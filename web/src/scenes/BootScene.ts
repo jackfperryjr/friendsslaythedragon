@@ -123,7 +123,7 @@ const ANIM_FRAMES = {
 }
 // ── Enemy sheet config ────────────────────────────────────────────────────────
 // New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
-const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number }[] = [
+const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number; walkFrames?: number[] }[] = [
   { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
   { key: 'sheet-enemy-duck',     file: 'enemies/duck.png',          fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
   { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
@@ -132,6 +132,8 @@ const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkSta
   { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 15, walkFrames: [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15] },
+  { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -198,8 +200,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset-six',                'tileset/six/spritesheet.png')
     this.load.tilemapTiledJSON('world-map-seven', 'tileset/seven/map.json')
     this.load.image('tileset-seven',              'tileset/seven/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-final',  'tileset/boss_final/map.json')
-    this.load.image('boss-tileset-final',         'tileset/boss_final/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-final',        'tileset/boss_final/map.json')
+    this.load.image('boss-tileset-final',               'tileset/boss_final/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-final-final',  'tileset/boss_final_final/map.json')
+    this.load.image('boss-tileset-final-final',         'tileset/boss_final_final/spritesheet.png')
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
     this.load.audio('music-boss',     'assets/music/boss.mp3')
@@ -249,18 +253,16 @@ export class BootScene extends Phaser.Scene {
   }
 
   private setupEnemyAnimations() {
-    for (const { key, walkStart, walkEnd } of ENEMY_SHEETS) {
+    for (const { key, walkStart, walkEnd, walkFrames } of ENEMY_SHEETS) {
       if (!this.textures.exists(key)) continue
-      this.anims.create({
-        key: `${key}-walk`,
-        frames: this.anims.generateFrameNumbers(key, { start: walkStart, end: walkEnd }),
-        frameRate: 8, repeat: -1,
-      })
-      this.anims.create({
-        key: `${key}-idle`,
-        frames: this.anims.generateFrameNumbers(key, { start: walkStart, end: walkStart }),
-        frameRate: 4, repeat: -1,
-      })
+      const frames = walkFrames
+        ? this.anims.generateFrameNumbers(key, { frames: walkFrames })
+        : this.anims.generateFrameNumbers(key, { start: walkStart, end: walkEnd })
+      const idleFrames = walkFrames
+        ? this.anims.generateFrameNumbers(key, { frames: [walkFrames[0]] })
+        : this.anims.generateFrameNumbers(key, { start: walkStart, end: walkStart })
+      this.anims.create({ key: `${key}-walk`, frames,      frameRate: 8, repeat: -1 })
+      this.anims.create({ key: `${key}-idle`, frames: idleFrames, frameRate: 4, repeat: -1 })
     }
   }
 

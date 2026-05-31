@@ -30,6 +30,7 @@ export class Boss extends Enemy {
     flying = true,
     stationary = false,
     attackRate = 3000,
+    scale = 3.45,
   ) {
     super(scene, x, y, AbilityType.None)
     this.hp = hp
@@ -43,7 +44,7 @@ export class Boss extends Enemy {
 
     if (scene.textures.exists(textureKey)) {
       this.setTexture(textureKey, 0)
-      this.setScale(3.45)
+      this.setScale(scale)
       if (flying) {
         body.setAllowGravity(false)
         this.bossFlying = true

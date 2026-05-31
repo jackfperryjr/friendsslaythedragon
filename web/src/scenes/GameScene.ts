@@ -77,8 +77,9 @@ export class GameScene extends Phaser.Scene {
   private bossRoomRightBarrier: Phaser.GameObjects.Rectangle | null = null
   private level2ExitPos:  { x: number; y: number } | null = null
   private backExitPos:    { x: number; y: number } | null = null
-  private backPortalPos:  { x: number; y: number } | null = null
-  private backPortalLbl:  Phaser.GameObjects.Text | null = null
+  private backPortalPos:    { x: number; y: number } | null = null
+  private backPortalLbl:    Phaser.GameObjects.Text | null = null
+  private hiddenPortalPos:  { x: number; y: number } | null = null
   private pauseItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private pauseFocusIdx = 0
   private pauseCursor: Phaser.GameObjects.Text | null = null
@@ -134,8 +135,9 @@ export class GameScene extends Phaser.Scene {
     this.bossRoomRightBarrier = null
     this.level2ExitPos = null
     this.backExitPos   = null
-    this.backPortalPos = null
-    this.backPortalLbl = null
+    this.backPortalPos   = null
+    this.backPortalLbl   = null
+    this.hiddenPortalPos = null
     this.pauseItems = []
     this.pauseFocusIdx = 0
     this.pauseCursor = null
@@ -169,6 +171,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.score = this.registry.get('score') ?? 0
+    if (!this.registry.get('runStartTime')) this.registry.set('runStartTime', Date.now())
     this.gm = new GameManager()
 
     this.nm = this.registry.get('networkManager') ?? null
@@ -205,7 +208,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.boss) {
       this.boss.on('hpChanged', (hp: number, max: number) => this.ui.updateBossBar(hp, max))
-      this.boss.on('bossAttack', (ability: AbilityType) => this.fireBossSpecial(ability))
+      if (!this.cfg.bossNoAttack) this.boss.on('bossAttack', (ability: AbilityType) => this.fireBossSpecial(ability))
       this.ui.updateBossBar(this.cfg.bossHp!, this.cfg.bossHp!)
     }
 
@@ -976,7 +979,7 @@ export class GameScene extends Phaser.Scene {
   private buildCeleryManNPCs() {
     const dadSaved = !!(this.registry.get('dadSaved'))
     const momSaved = !!(this.registry.get('momSaved'))
-    const npcX = 700, npcY = 1900
+    const npcX = 700, npcY = 1948
 
     if (dadSaved && momSaved) {
       const dadImg = this.add.image(npcX - 35, npcY, 'npc-dad', 8).setDepth(2).setScale(1.5)
@@ -1259,7 +1262,7 @@ export class GameScene extends Phaser.Scene {
           this.platforms.add(rBarrier as unknown as Phaser.Physics.Arcade.Image)
           this.bossRoomRightBarrier = rBarrier
 
-          this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000)
+          this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.bossScale ?? 3.45)
           this.boss.on('bossDead', () => {
             this.bossDefeated = true
             if (this.cfg.bossDefeatedKey) this.registry.set(this.cfg.bossDefeatedKey, true)
@@ -1293,15 +1296,20 @@ export class GameScene extends Phaser.Scene {
                 if (runIndex + 1 < runRooms.length) this.openLevel2Exit(W)
                 else this.showBossDefeatedOverlay()
               })
-            } else if (runIndex + 1 < runRooms.length) {
+            } else if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) {
               // More levels — reveal right exit and back portal after brief celebration
               SoundManager.startTrack(this.sound, 'music-gameplay')
               if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
               this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
             } else {
-              // Final boss — fanfare + overlay
-              if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
-              this.time.delayedCall(1800, () => this.showBossDefeatedOverlay())
+              // Final boss (or secret-bonus gate) — fanfare + overlay + hidden portal
+              if (this.cfg.backPortal)   this.time.delayedCall(800, () => this.buildBackPortal())
+              if (this.cfg.hiddenPortal) this.time.delayedCall(800, () => this.buildHiddenPortal())
+              if (this.cfg.isSecretBonus) {
+                this.time.delayedCall(1800, () => this.showCongratulatoryOverlay())
+              } else {
+                this.time.delayedCall(1800, () => this.showBossDefeatedOverlay())
+              }
             }
           })
         }
@@ -1744,7 +1752,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
-      this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
+      this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.bossScale ?? 3.45)
       this.boss.on('bossDead', () => {
         this.bossDefeated = true
         SoundManager.bossDeath()
@@ -2061,7 +2069,9 @@ export class GameScene extends Phaser.Scene {
       p.on('died', () => this.onPlayerDied(p))
       p.on('useMelee', (src: Player) => this.doMeleeSwing(src))
       p.on('useCharacterAbility', (src: Player) => this.handleCharacterAbility(src))
-      p.on('heartLost', () => {})
+      p.on('heartLost', () => {
+        this.registry.set('hitsTaken', (this.registry.get('hitsTaken') ?? 0) + 1)
+      })
     }
   }
 
@@ -2132,6 +2142,26 @@ export class GameScene extends Phaser.Scene {
       fontSize: '9px', fontFamily: FONT, color: '#000000',
     }).setOrigin(0.5).setDepth(11).setVisible(false)
     this.backPortalPos = this.cfg.backPortal
+  }
+
+  private buildHiddenPortal() {
+    if (!this.cfg.hiddenPortal) return
+    this.hiddenPortalPos = this.cfg.hiddenPortal
+  }
+
+  private useHiddenPortal() {
+    const ri: number = this.registry.get('runIndex') ?? 0
+    if (this.roomTransitioning) return
+    this.roomTransitioning = true
+    this.gm.pause()
+    this.physics.world.isPaused = true
+    this.registry.set('score', this.score)
+    this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.charKey === 'coco' && !!(this.cocoShadow?.active) })))
+    this.registry.set('runIndex', ri + 1)
+    this.registry.set('entryDir', 'left')
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
   }
 
   private wirePlayerUIEvents() {
@@ -2267,6 +2297,7 @@ export class GameScene extends Phaser.Scene {
         if (player.isTruck || player.isTrex) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
+          this.trackEnemyKill()
         } else {
           player.hitByEnemy()
         }
@@ -2278,6 +2309,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(this.boss, this.platforms)
       this.players.forEach(p => {
         this.physics.add.overlap(p, this.boss!, (_p, _b) => {
+          if (this.cfg.bossNoAttack) return
           const player = _p as Player
           const boss   = _b as unknown as Boss
           if (Math.abs(player.y - boss.y) > 350) return
@@ -2383,10 +2415,15 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private trackEnemyKill() {
+    this.registry.set('enemiesKilled', (this.registry.get('enemiesKilled') ?? 0) + 1)
+  }
+
   private hitEnemy(e: Enemy, src: Player) {
     if (src.strengthBoostActive) e.die()
     else e.hit()
     this.addScore(SCORE_ENEMY)
+    this.trackEnemyKill()
   }
 
   private hitBoss(src: Player) {
@@ -3406,6 +3443,87 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(550, () => moveFocus(0))
   }
 
+  private showCongratulatoryOverlay() {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    this.cameras.main.setBackgroundColor('#000000')
+    SoundManager.stopTrack()
+    SoundManager.startCutsceneMusic()
+
+    this.add.rectangle(cx, cy, width, height, 0x000000, 1)
+      .setScrollFactor(0).setDepth(90)
+
+    this.add.text(cx, cy - 160, 'CONGRATULATIONS!', {
+      fontSize: '22px', fontFamily: FONT, color: '#ffd700',
+      stroke: '#000000', strokeThickness: 8,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+
+    this.add.text(cx, cy - 110, 'You found the Silly Dragon!', {
+      fontSize: '9px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+
+    const enemiesKilled: number = this.registry.get('enemiesKilled') ?? 0
+    const hitsTaken: number     = this.registry.get('hitsTaken')     ?? 0
+    const startTime: number     = this.registry.get('runStartTime')  ?? Date.now()
+    const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
+    const mins = Math.floor(elapsedSec / 60)
+    const secs = (elapsedSec % 60).toString().padStart(2, '0')
+    const timeStr = `${mins}m ${secs}s`
+
+    const stats = [
+      { label: 'Enemies slain',        value: `${enemiesKilled}` },
+      { label: 'Times hit',            value: `${hitsTaken}`     },
+      { label: 'Time to Silly Dragon', value: timeStr            },
+    ]
+    stats.forEach(({ label, value }, i) => {
+      const y = cy - 55 + i * 32
+      this.add.text(cx - 20, y, label, {
+        fontSize: '8px', fontFamily: FONT, color: '#aaaaaa',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(91)
+      this.add.text(cx + 20, y, value, {
+        fontSize: '8px', fontFamily: FONT, color: '#ffe066',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(91)
+    })
+
+    const btnMenu = this.add.text(cx, cy + 80, 'MAIN MENU', {
+      fontSize: '10px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+      backgroundColor: '#00000066', padding: { x: 16, y: 12 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+      .setInteractive({ useHandCursor: true }).setAlpha(0)
+
+    btnMenu.on('pointerover', () => btnMenu.setColor('#ffe066'))
+    btnMenu.on('pointerout',  () => btnMenu.setColor('#ffffff'))
+    btnMenu.on('pointerdown', () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.registry.set('runRooms',           null)
+        this.registry.set('runIndex',           0)
+        this.registry.set('entryDir',           null)
+        this.registry.set('persistedAbilities', null)
+        this.registry.set('persistedHearts',    null)
+        this.registry.set('score',              0)
+        this.registry.set('enemiesKilled',      0)
+        this.registry.set('hitsTaken',          0)
+        this.registry.set('runStartTime',       null)
+        this.registry.set('zombieKingDefeated', false)
+        this.registry.set('celeryManDefeated',  false)
+        this.scene.start('MenuScene')
+      })
+    })
+
+    const gpHandler = (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
+      if (button.index === 0 || button.index === 9) btnMenu.emit('pointerdown')
+    }
+    this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
+
+    this.tweens.add({ targets: btnMenu, alpha: 1, duration: 400, delay: 200 })
+  }
+
   // ── input ─────────────────────────────────────────────────────────────────
 
   private handleKeyboard(p: Player, keys: Record<string, Phaser.Input.Keyboard.Key>) {
@@ -3477,6 +3595,10 @@ export class GameScene extends Phaser.Scene {
         if (button.index === 12 && this.backPortalPos) {
           const nearBack = Phaser.Math.Distance.Between(player.x, player.y, this.backPortalPos.x, this.backPortalPos.y) < 90
           if (nearBack) this.useBackPortal()
+        }
+        if (button.index === 12 && this.hiddenPortalPos) {
+          const nearHidden = Phaser.Math.Distance.Between(player.x, player.y, this.hiddenPortalPos.x, this.hiddenPortalPos.y) < 90
+          if (nearHidden) this.useHiddenPortal()
         }
       },
     )
@@ -3727,6 +3849,15 @@ export class GameScene extends Phaser.Scene {
         const jumpKey2 = this.playerKeysets.get(p.playerId)?.['jump']
         if (nearBack && (touchInteract || (jumpKey2 && Phaser.Input.Keyboard.JustDown(jumpKey2)))) {
           this.useBackPortal()
+        }
+      }
+
+      // Hidden portal — secret door to bonus room, appears after boss defeated
+      if (this.hiddenPortalPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        const nearHidden = Phaser.Math.Distance.Between(p.x, p.y, this.hiddenPortalPos.x, this.hiddenPortalPos.y) < 90
+const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
+        if (nearHidden && (touchInteract || (jumpKey3 && Phaser.Input.Keyboard.JustDown(jumpKey3)))) {
+          this.useHiddenPortal()
         }
       }
 

@@ -58,6 +58,8 @@ export interface RoomConfig {
   bossFlying?: boolean
   bossStationary?: boolean    // boss stays in place, no patrol movement
   bossAttackRate?: number     // ms between boss attacks (default 3000)
+  bossScale?: number          // display scale multiplier for the boss sprite (default 3.45)
+  bossNoAttack?: boolean      // boss never fires projectiles
   bossSpawnX?: number
   bossSpawnY?: number
   bossPortal?: { x: number; y: number }
@@ -67,6 +69,8 @@ export interface RoomConfig {
   backPortal?: { x: number; y: number }  // non-glowing boss door for returning to previous room
   backPortalKey?: string                  // registry key to check instead of bossDefeatedKey
   backPortalEntryDir?: ExitDir            // which direction to enter the previous room from
+  hiddenPortal?: { x: number; y: number } // secret door — visible only after boss defeated, advances run
+  isSecretBonus?: boolean                 // room only reachable via hiddenPortal; skipped in normal boss-defeat advance
   bossRightBarrierX?: number              // override x for the right-exit barrier (default: worldWidth - 150)
   bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
@@ -109,7 +113,8 @@ const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',       
 const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
 const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
-const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three',  tilesetName: 'spritefusion' } as const
+const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
+const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
@@ -504,7 +509,7 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
   destructibles: [],
   furnitureSpawns: [],
   spikeFloors: [
-    { x: 178, y: 1724, xEnd: 2780, scale: 2 },
+    { x: 178, y: 1729, xEnd: 2780, scale: 2 },
   ],
   crates: [],
   items: [],
@@ -566,10 +571,53 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   exitPositions: { left: 1200, right: 1200 },
   entrySpawns: { left: { x: 200, y: 1400 } },
   backPortal: { x: 200, y: 1400 },
+  hiddenPortal: { x: 218, y: 604 },
   isBossRoom: true,
   bossDefeatedKey: 'dragonDefeated',
   bossHp: 30,
-  bossName: 'THE DRAGON',
+  bossName: 'RED DRAGON',
+  bossKey: 'sheet-red-dragon',
+  bossFlying: true,
+  bossSpawnX: 900,
+  bossSpawnY: 700,
+  bossScale: 3,
+  bossAttackRate: 1500,
+  bossRightBarrierX: 1200,
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
+// ─── Final Final Boss Room ────────────────────────────────────────────────────
+// Map: tileset/boss_final_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+// Secret room accessible only via the hidden portal in the Dragon's Lair.
+
+const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
+  name: "The True Lair",
+  ...SANCTUM,
+  worldWidth:  40 * 32,   // 1280
+  worldHeight: 50 * 32,   // 1600
+  worldMap: { ...BOSS_MAP_FINAL_FINAL },
+  isDark: true,
+  isSecretBonus: true,
+  exits: ['left', 'right'],
+  exitPositions: { left: 1200, right: 1200 },
+  entrySpawns: { left: { x: 200, y: 1400 } },
+  isBossRoom: true,
+  bossDefeatedKey: 'trueDragonDefeated',
+  bossHp: 1,
+  bossName: 'SILLY DRAGON',
+  bossKey: 'sheet-gold-dragon',
+  bossFlying: false,
+  bossStationary: true,
+  bossNoAttack: true,
+  bossSpawnX: 640,
+  bossSpawnY: 1200,
+  bossScale: 7,
+  bossRightBarrierX: 1200,
   platforms: [],
   enemies: [],
   destructibles: [],
@@ -594,7 +642,8 @@ export function generateRun(): RoomConfig[] {
     LEVEL5_WORLD_ROOM,    // 7 — Level 5
     LEVEL6_WORLD_ROOM,    // 8 — Level 6
     LEVEL7_WORLD_ROOM,    // 9 — Level 7 (boss portal TBD)
-    BOSS_FINAL_ROOM,      // 10 — Final Boss: The Dragon
+    BOSS_FINAL_ROOM,       // 10 — Final Boss: The Dragon
+    BOSS_FINAL_FINAL_ROOM, // 11 — Secret: The True Dragon (hidden portal only)
   ]
 }
 
