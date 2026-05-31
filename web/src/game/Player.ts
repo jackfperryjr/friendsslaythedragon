@@ -202,7 +202,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     SoundManager.playerHit()
 
     this.hitCount++
-    if (this.hitCount >= 10) {
+    if (this.hitCount >= 5) {
       this.hitCount = 0
       this.hearts--
       this.emit('heartLost', this.hearts)

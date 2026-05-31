@@ -24,6 +24,8 @@ export class MenuScene extends Phaser.Scene {
   constructor() { super({ key: 'MenuScene' }) }
 
   create() {
+    this.activeItems = []
+    SoundManager.stopTrack()
     const { width, height } = this.scale
 
     this.cameras.main.fadeIn(400, 0, 0, 0)

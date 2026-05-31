@@ -3,7 +3,7 @@ import Phaser from 'phaser'
 export type ShadowState = 'summoning' | 'idle' | 'spinning-up' | 'charging' | 'spinning-down' | 'releasing'
 
 const DETECT_RANGE   = 420   // px — trigger spin-dash when enemy is this close
-const CHARGE_SPEED   = 1050  // 3× player speed
+const CHARGE_SPEED   = 1750  // 5× player speed
 const CHARGE_TIMEOUT = 2000  // ms — auto spin-down if charge goes this long without a hit
 
 export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
@@ -21,6 +21,8 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
     body.setSize(42, 60, false)
     body.setOffset(18, 0)
     body.setAllowGravity(true)
+    body.checkCollision.left  = true
+    body.checkCollision.right = true
 
     // Summon: play spin-up animation, then settle into idle follow mode
     this.play('shadow-spin-up')

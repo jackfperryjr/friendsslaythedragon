@@ -77,8 +77,10 @@ export interface RoomConfig {
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
+  rightExitX?: number             // trigger right exit at this X instead of worldWidth (no Y check)
   comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
   isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
+  isDark?: boolean               // apply a dark purple overlay (levels 5-7+)
   worldMapLayers?: {
     background?: string   // decorative bg layer (depth -2, no collision)
     solid?: string[]      // collision layers (depth 1)
@@ -102,8 +104,12 @@ const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tileset
 const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
 const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
-const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion'  } as const
-const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three', tilesetName: 'spritefusion' } as const
+const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion' } as const
+const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',        tilesetName: 'spritefusion' } as const
+const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
+const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
+const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
+const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three',  tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
@@ -464,7 +470,106 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
   },
   isOutdoor: true,
   defaultSpawn: { x: 238, y: 1600 },
-  exits: [],
+  entrySpawns: { right: { x: 9018, y: 860 } },
+  exits: ['right'],
+  rightExitX: 9018,
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [
+    { x: 5916, y: 1072, type: 'attack-boost' },
+    { x: 2490, y: 1628, type: 'speed' },
+  ],
+}
+
+// ─── Levels 5-7: Dark castle interior rooms ───────────────────────────────────
+// Maps: 100×58 tiles at 32px = 3200×1856 world pixels each
+
+const LEVEL5_WORLD_ROOM: RoomConfig = {
+  name: 'The Forgotten Keep',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_FIVE },
+  isDark: true,
+  defaultSpawn: { x: 204, y: 220 },
+  exits: ['left', 'right'],
+  exitPositions: { left: 220 },
+  rightExitX: 3115,
+  entrySpawns: { left: { x: 204, y: 220 }, right: { x: 3080, y: 1724 } },
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  spikeFloors: [
+    { x: 178, y: 1724, xEnd: 2780, scale: 2 },
+  ],
+  crates: [],
+  items: [],
+}
+
+const LEVEL6_WORLD_ROOM: RoomConfig = {
+  name: 'The Shadow Halls',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_SIX },
+  isDark: true,
+  defaultSpawn: { x: 204, y: 1724 },
+  exits: ['left', 'right'],
+  exitPositions: { left: 1600 },
+  rightExitX: 3106,
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 3080, y: 1724 } },
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [
+    { x: 1906, y: 284, type: 'invulnerability' },
+  ],
+}
+
+const LEVEL7_WORLD_ROOM: RoomConfig = {
+  name: 'The Dragon\'s Approach',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_SEVEN },
+  isDark: true,
+  defaultSpawn: { x: 204, y: 1724 },
+  exits: ['left'],
+  exitPositions: { left: 1724 },
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 3080, y: 1724 } },
+  bossPortal: { x: 1630, y: 604 },
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
+// ─── Final Boss Room ──────────────────────────────────────────────────────────
+// Map: tileset/boss_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+
+const BOSS_FINAL_ROOM: RoomConfig = {
+  name: "The Dragon's Lair",
+  ...SANCTUM,
+  worldWidth:  40 * 32,   // 1280
+  worldHeight: 50 * 32,   // 1600
+  worldMap: { ...BOSS_MAP_FINAL },
+  isDark: true,
+  exits: ['left', 'right'],
+  exitPositions: { left: 1200, right: 1200 },
+  entrySpawns: { left: { x: 200, y: 1400 } },
+  backPortal: { x: 200, y: 1400 },
+  isBossRoom: true,
+  bossDefeatedKey: 'dragonDefeated',
+  bossHp: 30,
+  bossName: 'THE DRAGON',
   platforms: [],
   enemies: [],
   destructibles: [],
@@ -479,13 +584,17 @@ export const TOTAL_ROLY_POLYS = 3
 
 export function generateRun(): RoomConfig[] {
   return [
-    WORLD_ROOM,
-    BOSS_TILEMAP_ROOM,
-    LEVEL2_WORLD_ROOM,
-    LEVEL2_BOSS_ROOM,
-    LEVEL3_WORLD_ROOM,
-    BOSS_THREE_ROOM,
-    LEVEL4_WORLD_ROOM,
+    WORLD_ROOM,           // 0 — Level 1
+    BOSS_TILEMAP_ROOM,    // 1 — Boss 1: Skeleton King
+    LEVEL2_WORLD_ROOM,    // 2 — Level 2
+    LEVEL2_BOSS_ROOM,     // 3 — Boss 2: Zombie King
+    LEVEL3_WORLD_ROOM,    // 4 — Level 3
+    BOSS_THREE_ROOM,      // 5 — Boss 3: Celery Man
+    LEVEL4_WORLD_ROOM,    // 6 — Level 4 (outside)
+    LEVEL5_WORLD_ROOM,    // 7 — Level 5
+    LEVEL6_WORLD_ROOM,    // 8 — Level 6
+    LEVEL7_WORLD_ROOM,    // 9 — Level 7 (boss portal TBD)
+    BOSS_FINAL_ROOM,      // 10 — Final Boss: The Dragon
   ]
 }
 

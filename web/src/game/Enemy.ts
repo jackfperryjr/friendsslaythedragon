@@ -36,7 +36,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private readonly animKey: string
   private attackTimer: number
   private stunTimer = 0
-  protected hp = 3
+  protected hp = 5
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
     const isFlying = ability === AbilityType.Ice || ability === AbilityType.Bat

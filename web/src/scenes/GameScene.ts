@@ -94,9 +94,11 @@ export class GameScene extends Phaser.Scene {
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
   private dadCageGfx:     Phaser.GameObjects.Graphics | null = null
   private dadCageBubble:  Phaser.GameObjects.Container | null = null
+  private dadHintBubble:  Phaser.GameObjects.Container | null = null
   private momNpcSprite:   Phaser.GameObjects.Image | null = null
   private momCageGfx:     Phaser.GameObjects.Graphics | null = null
   private momCageBubble:  Phaser.GameObjects.Container | null = null
+  private momHintBubble:  Phaser.GameObjects.Container | null = null
 
   private playerKeysets = new Map<number, Record<string, Phaser.Input.Keyboard.Key>>()
   private touchControls: TouchControls | null = null
@@ -114,6 +116,7 @@ export class GameScene extends Phaser.Scene {
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
+    this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
@@ -210,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.updateWormCount(this.registry.get('wormCount') ?? 0)
     this.ui.updateRolyPolyCount(this.registry.get('rolyPolyCount') ?? 0)
     this.buildNPCs()
+    this.buildTorches()
     this.buildPauseMenu()
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
@@ -251,18 +255,60 @@ export class GameScene extends Phaser.Scene {
 
     if (this.cfg.worldMap && !this.cfg.isOutdoor) return  // tilemap layers serve as background
 
-    // Outdoor rooms: smooth atmospheric gradient over the sky tiles
+    // Outdoor rooms: twilight/after-sunset atmospheric gradient + stars + clouds
     if (this.cfg.isOutdoor) {
+      // depth -1: sits above the tilemap 'Sky' background layer (-2) but below solid tiles (1)
       const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
-      // fillGradientStyle gives a single-pass WebGL linear gradient — no banding
       g.fillGradientStyle(
-        0x1a4e8c, 0x1a4e8c,   // top: dark midnight blue
-        0x4488bb, 0x4488bb,   // bottom: muted horizon blue
-        0.72, 0.72,            // top alpha — noticeably dark overhead
-        0.12, 0.12             // bottom alpha — fades toward horizon
+        0x06020f, 0x06020f,   // top: near-black deep night
+        0x1a0838, 0x1a0838,   // bottom: deep purple dusk horizon
+        1.0, 1.0,
+        1.0, 1.0
       )
       g.fillRect(0, 0, width, height)
+
+      // Stars — two layers that twinkle at different rates (depth -1, drawn after gradient)
+      const makeStarLayer = (seed: number, count: number) => {
+        const sg = this.add.graphics().setScrollFactor(0).setDepth(-1)
+        let n = seed
+        const rng = () => { n = (n * 1664525 + 1013904223) & 0x7fffffff; return n / 0x7fffffff }
+        for (let i = 0; i < count; i++) {
+          const sx  = rng() * width
+          const sy  = rng() * height * 0.70
+          const big = rng() > 0.88
+          const r   = rng()
+          const col = r > 0.65 ? 0xdde0ff : r > 0.35 ? 0xffffc8 : 0xffffff
+          sg.fillStyle(col, big ? 0.95 : 0.80)
+          if (big) sg.fillRect(sx - 0.5, sy - 0.5, 2, 2)
+          else     sg.fillRect(sx, sy, 1, 1)
+        }
+        return sg
+      }
+      const stars1 = makeStarLayer(42,  75)
+      const stars2 = makeStarLayer(137, 55)
+      this.tweens.add({ targets: stars1, alpha: 0.20, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+      this.tweens.add({ targets: stars2, alpha: 0.15, duration: 1100, yoyo: true, repeat: -1, delay: 700, ease: 'Sine.InOut' })
+
+      // Clouds — barely-visible lavender, just slightly lighter than the sky
+      const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
+      const drawCloud = (clx: number, cly: number, wr: number, hr: number) => {
+        cloudG.fillStyle(0x4a3272, 0.38)
+        cloudG.fillEllipse(clx, cly, wr, hr)
+        cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+        cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+      }
+      drawCloud(width * 0.10, height * 0.42, 210, 72)
+      drawCloud(width * 0.38, height * 0.28, 170, 58)
+      drawCloud(width * 0.63, height * 0.48, 230, 78)
+      drawCloud(width * 0.85, height * 0.35, 150, 52)
+      this.tweens.add({ targets: cloudG, alpha: 0.30, duration: 4500, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+
       return
+    }
+
+    // Dark rooms (levels 5-7+): purple overlay on top of tilemap background
+    if (this.cfg.isDark && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x08001a, 0.42).setScrollFactor(0).setDepth(1)
     }
 
     if (this.cfg.roomImage) {
@@ -574,6 +620,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Dark-level torches ────────────────────────────────────────────────────────
+  private buildTorches() {
+    if (!this.cfg.isDark || this.cfg.isBossRoom) return
+    const W = this.cfg.worldWidth
+    const H = this.cfg.worldHeight ?? 1856
+
+    // Three height bands; first band nudged up 35px
+    const bands = [H * 0.14 - 35, H * 0.44, H * 0.74]
+    let idx = 0
+    for (let x = 220; x < W - 100; x += 480) {
+      this.spawnTorch(x, bands[idx % bands.length], idx * 180)
+      idx++
+    }
+  }
+
+  private spawnTorch(x: number, y: number, flickerOffset: number) {
+    // Gradient glow — concentric rings, additive blend, single object for flicker
+    const glow = this.add.graphics().setDepth(2).setBlendMode(Phaser.BlendModes.ADD)
+    glow.fillStyle(0x441400, 0.22); glow.fillCircle(x, y - 8, 56)
+    glow.fillStyle(0xff4400, 0.18); glow.fillCircle(x, y - 8, 42)
+    glow.fillStyle(0xff8800, 0.22); glow.fillCircle(x, y - 8, 30)
+    glow.fillStyle(0xffcc44, 0.28); glow.fillCircle(x, y - 8, 18)
+    glow.fillStyle(0xffffff, 0.20); glow.fillCircle(x, y - 8, 8)
+
+    // Torch bracket + handle (static)
+    const body = this.add.graphics().setDepth(2)
+    body.fillStyle(0x4a3420, 1); body.fillRect(x - 2, y, 4, 14)
+    body.fillStyle(0x6a4e30, 1); body.fillRect(x - 5, y - 5, 10, 6)
+
+    // Flame — static, no tween
+    const flame = this.add.graphics().setDepth(3)
+    flame.fillStyle(0xff8800, 0.90); flame.fillEllipse(x, y - 13, 9, 13)
+    flame.fillStyle(0xffee44, 0.85); flame.fillEllipse(x, y - 17, 5, 8)
+    flame.fillStyle(0xffffff, 0.55); flame.fillEllipse(x, y - 20, 3, 5)
+
+    // Only the glow flickers
+    this.tweens.add({
+      targets: glow,
+      alpha: 0.42,
+      duration: 130 + (flickerOffset % 80),
+      yoyo: true, repeat: -1, delay: flickerOffset % 350, ease: 'Sine.InOut',
+    })
+  }
+
   // ── Throne Hall — grand pillars, royal banners, ornate floor, throne ──────────
   private buildSceneryThrone(w: number) {
     this.buildWallFeatures(w)
@@ -662,8 +752,11 @@ export class GameScene extends Phaser.Scene {
         return tile !== null && tile.index >= 0
       })
 
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     for (const item of this.cfg.items) {
       if (isInsideWall(item.x, item.y)) continue
+      const isSuperAbility = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
+      if (isSuperAbility && !isLocalhost) continue
       const tex = item.type === 'heart'            ? 'item-heart'
                 : item.type === 'pizza'            ? 'item-pizza'
                 : item.type === 'worm'             ? 'item-worm'
@@ -865,8 +958,8 @@ export class GameScene extends Phaser.Scene {
   private buildSkeletonKingNPCs() {
     if (this.registry.get('dadSaved')) return
 
-    this.dadNpcSprite  = this.add.image(633, 796, 'npc-dad', 14).setDepth(2).setScale(1.5)
-    this.dadCageGfx    = this.drawCage(633, 796, 80, 100)
+    this.dadNpcSprite  = this.add.image(633, 791, 'npc-dad', 14).setDepth(2).setScale(1.5)
+    this.dadCageGfx    = this.drawCage(633, 791, 80, 100)
     this.dadCageBubble = this.showNpcBubble(633, 710, ['Help me!'], null)
     this.checkDadFreed()
   }
@@ -874,8 +967,8 @@ export class GameScene extends Phaser.Scene {
   private buildZombieKingNPCs() {
     if (this.registry.get('momSaved')) return
 
-    this.momNpcSprite  = this.add.image(542, 1084, 'npc-mom', 12).setDepth(2).setScale(1.5)
-    this.momCageGfx    = this.drawCage(542, 1084, 80, 100)
+    this.momNpcSprite  = this.add.image(542, 1079, 'npc-mom', 12).setDepth(2).setScale(1.5)
+    this.momCageGfx    = this.drawCage(542, 1079, 80, 100)
     this.momCageBubble = this.showNpcBubble(542, 998, ['Help me!'], null)
     this.checkMomFreed()
   }
@@ -991,13 +1084,47 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private showCagedParentHint(parent: 'dad' | 'mom') {
-    const sprite     = parent === 'dad' ? this.dadNpcSprite : this.momNpcSprite
-    const collectible = parent === 'dad' ? 'worms' : 'roly polies'
-    if (!sprite?.active) return
-    this.showNpcBubble(sprite.x, sprite.y - 100, [
-      `Collect all the ${collectible}`, 'to free me!',
-    ], 4500)
+  private updateParentHints() {
+    const PROX = 140
+
+    const updateHint = (
+      sprite:    Phaser.GameObjects.Image | null,
+      bossKey:   string,
+      countKey:  string,
+      total:     number,
+      lines:     string[],
+      bubble:    Phaser.GameObjects.Container | null,
+      setBubble: (b: Phaser.GameObjects.Container | null) => void,
+    ) => {
+      if (!sprite?.active) return
+      if (!this.registry.get(bossKey)) return          // boss not beaten yet
+      if ((this.registry.get(countKey) ?? 0) >= total) return  // already collected all
+
+      const near = this.players.some(p =>
+        p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, sprite.x, sprite.y) < PROX
+      )
+
+      if (near && !bubble?.active) {
+        // "Help me!" bubble sits ~81px above the sprite; place hint ~70px above that
+        const hint = this.showNpcBubble(sprite.x, sprite.y - 160, lines, null)
+        setBubble(hint)
+      } else if (!near && bubble?.active) {
+        bubble.destroy()
+        setBubble(null)
+      }
+    }
+
+    updateHint(
+      this.dadNpcSprite, 'skeletonKingDefeated', 'wormCount', TOTAL_WORMS,
+      ['Collect all worms', 'to free me!'],
+      this.dadHintBubble, b => { this.dadHintBubble = b },
+    )
+
+    updateHint(
+      this.momNpcSprite, 'zombieKingDefeated', 'rolyPolyCount', TOTAL_ROLY_POLYS,
+      ['Collect all roly polies', 'to free me!'],
+      this.momHintBubble, b => { this.momHintBubble = b },
+    )
   }
 
   // ── level ───────────────────────────────────────────────────────────────────
@@ -1032,9 +1159,17 @@ export class GameScene extends Phaser.Scene {
       const solidNames  = ml?.solid      ?? ['Walls', 'Platforms large', 'Platform small']
       const overlayNames = ml?.overlay   ?? ['Banner', 'Windows']
 
-      mkLayer(bgName, -2)
-      const solidLayers = solidNames.map((n: string) => mkLayer(n, 1, true))
-      overlayNames.forEach((n: string, i: number) => mkLayer(n, 3 + i * 2))
+      const bgLayer      = mkLayer(bgName, -2)
+      const solidLayers  = solidNames.map((n: string) => mkLayer(n, 1, true))
+      const overlayLayers = overlayNames.map((n: string, i: number) => mkLayer(n, 3 + i * 2))
+
+      // Dark rooms (levels 5-7+): tint tile layers with grey/purple hues
+      if (this.cfg.isDark) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x404060)                        // dark purple-grey background
+        solidLayers.forEach(l  => tint(l,  0x585878))  // medium grey-purple solids
+        overlayLayers.forEach(l => tint(l, 0x686898))  // slightly lighter purple overlay
+      }
 
       this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
 
@@ -1145,11 +1280,8 @@ export class GameScene extends Phaser.Scene {
             const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
             const runIndex: number       = this.registry.get('runIndex') ?? 0
             const dk = this.cfg.bossDefeatedKey
-            if (dk === 'skeletonKingDefeated') {
-              if (!this.checkDadFreed()) this.showCagedParentHint('dad')
-            } else if (dk === 'zombieKingDefeated') {
-              if (!this.checkMomFreed()) this.showCagedParentHint('mom')
-            }
+            if (dk === 'skeletonKingDefeated') this.checkDadFreed()
+            else if (dk === 'zombieKingDefeated') this.checkMomFreed()
 
             const hasCutscene = dk === 'skeletonKingDefeated' || dk === 'zombieKingDefeated'
             const cutsceneSuffix = dk === 'skeletonKingDefeated' ? 'skeleton_king' : 'zombie_king'
@@ -1422,85 +1554,81 @@ export class GameScene extends Phaser.Scene {
             const py3 = ((seed + 25)  *  3) % (th - 16) + 8
 
             if (!hasAbove) {
-              // ── Surface tile ─────────────────────────────────────────────
-              // Dirt starts at wy+9 so it shows through where grass dips up
-              tileG.fillStyle(0xa07848); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil
-              tileG.fillStyle(0x8b5e34); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
-              tileG.fillStyle(0x7a5028); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
-              tileG.fillStyle(0x6a4020); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
+              // ── Surface tile (twilight palette) ───────────────────────────
+              tileG.fillStyle(0x3a2448); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil (purple-brown)
+              tileG.fillStyle(0x2c1838); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
+              tileG.fillStyle(0x22122c); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
+              tileG.fillStyle(0x180c20); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
 
               // World-aligned strata lines
-              tileG.fillStyle(0x4a2e0c)
+              tileG.fillStyle(0x281040)
               const firstS = Math.ceil((wy + 15) / 8) * 8
               for (let sy = firstS; sy < wy + th - 1; sy += 8) {
                 tileG.fillRect(wx + 2, sy, tw - 4, 1)
               }
               // Left-edge highlight and bottom shadow
-              tileG.fillStyle(0xb08050); tileG.fillRect(wx, wy + 15, 1, th - 15)
-              tileG.fillStyle(0x3e2010); tileG.fillRect(wx, wy + th - 2, tw, 2)
+              tileG.fillStyle(0x4a2c68); tileG.fillRect(wx, wy + 15, 1, th - 15)
+              tileG.fillStyle(0x140a1c); tileG.fillRect(wx, wy + th - 2, tw, 2)
 
-              // Pebbles inside the dirt zone
-              tileG.fillStyle(0x4a2e0c)
+              // Pebbles
+              tileG.fillStyle(0x201040)
               tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
               tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
-              tileG.fillStyle(0xc09060)
+              tileG.fillStyle(0x6040a0)
               tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
 
-              // ── Grass cap — drawn on top of dirt ─────────────────────────
-              // Flat upper grass (chamfered corners at top)
-              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 2, wy,     tw - 4, 1)  // top row chamfered
-              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)  // 1px chamfer
-              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx,     wy + 2, tw, 2)       // full bright
-              tileG.fillStyle(0x4da840); tileG.fillRect(wx,     wy + 4, tw, 2)       // mid
-              tileG.fillStyle(0x3a7022); tileG.fillRect(wx,     wy + 6, tw, 3)       // dark
+              // ── Grass cap (twilight blue-green) ───────────────────────────
+              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 2, wy,     tw - 4, 1)
+              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)
+              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx,     wy + 2, tw, 2)
+              tileG.fillStyle(0x1e4228); tileG.fillRect(wx,     wy + 4, tw, 2)
+              tileG.fillStyle(0x142e1c); tileG.fillRect(wx,     wy + 6, tw, 3)
 
-              // Fluctuating grass-dirt boundary: draw transition in 4px column groups
-              // each group has ±2px height variation for a ragged natural edge
+              // Ragged grass-dirt boundary
               const numG = Math.ceil(tw / 4)
               for (let gi = 0; gi < numG; gi++) {
                 const gx  = wx + gi * 4
                 const gw  = Math.min(4, tw - gi * 4)
-                const gseed = (c * 37 + r * 13 + gi * 7) & 0x7   // 0–7
-                const yVar  = (gseed % 5) - 2   // -2 … +2
-                tileG.fillStyle(0x2d5a18); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
-                tileG.fillStyle(0x4a6818); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
+                const gseed = (c * 37 + r * 13 + gi * 7) & 0x7
+                const yVar  = (gseed % 5) - 2
+                tileG.fillStyle(0x0e2018); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
+                tileG.fillStyle(0x1a2e20); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
               }
-              // Highlight sliver on top-left
-              tileG.fillStyle(0x78d85e); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
+              // Highlight sliver
+              tileG.fillStyle(0x3a7050); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
 
             } else if (fullyInner) {
-              // ── Fully surrounded — deep dark earth ────────────────────────
-              tileG.fillStyle(0x3e2410); tileG.fillRect(wx, wy, tw, th)
+              // ── Fully surrounded — deep dark purple-earth ─────────────────
+              tileG.fillStyle(0x1a0a28); tileG.fillRect(wx, wy, tw, th)
 
-              tileG.fillStyle(0x2e1808)
+              tileG.fillStyle(0x120818)
               const firstS2 = Math.ceil(wy / 8) * 8
               for (let sy = firstS2; sy < wy + th - 1; sy += 8) {
                 tileG.fillRect(wx + 2, sy, tw - 4, 1)
               }
 
-              tileG.fillStyle(0x4e3018)
+              tileG.fillStyle(0x281848)
               tileG.fillRect(wx + px1, wy + py1, 2, 2)
               tileG.fillRect(wx + px2, wy + py2, 2, 2)
-              tileG.fillStyle(0x2a1408)
+              tileG.fillStyle(0x140a24)
               tileG.fillRect(wx + px3, wy + py3, 1, 1)
 
             } else {
-              // ── Partially exposed edge tile — medium-dark brown ───────────
-              tileG.fillStyle(0x6a4222); tileG.fillRect(wx, wy, tw, th)
+              // ── Partially exposed edge tile ───────────────────────────────
+              tileG.fillStyle(0x2a1838); tileG.fillRect(wx, wy, tw, th)
 
-              tileG.fillStyle(0x4a2e0c)
+              tileG.fillStyle(0x201040)
               const firstS3 = Math.ceil(wy / 8) * 8
               for (let sy = firstS3; sy < wy + th - 1; sy += 8) {
                 tileG.fillRect(wx + 2, sy, tw - 4, 1)
               }
 
-              tileG.fillStyle(0x3e2010)
+              tileG.fillStyle(0x160c20)
               tileG.fillRect(wx + px1, wy + py1, 2, 2)
               tileG.fillRect(wx + px2, wy + py2, 2, 2)
-              tileG.fillStyle(0x8a6040)
+              tileG.fillStyle(0x4a3068)
               tileG.fillRect(wx + px3, wy + py3, 1, 1)
-              // Left edge highlight
-              tileG.fillStyle(0x8a5530); tileG.fillRect(wx, wy, 1, th)
+              tileG.fillStyle(0x3a2460); tileG.fillRect(wx, wy, 1, th)
             }
           }
         }
@@ -1945,7 +2073,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.charKey === 'coco' && !!(this.cocoShadow?.active) })))
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -2016,14 +2144,36 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
-    const persistedBoosts: { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean }[] | null =
-      this.registry.get('persistedBoosts')
+    // Mom & dad's granted powers expire at the outdoor level — strip boosts but keep transforms
+    if (this.cfg.isOutdoor) {
+      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+      const prev = this.registry.get('persistedBoosts') as PB[] | null
+      this.registry.set('persistedBoosts', prev
+        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false }))
+        : null)
+    }
+
+    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+    const persistedBoosts: PersistedBoost[] | null = this.registry.get('persistedBoosts')
     if (persistedBoosts) {
       this.players.forEach((p, i) => {
         const pb = persistedBoosts[i]
-        if (pb?.speedBoostActive)       p.applySpeedBoost(true)
-        if (pb?.strengthBoostActive)    p.applyStrengthBoost(true)
-        if (pb?.invulnerabilityActive)  p.applyInvulnerability(true)
+        if (pb?.speedBoostActive)      p.applySpeedBoost(true)
+        if (pb?.strengthBoostActive)   p.applyStrengthBoost(true)
+        if (pb?.invulnerabilityActive) p.applyInvulnerability(true)
+        if (pb?.isTruck && p.charKey === 'eric') {
+          p.isTruck = true
+          p.setTexture('sheet-eric-transformer', 12)
+          p.play('eric-anim-truck-idle', true)
+        }
+        if (pb?.isTrex && p.charKey === 'scarlett') {
+          p.isTrex = true
+          p.setTexture('sheet-trex', 0)
+          p.play('trex-idle', true)
+        }
+        if (pb?.hasShadow && p.charKey === 'coco') {
+          this.spawnCocoShadow(p)
+        }
       })
     }
   }
@@ -2423,6 +2573,11 @@ export class GameScene extends Phaser.Scene {
         ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
       })
     }
+
+    // Absorb enemy projectiles while spindashing
+    this.physics.add.overlap(shadow, this.enemyProjectiles, (_s, proj) => {
+      if (shadow.shadowState === 'charging') (proj as Phaser.Physics.Arcade.Image).destroy()
+    })
 
     shadow.on('shadowReleased', () => { this.cocoShadow = null })
   }
@@ -3075,7 +3230,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
-      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.invulnerabilityActive })))
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.charKey === 'coco' && !!(this.cocoShadow?.active) })))
 
     const nextIndex = goBack ? runIndex - 1 : runIndex + 1
 
@@ -3532,13 +3687,17 @@ export class GameScene extends Phaser.Scene {
       // Exit boundary detection (all modes except continuous worldMap)
       const remoteIds2: number[] = this.registry.get('remotePlayers') ?? []
       const isLocalPlayer = !remoteIds2.includes(p.playerId)
-      const isContinuousWorld = !!this.cfg.worldMap && !this.cfg.worldMap.section && !this.cfg.isBossRoom
+      const isContinuousWorld = !!this.cfg.worldMap && !this.cfg.worldMap.section && !this.cfg.isBossRoom && this.cfg.exits.length === 0
       if (isLocalPlayer && !this.roomTransitioning && p.isAlive && !isContinuousWorld) {
         const W = this.cfg.worldWidth
         const exits = this.cfg.exits
         const ep2 = this.cfg.exitPositions ?? {}
         if (p.x < 0   && exits.includes('left')   && Math.abs(p.y - (ep2.left   ?? 640))   < DOOR_H / 2) { this.exitRoom('left');   return }
-        if (p.x > W   && exits.includes('right')  && Math.abs(p.y - (ep2.right  ?? 640))   < DOOR_H / 2) { this.exitRoom('right');  return }
+        const rightTrigX = this.cfg.rightExitX ?? W
+        if (p.x > rightTrigX && exits.includes('right') &&
+            (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)) {
+          this.exitRoom('right'); return
+        }
         if (p.y < 0   && exits.includes('top')    && Math.abs(p.x - (ep2.top    ?? W / 2)) < DOOR_W / 2) { this.exitRoom('top');    return }
         if (p.y > 740 && exits.includes('bottom') && Math.abs(p.x - (ep2.bottom ?? W / 2)) < DOOR_W / 2) { this.exitRoom('bottom'); return }
       }
@@ -3628,6 +3787,7 @@ export class GameScene extends Phaser.Scene {
     this.updateConradTrucks()
     this.updateCocoShadow()
     this.updateCallumNumbers()
+    this.updateParentHints()
     this.ui.update(this.players)
 
     // Debug: log first player position every 2 seconds

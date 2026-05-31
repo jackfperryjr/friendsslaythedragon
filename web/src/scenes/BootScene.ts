@@ -190,11 +190,19 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset-two',               'tileset/two/spritesheet.png')
     this.load.tilemapTiledJSON('world-map-three', 'tileset/three/map.json')
     this.load.image('tileset-three',             'tileset/three/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-four', 'tileset/four/map.json')
-    this.load.image('tileset-four',              'tileset/four/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-four',  'tileset/four/map.json')
+    this.load.image('tileset-four',               'tileset/four/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-five',  'tileset/five/map.json')
+    this.load.image('tileset-five',               'tileset/five/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-six',   'tileset/six/map.json')
+    this.load.image('tileset-six',                'tileset/six/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-seven', 'tileset/seven/map.json')
+    this.load.image('tileset-seven',              'tileset/seven/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-final',  'tileset/boss_final/map.json')
+    this.load.image('boss-tileset-final',         'tileset/boss_final/spritesheet.png')
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
-    this.load.audio('music-boss',     'assets/music/boss_defeat.mp3')
+    this.load.audio('music-boss',     'assets/music/boss.mp3')
     // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {
@@ -206,7 +214,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    console.log('%c🏰 CASTLE BUILD — BootScene running', 'background:#330a00;color:#ffcc00;font-size:16px;padding:4px 8px')
     this.genCharacters()
     this.genTiles()
     this.genObjects()
