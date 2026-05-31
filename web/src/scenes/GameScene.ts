@@ -1210,7 +1210,7 @@ export class GameScene extends Phaser.Scene {
           furnY = floorY - fh / 2
         }
         const hp = fs.type === 'chest' ? 3 : fs.type === 'bookcase' ? 2 : 1
-        this.spawnFurniturePiece(fs.type, fs.x, furnY, fs.ability ?? AbilityType.None, hp)
+        this.spawnFurniturePiece(fs.type, fs.x, furnY, fs.ability ?? AbilityType.None, hp, {}, fs.pizzaDrop)
       }
 
       // Floor spike tiles
@@ -1940,7 +1940,8 @@ export class GameScene extends Phaser.Scene {
     x: number, y: number,
     ability: AbilityType,
     health = 2,
-    resistances: Partial<Record<DamageType, number>> = {}
+    resistances: Partial<Record<DamageType, number>> = {},
+    pizzaDrop = false,
   ) {
     const visuals: Phaser.GameObjects.GameObject[] = []
     const v = <T extends Phaser.GameObjects.GameObject>(obj: T): T => { visuals.push(obj); return obj }
@@ -1973,7 +1974,8 @@ export class GameScene extends Phaser.Scene {
 
     } else { // chest
       fw = 48; fh = 40
-      const cl = ability === AbilityType.Fire     ? 0xff6600
+      const cl = pizzaDrop                         ? 0x55cc22
+               : ability === AbilityType.Fire     ? 0xff6600
                : ability === AbilityType.Lightning ? 0xffdd00
                : ability === AbilityType.Ice      ? 0x66ccff : 0xcb9b00
       v(this.add.rectangle(x,       y + 8,  48, 28, 0x5c3317, 0.98).setDepth(3))
@@ -2012,7 +2014,21 @@ export class GameScene extends Phaser.Scene {
       this.addScore(SCORE_DESTRUCT)
       visuals.forEach(go => { if (go.active) go.destroy() })
       if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
+      if (pizzaDrop) this.spawnPizzaDrop(obj.x, obj.y)
       if (Math.random() < 0.25) this.spawnFurnitureDrop(obj.x, obj.y)
+    })
+  }
+
+  private spawnPizzaDrop(x: number, y: number) {
+    const dropY = y - 16
+    const img = this.add.image(x, dropY, 'item-pizza').setDepth(8).setScale(1.2)
+    img.setData('item', { type: 'pizza', x, y: dropY } as ItemSpawn)
+    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    this.collectibleSprites.push(img)
+    this.time.delayedCall(10000, () => {
+      if (!img.active) return
+      this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
+      this.tweens.add({ targets: img, alpha: 0, duration: 800, onComplete: () => img.destroy() })
     })
   }
 
