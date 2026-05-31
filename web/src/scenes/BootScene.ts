@@ -134,6 +134,7 @@ const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkSta
   { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 15, walkFrames: [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15] },
   { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
+  { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',  fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 

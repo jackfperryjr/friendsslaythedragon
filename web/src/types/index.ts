@@ -9,6 +9,7 @@ export enum AbilityType {
   Lightning = 'Lightning',
   Ice = 'Ice',
   Bat = 'Bat',
+  BlackDragon = 'BlackDragon',
 }
 
 export enum DamageType {

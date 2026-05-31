@@ -1296,6 +1296,12 @@ export class GameScene extends Phaser.Scene {
                 if (runIndex + 1 < runRooms.length) this.openLevel2Exit(W)
                 else this.showBossDefeatedOverlay()
               })
+            } else if (dk === 'celeryManDefeated') {
+              this.showPlaceholderCutscene('You defeated Celery Man!', () => {
+                if (this.cfg.backPortal) this.buildBackPortal()
+                if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) this.openLevel2Exit(W)
+                else this.showBossDefeatedOverlay()
+              })
             } else if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) {
               // More levels — reveal right exit and back portal after brief celebration
               SoundManager.startTrack(this.sound, 'music-gameplay')
@@ -1500,12 +1506,32 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Coming-soon glow at right exit — white-yellow gradient, no hard wall visual
+      // Purple entrance glow at left edge
+      if (this.cfg.exitGlowLeft) {
+        const ey  = this.cfg.exitPositions?.left ?? 640
+        const gy  = ey - 25
+        const color = 0xcc55ff
+        const gg = this.add.graphics().setDepth(3)
+        for (let i = 9; i >= 0; i--) {
+          const t   = i / 9
+          const exp = t * 52
+          gg.fillStyle(color, (1 - t) * 0.30 + 0.02)
+          gg.fillRect(0, gy - 65 - exp, 16 + exp * 2, 130 + exp * 2)
+        }
+        gg.lineStyle(2, color, 0.90)
+        gg.strokeRect(0, gy - 65, 16, 130)
+        gg.lineStyle(3, color, 1)
+        gg.beginPath(); gg.moveTo(0,  gy - 70); gg.lineTo(0,  gy + 70); gg.strokePath()
+        gg.beginPath(); gg.moveTo(16, gy - 70); gg.lineTo(16, gy + 70); gg.strokePath()
+        this.tweens.add({ targets: gg, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
+      }
+
+      // Purple exit glow at right edge
       if (this.cfg.comingSoonGlowRight) {
         const W2  = this.cfg.worldWidth
         const ey  = this.cfg.exitPositions?.right ?? 1952
-        const gy  = ey - 25   // glow center shifted up 25px
-        const color = 0xffee88
+        const gy  = ey - 25
+        const color = 0xcc55ff
         const gg = this.add.graphics().setDepth(3)
         for (let i = 9; i >= 0; i--) {
           const t   = i / 9
@@ -1519,11 +1545,6 @@ export class GameScene extends Phaser.Scene {
         gg.beginPath(); gg.moveTo(W2 - 16, gy - 70); gg.lineTo(W2 - 16, gy + 70); gg.strokePath()
         gg.beginPath(); gg.moveTo(W2,      gy - 70); gg.lineTo(W2,      gy + 70); gg.strokePath()
         this.tweens.add({ targets: gg, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
-        // Text: original position adjusted — left 10px, down 20px
-        this.add.text(W2 - 58, ey - 70, 'COMING SOON!', {
-          fontSize: '9px', fontFamily: FONT, color: '#ffee88',
-          stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(1, 0.5).setDepth(10)
       }
 
       // Outdoor rooms: paint every solid tile with detailed grass/dirt colours
@@ -3163,7 +3184,7 @@ export class GameScene extends Phaser.Scene {
     if (enemy.abilityType === AbilityType.Lightning) gy = -200
 
     const isIce  = enemy.abilityType === AbilityType.Ice
-    const isFire = enemy.abilityType === AbilityType.Fire
+    const isFire = enemy.abilityType === AbilityType.Fire || enemy.abilityType === AbilityType.BlackDragon
     const texKey = isFire && this.textures.exists('proj-fire') ? 'proj-fire'
                  : isIce  && this.textures.exists('proj-ice')  ? 'proj-ice'
                  : 'fireball'
@@ -3343,6 +3364,47 @@ export class GameScene extends Phaser.Scene {
         SoundManager.stopCutsceneMusic()
         SoundManager.startTrack(this.sound, 'music-gameplay')
         elements.forEach(e => { if (e.active) e.destroy() })
+        onComplete()
+      }
+      this.input.keyboard?.once('keydown', dismiss)
+      this.input.gamepad?.once(Phaser.Input.Gamepad.Events.BUTTON_DOWN, dismiss)
+    })
+  }
+
+  private showPlaceholderCutscene(message: string, onComplete: () => void) {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    this.physics.world.isPaused = true
+    SoundManager.stopTrack()
+    SoundManager.startCutsceneMusic()
+
+    this.cameras.main.setBackgroundColor('#000000')
+    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
+      .setScrollFactor(0).setDepth(200)
+
+    const title = this.add.text(cx, cy, message, {
+      fontSize: '18px', fontFamily: FONT, color: '#ffe066',
+      stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setAlpha(0)
+
+    this.tweens.add({ targets: title, alpha: 1, duration: 400, delay: 200 })
+
+    this.time.delayedCall(2000, () => {
+      if (!this.scene.isActive('GameScene')) return
+      const prompt = this.add.text(cx, cy + 60, 'PRESS ANY BUTTON TO CONTINUE', {
+        fontSize: '10px', fontFamily: FONT, color: '#ffffff',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setAlpha(0)
+      this.tweens.add({ targets: prompt, alpha: 1, duration: 300 })
+      this.tweens.add({ targets: prompt, alpha: 0.2, duration: 500, yoyo: true, repeat: -1, delay: 300 })
+
+      const dismiss = () => {
+        this.input.keyboard?.off('keydown', dismiss)
+        this.physics.world.isPaused = false
+        SoundManager.stopCutsceneMusic()
+        SoundManager.startTrack(this.sound, 'music-gameplay')
+        ;[bg, title, prompt].forEach(e => { if (e.active) e.destroy() })
         onComplete()
       }
       this.input.keyboard?.once('keydown', dismiss)
