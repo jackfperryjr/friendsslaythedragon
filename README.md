@@ -18,7 +18,7 @@ Play locally by yourself. Or create a room on the server for up to 4 players. Us
 
 ## Go play
 
-**[Friends Slay the Dragon!](https://jackfperryjr.github.io/friends/)**
+**[Friends Slay the Dragon!](https://www.friendsslay.com)**
 
 No download. No install. Just vibes and dragon-slaying.
 

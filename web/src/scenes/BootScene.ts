@@ -205,9 +205,18 @@ export class BootScene extends Phaser.Scene {
     this.load.image('boss-tileset-final',               'tileset/boss_final/spritesheet.png')
     this.load.tilemapTiledJSON('boss-map-final-final',  'tileset/boss_final_final/map.json')
     this.load.image('boss-tileset-final-final',         'tileset/boss_final_final/spritesheet.png')
-    this.load.audio('music-title',    'assets/music/title_menu.mp3')
-    this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
-    this.load.audio('music-boss',     'assets/music/boss.mp3')
+    this.load.audio('music-title',              'assets/music/title_menu.mp3')
+    this.load.audio('music-gameplay',           'assets/music/gameplay_loop.mp3')
+    this.load.audio('music-boss',               'assets/music/boss.mp3')
+    this.load.audio('music-level4',             'assets/music/gameplay_loop1_5.mp3')
+    this.load.audio('music-level5-7',           'assets/music/gameplay_loop2.mp3')
+    this.load.audio('music-boss2',              'assets/music/boss2.mp3')
+    this.load.audio('music-boss3',              'assets/music/boss3.mp3')
+    this.load.audio('music-boss-victory',       'assets/music/boss_victory.mp3')
+    this.load.audio('music-final-boss-victory', 'assets/music/game_victory.mp3')
+    this.load.audio('music-end-game',           'assets/music/end_game.mp3')
+    this.load.image('cutscene-celery-man-down', 'assets/players/celery_man_down.png')
+    this.load.image('cutscene-victory',         'assets/players/victory.png')
     // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {

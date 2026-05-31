@@ -220,6 +220,10 @@ function clearFadeTimer() {
 }
 
 function _startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume: number) {
+  if (!manager.game.cache.audio.has(key)) {
+    console.warn(`[SoundManager] audio key "${key}" not in cache — skipping`)
+    return
+  }
   _track = manager.add(key, { loop: true, volume: key === 'music-gameplay' ? 0 : volume })
   _track.play()
   if (key === 'music-gameplay') {

@@ -72,6 +72,7 @@ export interface RoomConfig {
   backPortalEntryDir?: ExitDir            // which direction to enter the previous room from
   hiddenPortal?: { x: number; y: number } // secret door — visible only after boss defeated, advances run
   isSecretBonus?: boolean                 // room only reachable via hiddenPortal; skipped in normal boss-defeat advance
+  bossLeftBarrierX?: number               // override x for the left-entry barrier (default: 150)
   bossRightBarrierX?: number              // override x for the right-exit barrier (default: worldWidth - 150)
   bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
@@ -83,6 +84,8 @@ export interface RoomConfig {
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
   rightExitX?: number             // trigger right exit at this X instead of worldWidth (no Y check)
+  musicKey?: string               // overrides 'music-gameplay' for this room (non-boss state)
+  bossMusicKey?: string          // overrides 'music-boss' while boss is alive
   comingSoonGlowRight?: boolean  // purple glow at right exit
   exitGlowLeft?: boolean         // purple glow at left entrance
   isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
@@ -480,6 +483,7 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
     solid:      ['Walls'],
   },
   isOutdoor: true,
+  musicKey: 'music-level4',
   defaultSpawn: { x: 256, y: 1628 },
   entrySpawns: { left: { x: 256, y: 1628 }, right: { x: 9018, y: 860 } },
   exits: ['right'],
@@ -508,6 +512,7 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_FIVE },
   isDark: true,
+  musicKey: 'music-level5-7',
   exitGlowLeft: true,
   defaultSpawn: { x: 204, y: 220 },
   exits: ['left', 'right'],
@@ -534,7 +539,7 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
   ],
   destructibles: [],
   furnitureSpawns: [
-    { type: 'chest', x: 380, y: 200, pizzaDrop: true },
+    { type: 'chest', x: 380, scanFromY: 0, pizzaDrop: true },
   ],
   spikeFloors: [
     { x: 178, y: 1729, xEnd: 2780, scale: 2 },
@@ -559,6 +564,7 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_SIX },
   isDark: true,
+  musicKey: 'music-level5-7',
   defaultSpawn: { x: 204, y: 1724 },
   exits: ['left', 'right'],
   exitPositions: { left: 1600 },
@@ -584,7 +590,7 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
   ],
   destructibles: [],
   furnitureSpawns: [
-    { type: 'chest', x: 380, y: 1704, pizzaDrop: true },
+    { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
   spikeBalls: [
     { x:  450, y: 1400, count: 1 },
@@ -608,6 +614,7 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_SEVEN },
   isDark: true,
+  musicKey: 'music-level5-7',
   defaultSpawn: { x: 204, y: 1724 },
   exits: ['left'],
   exitPositions: { left: 1724 },
@@ -633,7 +640,7 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   ],
   destructibles: [],
   furnitureSpawns: [
-    { type: 'chest', x: 380, y: 1704, pizzaDrop: true },
+    { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
   spikeBalls: [
     { x:  400, y: 1400, count: 1 },
@@ -658,6 +665,8 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_FINAL },
   isDark: true,
+  bossMusicKey: 'music-boss2',
+  bossLeftBarrierX: 50,
   exits: ['left', 'right'],
   exitPositions: { left: 1200, right: 1200 },
   entrySpawns: { left: { x: 200, y: 1400 } },
@@ -693,6 +702,8 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_FINAL_FINAL },
   isDark: true,
+  bossMusicKey: 'music-boss3',
+  bossLeftBarrierX: 50,
   isSecretBonus: true,
   exits: ['left', 'right'],
   exitPositions: { left: 1200, right: 1200 },
