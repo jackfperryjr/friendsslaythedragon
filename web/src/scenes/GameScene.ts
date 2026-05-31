@@ -223,7 +223,10 @@ export class GameScene extends Phaser.Scene {
 
     const defeatedKey = this.cfg.bossDefeatedKey
     const isBossRoomLive = this.cfg.isBossRoom && !(defeatedKey && this.registry.get(defeatedKey))
-    SoundManager.startTrack(this.sound, isBossRoomLive ? 'music-boss' : 'music-gameplay')
+    const trackKey = isBossRoomLive
+      ? (this.cfg.bossMusicKey ?? 'music-boss')
+      : (this.cfg.musicKey    ?? 'music-gameplay')
+    SoundManager.startTrack(this.sound, trackKey)
   }
 
   // ── background ──────────────────────────────────────────────────────────────
@@ -772,6 +775,7 @@ export class GameScene extends Phaser.Scene {
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
         .setScale(item.type === 'mystery' ? 2.2
           : item.type === 'worm' || item.type === 'roly-poly' ? 1.0 : 1.2)
+      if (item.type === 'pizza') img.setDisplaySize(26, 26)
       if (isHidden) img.setAlpha(0)
       img.setData('item', item)
       this.tweens.add({
@@ -1252,7 +1256,7 @@ export class GameScene extends Phaser.Scene {
         } else {
           // Seal both exits until the boss dies
           const barrierH = this.cfg.worldHeight ?? 720
-          const barrier = this.add.rectangle(150, barrierH / 2, 20, barrierH, 0x000000, 0)
+          const barrier = this.add.rectangle(this.cfg.bossLeftBarrierX ?? 150, barrierH / 2, 20, barrierH, 0x000000, 0)
           this.physics.add.existing(barrier, true)
           this.platforms.add(barrier as unknown as Phaser.Physics.Arcade.Image)
           this.bossRoomLeftBarrier = barrier
@@ -1301,7 +1305,7 @@ export class GameScene extends Phaser.Scene {
                 if (this.cfg.backPortal) this.buildBackPortal()
                 if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) this.openLevel2Exit(W)
                 else this.showBossDefeatedOverlay()
-              })
+              }, 'cutscene-celery-man-down')
             } else if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) {
               // More levels — reveal right exit and back portal after brief celebration
               SoundManager.startTrack(this.sound, 'music-gameplay')
@@ -2021,7 +2025,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnPizzaDrop(x: number, y: number) {
     const dropY = y - 16
-    const img = this.add.image(x, dropY, 'item-pizza').setDepth(8).setScale(1.2)
+    const img = this.add.image(x, dropY, 'item-pizza').setDepth(8).setDisplaySize(26, 26)
     img.setData('item', { type: 'pizza', x, y: dropY } as ItemSpawn)
     this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     this.collectibleSprites.push(img)
@@ -2570,7 +2574,7 @@ export class GameScene extends Phaser.Scene {
     proj.setTint(0x44cc44)
     this.projectiles.add(proj)
     ;(proj.body as Phaser.Physics.Arcade.Body)
-      .setVelocity(Math.cos(angle) * 520, Math.sin(angle) * 520)
+      .setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
       .setGravityY(-800)
 
     this.enemies.forEach(e => {
@@ -2740,100 +2744,114 @@ export class GameScene extends Phaser.Scene {
   // ── Callum number ability ─────────────────────────────────────────────────────
 
   private spawnCallumNumber(src: Player) {
+    // Don't stack if a line is already active
+    if (this.callumNumbers.length > 0) return
     src.swingMelee()
 
-    const value = Phaser.Math.Between(1, 10)
+    const COUNT   = 10
+    const SPACING = 56
+    // Spawn at foot level so numbers sit on the surface the player is standing on
+    const lineY   = src.y + 28
+    const startX  = src.x - ((COUNT - 1) * SPACING) / 2
     const palette = ['#ff6666','#ffdd44','#44ff88','#44ccff','#ff88ff',
                      '#ff9944','#aaffff','#ffffff','#ffaacc','#aaffaa']
-    const color = palette[value - 1]
 
-    // Gradient glow shadow behind the number
-    const glow = this.add.text(src.x, src.y - 20, `${value}`, {
-      fontSize: '80px', fontFamily: FONT, color: '#ffffff',
-      stroke: '#ffffff', strokeThickness: 14,
-    }).setOrigin(0.5).setDepth(11).setAlpha(0.45)
-    glow.setTint(0xaa00ff, 0x0088ff, 0xff0077, 0xffaa00)
-    this.tweens.add({ targets: glow, alpha: 0.15, duration: 550, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+    for (let i = 0; i < COUNT; i++) {
+      const numX   = startX + i * SPACING
+      const numVal = i + 1
+      const color  = palette[i]
 
-    const num = this.add.text(src.x, src.y - 20, `${value}`, {
-      fontSize: '72px', fontFamily: FONT, color,
-      stroke: '#000000', strokeThickness: 8,
-    }).setOrigin(0.5).setDepth(12)
+      const glow = this.add.text(numX, lineY, `${numVal}`, {
+        fontSize: '46px', fontFamily: FONT, color: '#ffffff',
+        stroke: '#ffffff', strokeThickness: 10,
+      }).setOrigin(0.5).setDepth(11).setAlpha(0.40)
+      glow.setTint(0xaa00ff, 0x0088ff, 0xff0077, 0xffaa00)
+      this.tweens.add({ targets: glow, alpha: 0.12, duration: 600 + i * 60, yoyo: true, repeat: -1 })
 
-    this.physics.add.existing(num)
-    const body = num.body as Phaser.Physics.Arcade.Body
-    body.setAllowGravity(false)
-    body.setBounce(1, 1)
-    body.setCollideWorldBounds(true)
-    this.physics.add.collider(num, this.platforms)
-    this.tilemapLayers.forEach(l => this.physics.add.collider(num, l))
+      const num = this.add.text(numX, lineY, `${numVal}`, {
+        fontSize: '42px', fontFamily: FONT, color,
+        stroke: '#000000', strokeThickness: 5,
+      }).setOrigin(0.5).setDepth(12)
 
-    const emitter = this.add.particles(num.x, num.y, '__DEFAULT', {
-      lifespan: { min: 400, max: 800 },
-      speed: { min: 20, max: 70 },
-      scale: { start: 0.3, end: 0 },
-      alpha: { start: 0.9, end: 0 },
-      tint: [0xffd700, 0xffffff, 0xccaaff, 0x88ddff, 0xff99aa],
-      quantity: 1,
-      frequency: 80,
-      blendMode: 'ADD',
-    }).setDepth(13)
+      this.physics.add.existing(num)
+      const body = num.body as Phaser.Physics.Arcade.Body
+      body.setAllowGravity(false)
+      body.setVelocity(0, 0)
 
-    // Find nearest target
-    let target: Phaser.GameObjects.Sprite | null = null
-    let best = Infinity
-    for (const e of this.enemies) {
-      if (!e.active) continue
-      const d = Phaser.Math.Distance.Between(src.x, src.y, e.x, e.y)
-      if (d < best) { best = d; target = e }
-    }
-    if (this.boss?.active) {
-      const d = Phaser.Math.Distance.Between(src.x, src.y, this.boss.x, this.boss.y)
-      if (d < best) { best = d; target = this.boss }
-    }
-
-    if (target) {
-      const angle = Phaser.Math.Angle.Between(num.x, num.y, target.x, target.y)
-      body.setVelocity(Math.cos(angle) * 420, Math.sin(angle) * 420)
+      const emitter = this.add.particles(numX, lineY, '__DEFAULT', {
+        lifespan: { min: 300, max: 600 },
+        speed: { min: 10, max: 40 },
+        scale: { start: 0.25, end: 0 },
+        alpha: { start: 0.8, end: 0 },
+        tint: [0xffd700, 0xffffff, 0xccaaff, 0x88ddff],
+        quantity: 1, frequency: 120, blendMode: 'ADD',
+      }).setDepth(13)
 
       let didHit = false
-      const onHit = () => {
-        if (!num.active || didHit) return
+      const cleanup = () => {
+        if (!num.active) return
+        emitter.destroy()
+        if (glow.active) glow.destroy()
+        this.tweens.add({
+          targets: num, alpha: 0, scaleX: 1.5, scaleY: 1.5,
+          duration: 160, onComplete: () => { if (num.active) num.destroy() },
+        })
+      }
+
+      const onHit = (targetObj: Enemy | Boss) => {
+        if (didHit || !num.active) return
         didHit = true
-        if (target === this.boss) {
+        if (targetObj === this.boss) {
           if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
               (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
           SoundManager.bossHit()
           this.boss!.hit()
         } else {
           SoundManager.enemyHit()
-          ;(target as Enemy).hit()
+          ;(targetObj as Enemy).hit()
           this.addScore(SCORE_ENEMY)
         }
-        emitter.destroy()
-        if (glow.active) glow.destroy()
-        this.tweens.add({
-          targets: num, alpha: 0, scaleX: 1.6, scaleY: 1.6,
-          duration: 180, onComplete: () => { if (num.active) num.destroy() },
-        })
+        cleanup()
       }
 
-      for (const e of this.enemies) {
-        if (e === target) { this.physics.add.overlap(num, e, onHit); break }
+      // Phase 1 (3 s): numbers sit in line; any enemy walking into them takes a hit
+      this.enemies.forEach(e => {
+        if (e.active) this.physics.add.overlap(num, e, () => onHit(e))
+      })
+      if (this.boss?.active) {
+        this.physics.add.overlap(num, this.boss, () => onHit(this.boss!))
       }
-      if (target === this.boss && this.boss?.active) {
-        this.physics.add.overlap(num, this.boss, onHit)
-      }
+
+      // Phase 2: after 1.5 s, each number shoots toward nearest enemy
+      this.time.delayedCall(1500, () => {
+        if (!num.active || didHit) return
+        body.setBounce(1, 1)
+        body.setCollideWorldBounds(true)
+
+        let target: Phaser.GameObjects.Sprite | null = null
+        let best = Infinity
+        for (const e of this.enemies) {
+          if (!e.active) continue
+          const d = Phaser.Math.Distance.Between(num.x, num.y, e.x, e.y)
+          if (d < best) { best = d; target = e }
+        }
+        if (this.boss?.active) {
+          const d = Phaser.Math.Distance.Between(num.x, num.y, this.boss.x, this.boss.y)
+          if (d < best) { best = d; target = this.boss }
+        }
+        if (target) {
+          const angle = Phaser.Math.Angle.Between(num.x, num.y, target.x, target.y)
+          body.setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
+        }
+      })
+
+      // Total lifetime cap: 7 s
+      this.time.delayedCall(7000, () => {
+        if (num.active && !didHit) cleanup()
+      })
+
+      this.callumNumbers.push({ obj: num, glow, emitter })
     }
-
-    this.time.delayedCall(7000, () => {
-      if (!num.active) return
-      emitter.destroy()
-      if (glow.active) glow.destroy()
-      this.tweens.add({ targets: num, alpha: 0, duration: 300, onComplete: () => { if (num.active) num.destroy() } })
-    })
-
-    this.callumNumbers.push({ obj: num, glow, emitter })
   }
 
   private updateCallumNumbers() {
@@ -3337,13 +3355,12 @@ export class GameScene extends Phaser.Scene {
     const chars = (selectedChars ?? ['conrad']).slice(0, 4)
 
     this.physics.world.isPaused = true
-    SoundManager.stopTrack()
-    SoundManager.startCutsceneMusic()
+    SoundManager.startTrack(this.sound, 'music-boss-victory')
 
-    // Immediately black — no fade so the game world is never visible behind the cutscene
     this.cameras.main.setBackgroundColor('#000000')
     const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
-      .setScrollFactor(0).setDepth(200)
+      .setScrollFactor(0).setDepth(200).setAlpha(0)
+    this.tweens.add({ targets: bg, alpha: 1, duration: 250 })
 
     const elements: Phaser.GameObjects.GameObject[] = [bg]
 
@@ -3356,11 +3373,10 @@ export class GameScene extends Phaser.Scene {
       const slotX = slotW * (idx + 0.5)
       const img = this.add.image(slotX, cy, imgKey)
         .setScrollFactor(0).setDepth(201).setAlpha(0)
-      // Scale to fit slot while keeping aspect ratio (letterbox)
       const scale = Math.min(slotW / img.width, height / img.height)
       img.setScale(scale)
       elements.push(img)
-      this.tweens.add({ targets: img, alpha: 1, duration: 400, delay: 200 })
+      this.tweens.add({ targets: img, alpha: 1, duration: 350, delay: 150 })
     })
 
     // After 3 s, show "press any button" prompt at the top
@@ -3377,7 +3393,6 @@ export class GameScene extends Phaser.Scene {
       const dismiss = () => {
         this.input.keyboard?.off('keydown', dismiss)
         this.physics.world.isPaused = false
-        SoundManager.stopCutsceneMusic()
         SoundManager.startTrack(this.sound, 'music-gameplay')
         elements.forEach(e => { if (e.active) e.destroy() })
         onComplete()
@@ -3387,40 +3402,51 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private showPlaceholderCutscene(message: string, onComplete: () => void) {
+  private showPlaceholderCutscene(message: string, onComplete: () => void, imageKey?: string) {
     const { width, height } = this.scale
-    const cx = width / 2, cy = height / 2
+    const cx = width / 2
 
     this.physics.world.isPaused = true
-    SoundManager.stopTrack()
-    SoundManager.startCutsceneMusic()
+    SoundManager.startTrack(this.sound, 'music-boss-victory')
 
     this.cameras.main.setBackgroundColor('#000000')
-    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
-      .setScrollFactor(0).setDepth(200)
+    const bg = this.add.rectangle(cx, height / 2, width, height, 0x000000, 1)
+      .setScrollFactor(0).setDepth(200).setAlpha(0)
+    this.tweens.add({ targets: bg, alpha: 1, duration: 250 })
 
-    const title = this.add.text(cx, cy, message, {
-      fontSize: '18px', fontFamily: FONT, color: '#ffe066',
+    const elements: Phaser.GameObjects.GameObject[] = [bg]
+
+    if (imageKey && this.textures.exists(imageKey)) {
+      const img = this.add.image(cx, height / 2, imageKey)
+        .setScrollFactor(0).setDepth(201).setAlpha(0)
+      const scale = Math.min(width / img.width, height / img.height)
+      img.setScale(scale)
+      this.tweens.add({ targets: img, alpha: 1, duration: 300, delay: 100 })
+      elements.push(img)
+    }
+
+    const title = this.add.text(cx, 44, message, {
+      fontSize: '16px', fontFamily: FONT, color: '#ffe066',
       stroke: '#000000', strokeThickness: 6,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setAlpha(0)
-
-    this.tweens.add({ targets: title, alpha: 1, duration: 400, delay: 200 })
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(202).setAlpha(0)
+    this.tweens.add({ targets: title, alpha: 1, duration: 350, delay: 150 })
+    elements.push(title)
 
     this.time.delayedCall(2000, () => {
       if (!this.scene.isActive('GameScene')) return
-      const prompt = this.add.text(cx, cy + 60, 'PRESS ANY BUTTON TO CONTINUE', {
+      const prompt = this.add.text(cx, height - 50, 'PRESS ANY BUTTON TO CONTINUE', {
         fontSize: '10px', fontFamily: FONT, color: '#ffffff',
         stroke: '#000000', strokeThickness: 3,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setAlpha(0)
+      }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(202).setAlpha(0)
+      elements.push(prompt)
       this.tweens.add({ targets: prompt, alpha: 1, duration: 300 })
       this.tweens.add({ targets: prompt, alpha: 0.2, duration: 500, yoyo: true, repeat: -1, delay: 300 })
 
       const dismiss = () => {
         this.input.keyboard?.off('keydown', dismiss)
         this.physics.world.isPaused = false
-        SoundManager.stopCutsceneMusic()
         SoundManager.startTrack(this.sound, 'music-gameplay')
-        ;[bg, title, prompt].forEach(e => { if (e.active) e.destroy() })
+        elements.forEach(e => { if (e.active) e.destroy() })
         onComplete()
       }
       this.input.keyboard?.once('keydown', dismiss)
@@ -3433,29 +3459,36 @@ export class GameScene extends Phaser.Scene {
     const cx = width / 2, cy = height / 2
 
     this.cameras.main.setBackgroundColor('#000000')
-    SoundManager.stopTrack()
-    SoundManager.startCutsceneMusic()
+    SoundManager.startTrack(this.sound, 'music-final-boss-victory')
 
-    // Fully opaque black — hides the game world completely
     const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
-      .setScrollFactor(0).setDepth(90)
+      .setScrollFactor(0).setDepth(90).setAlpha(0)
+    this.tweens.add({ targets: bg, alpha: 1, duration: 250 })
+
+    if (this.textures.exists('cutscene-victory')) {
+      const vImg = this.add.image(cx, cy, 'cutscene-victory')
+        .setScrollFactor(0).setDepth(91).setAlpha(0)
+      const scale = Math.min(width / vImg.width, height / vImg.height)
+      vImg.setScale(scale)
+      this.tweens.add({ targets: vImg, alpha: 1, duration: 350, delay: 150 })
+    }
 
     const title = this.add.text(cx, cy - 110, 'BOSS DEFEATED!', {
       fontSize: '28px', fontFamily: FONT, color: '#ffe066',
       stroke: '#000000', strokeThickness: 8,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(91).setAlpha(0)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setAlpha(0)
 
     const sub = this.add.text(cx, cy - 55, 'What will you do?', {
       fontSize: '11px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(91).setAlpha(0)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setAlpha(0)
 
     const makeBtn = (x: number, label: string, cb: () => void) => {
       const btn = this.add.text(x, cy + 30, label, {
         fontSize: '10px', fontFamily: FONT, color: '#ffffff',
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000066', padding: { x: 16, y: 12 },
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(92)
         .setInteractive({ useHandCursor: true }).setAlpha(0)
       btn.on('pointerover', () => btn.setColor('#ffe066'))
       btn.on('pointerout',  () => btn.setColor('#ffffff'))
@@ -3487,7 +3520,7 @@ export class GameScene extends Phaser.Scene {
     // Gamepad cursor
     const cursor = this.add.text(0, 0, '►', {
       fontSize: '14px', fontFamily: FONT, color: '#ffe066',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(92).setVisible(false)
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(93).setVisible(false)
 
     const items = [
       { text: btnContinue, action: () => btnContinue.emit('pointerdown') },
@@ -3510,15 +3543,14 @@ export class GameScene extends Phaser.Scene {
 
     const cleanup = () => {
       this.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
-      SoundManager.stopCutsceneMusic()
     }
     this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
 
-    // Fade in content (not the bg — that's instantly black)
-    this.tweens.add({ targets: [title, sub, btnContinue, btnMenu], alpha: 1, duration: 400, delay: 100 })
+    // Fade in text/buttons after image has a moment to appear
+    this.tweens.add({ targets: [title, sub, btnContinue, btnMenu], alpha: 1, duration: 400, delay: 300 })
 
     // Show cursor on first button after content is visible
-    this.time.delayedCall(550, () => moveFocus(0))
+    this.time.delayedCall(750, () => moveFocus(0))
   }
 
   private showCongratulatoryOverlay() {
@@ -3526,11 +3558,11 @@ export class GameScene extends Phaser.Scene {
     const cx = width / 2, cy = height / 2
 
     this.cameras.main.setBackgroundColor('#000000')
-    SoundManager.stopTrack()
-    SoundManager.startCutsceneMusic()
+    SoundManager.startTrack(this.sound, 'music-end-game')
 
-    this.add.rectangle(cx, cy, width, height, 0x000000, 1)
-      .setScrollFactor(0).setDepth(90)
+    const congBg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
+      .setScrollFactor(0).setDepth(90).setAlpha(0)
+    this.tweens.add({ targets: congBg, alpha: 1, duration: 300 })
 
     this.add.text(cx, cy - 160, 'CONGRATULATIONS!', {
       fontSize: '22px', fontFamily: FONT, color: '#ffd700',

@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 
-const FIRE_INTERVAL = 2000
+const FIRE_INTERVAL = 900
 
 export class CarterDuplicate extends Phaser.Physics.Arcade.Sprite {
   private hp = 2

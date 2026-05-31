@@ -176,11 +176,43 @@ export class LobbyScene extends Phaser.Scene {
       fontSize: '9px', fontFamily: FONT, color: DIM,
     }).setOrigin(0.5))
 
+    items.push(this.add.text(width / 2, height * 0.28 + 22, '(tap code to open keyboard on mobile)', {
+      fontSize: '7px', fontFamily: FONT, color: DIM,
+    }).setOrigin(0.5))
+
     this.codeDisplay = this.add.text(width / 2, height * 0.40, '______', {
       fontSize: '36px', fontFamily: FONT, color: CYAN, letterSpacing: 18,
       stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5)
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
     items.push(this.codeDisplay)
+
+    // Hidden HTML input for mobile virtual keyboard
+    const mobileInput = document.createElement('input')
+    mobileInput.type = 'text'
+    mobileInput.setAttribute('inputmode', 'text')
+    mobileInput.setAttribute('autocapitalize', 'characters')
+    mobileInput.autocomplete = 'off'
+    mobileInput.style.cssText = [
+      'position:fixed', 'opacity:0', 'pointer-events:none',
+      'top:50%', 'left:50%', 'transform:translate(-50%,-50%)',
+      'width:1px', 'height:1px', 'font-size:16px',
+    ].join(';')
+    document.body.appendChild(mobileInput)
+
+    // Tap code display → focus hidden input → native keyboard opens
+    this.codeDisplay.on('pointerdown', () => {
+      mobileInput.value = this.codeEntry
+      mobileInput.focus()
+    })
+
+    mobileInput.addEventListener('input', () => {
+      const val = mobileInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+      this.codeEntry = val
+      mobileInput.value = val
+      this.codeDisplay.setText(val.padEnd(6, '_'))
+    })
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { mobileInput.remove() })
 
     this.joinError = this.add.text(width / 2, height * 0.54, '', {
       fontSize: '9px', fontFamily: FONT, color: RED,

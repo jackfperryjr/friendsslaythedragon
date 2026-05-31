@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 
-const FIRE_RATE    = 1500   // ms between shots while stopped
+const FIRE_RATE    = 1600   // ms between bursts while stopped
 const ATTACK_RANGE = 180    // px — stop and shoot within this distance
 const MOVE_SPEED   = 700    // 2× player speed
 const LIFETIME_MS  = 10000
@@ -26,7 +26,13 @@ export class ConradArmyTruck extends Phaser.Physics.Arcade.Sprite {
     this.fireTimer = scene.time.addEvent({
       delay: FIRE_RATE,
       loop: true,
-      callback: () => { if (this.active && this.isShooting) this.emit('fireShot', this) },
+      callback: () => {
+        if (!this.active || !this.isShooting) return
+        // 3-round burst: fire immediately, then +150 ms, then +300 ms
+        this.emit('fireShot', this)
+        scene.time.delayedCall(150, () => { if (this.active && this.isShooting) this.emit('fireShot', this) })
+        scene.time.delayedCall(300, () => { if (this.active && this.isShooting) this.emit('fireShot', this) })
+      },
     })
   }
 
