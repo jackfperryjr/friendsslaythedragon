@@ -58,6 +58,8 @@ export interface RoomConfig {
   bossFlying?: boolean
   bossStationary?: boolean    // boss stays in place, no patrol movement
   bossAttackRate?: number     // ms between boss attacks (default 3000)
+  bossScale?: number          // display scale multiplier for the boss sprite (default 3.45)
+  bossNoAttack?: boolean      // boss never fires projectiles
   bossSpawnX?: number
   bossSpawnY?: number
   bossPortal?: { x: number; y: number }
@@ -67,6 +69,8 @@ export interface RoomConfig {
   backPortal?: { x: number; y: number }  // non-glowing boss door for returning to previous room
   backPortalKey?: string                  // registry key to check instead of bossDefeatedKey
   backPortalEntryDir?: ExitDir            // which direction to enter the previous room from
+  hiddenPortal?: { x: number; y: number } // secret door — visible only after boss defeated, advances run
+  isSecretBonus?: boolean                 // room only reachable via hiddenPortal; skipped in normal boss-defeat advance
   bossRightBarrierX?: number              // override x for the right-exit barrier (default: worldWidth - 150)
   bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
@@ -77,8 +81,11 @@ export interface RoomConfig {
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
-  comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
+  rightExitX?: number             // trigger right exit at this X instead of worldWidth (no Y check)
+  comingSoonGlowRight?: boolean  // purple glow at right exit
+  exitGlowLeft?: boolean         // purple glow at left entrance
   isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
+  isDark?: boolean               // apply a dark purple overlay (levels 5-7+)
   worldMapLayers?: {
     background?: string   // decorative bg layer (depth -2, no collision)
     solid?: string[]      // collision layers (depth 1)
@@ -102,8 +109,13 @@ const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tileset
 const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
 const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
-const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion'  } as const
-const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three', tilesetName: 'spritefusion' } as const
+const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion' } as const
+const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',        tilesetName: 'spritefusion' } as const
+const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
+const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
+const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
+const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
+const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
@@ -436,8 +448,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
   starOrb: { x: 1219, y: 512 },
   comingSoonGlowRight: true,
   platforms: [
-    { x: 16,   y: 640,  w: 32, h: 130 },   // seal left exit
-    { x: 3152, y: 1952, w: 32, h: 130 },   // invisible barrier keeps right exit sealed
+    { x: 16, y: 640, w: 32, h: 130 },   // seal left exit
   ],
   enemies: [],
   destructibles: [],
@@ -463,8 +474,258 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
     solid:      ['Walls'],
   },
   isOutdoor: true,
-  defaultSpawn: { x: 238, y: 1600 },
-  exits: [],
+  defaultSpawn: { x: 256, y: 1628 },
+  entrySpawns: { left: { x: 256, y: 1628 }, right: { x: 9018, y: 860 } },
+  exits: ['right'],
+  rightExitX: 9018,
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [
+    { x: 5916, y: 1072, type: 'attack-boost' },
+    { x: 2490, y: 1628, type: 'speed' },
+  ],
+}
+
+// ─── Levels 5-7: Dark castle interior rooms ───────────────────────────────────
+// Maps: 100×58 tiles at 32px = 3200×1856 world pixels each
+
+const LEVEL5_WORLD_ROOM: RoomConfig = {
+  name: 'The Forgotten Keep',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_FIVE },
+  isDark: true,
+  exitGlowLeft: true,
+  defaultSpawn: { x: 204, y: 220 },
+  exits: ['left', 'right'],
+  exitPositions: { left: 220 },
+  rightExitX: 3115,
+  entrySpawns: { left: { x: 204, y: 220 }, right: { x: 3080, y: 1724 } },
+  platforms: [],
+  enemies: [
+    { x:  320, y:  500, ability: AbilityType.BlackDragon },
+    { x:  440, y:  900, ability: AbilityType.BlackDragon },
+    { x:  560, y: 1200, ability: AbilityType.BlackDragon },
+    { x:  680, y:  650, ability: AbilityType.BlackDragon },
+    { x:  800, y: 1000, ability: AbilityType.BlackDragon },
+    { x:  960, y:  400, ability: AbilityType.BlackDragon },
+    { x: 1080, y:  800, ability: AbilityType.BlackDragon },
+    { x: 1200, y: 1300, ability: AbilityType.BlackDragon },
+    { x: 1320, y:  600, ability: AbilityType.BlackDragon },
+    { x: 1440, y: 1000, ability: AbilityType.BlackDragon },
+    { x: 1560, y:  450, ability: AbilityType.BlackDragon },
+    { x: 1680, y:  850, ability: AbilityType.BlackDragon },
+    { x: 1800, y: 1200, ability: AbilityType.BlackDragon },
+    { x: 1920, y:  700, ability: AbilityType.BlackDragon },
+    { x: 2040, y:  400, ability: AbilityType.BlackDragon },
+    { x: 2160, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 2280, y:  600, ability: AbilityType.BlackDragon },
+    { x: 2400, y:  950, ability: AbilityType.BlackDragon },
+    { x: 2520, y: 1300, ability: AbilityType.BlackDragon },
+    { x: 2640, y:  500, ability: AbilityType.BlackDragon },
+    { x: 2760, y:  800, ability: AbilityType.BlackDragon },
+    { x: 2880, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 2960, y:  400, ability: AbilityType.BlackDragon },
+    { x: 3040, y:  700, ability: AbilityType.BlackDragon },
+    { x: 3100, y: 1000, ability: AbilityType.BlackDragon },
+  ],
+  destructibles: [],
+  furnitureSpawns: [],
+  spikeFloors: [
+    { x: 178, y: 1729, xEnd: 2780, scale: 2 },
+  ],
+  spikeBalls: [
+    { x:  500, y: 1400, count: 2 },
+    { x:  900, y: 1000, count: 2 },
+    { x: 1300, y: 1400, count: 2 },
+    { x: 1700, y: 1000, count: 2 },
+    { x: 2100, y: 1400, count: 3 },
+    { x: 2500, y: 1000, count: 2 },
+    { x: 2900, y: 1400, count: 2 },
+  ],
+  crates: [],
+  items: [],
+}
+
+const LEVEL6_WORLD_ROOM: RoomConfig = {
+  name: 'The Shadow Halls',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_SIX },
+  isDark: true,
+  defaultSpawn: { x: 204, y: 1724 },
+  exits: ['left', 'right'],
+  exitPositions: { left: 1600 },
+  rightExitX: 3106,
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 3080, y: 1724 } },
+  platforms: [],
+  enemies: [
+    { x:  350, y:  600, ability: AbilityType.BlackDragon },
+    { x:  470, y: 1000, ability: AbilityType.BlackDragon },
+    { x:  590, y:  450, ability: AbilityType.BlackDragon },
+    { x:  710, y: 1200, ability: AbilityType.BlackDragon },
+    { x:  830, y:  750, ability: AbilityType.BlackDragon },
+    { x:  990, y:  500, ability: AbilityType.BlackDragon },
+    { x: 1110, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 1230, y:  800, ability: AbilityType.BlackDragon },
+    { x: 1350, y:  400, ability: AbilityType.BlackDragon },
+    { x: 1470, y: 1300, ability: AbilityType.BlackDragon },
+    { x: 1590, y:  650, ability: AbilityType.BlackDragon },
+    { x: 1710, y:  950, ability: AbilityType.BlackDragon },
+    { x: 1830, y:  500, ability: AbilityType.BlackDragon },
+    { x: 1950, y: 1200, ability: AbilityType.BlackDragon },
+    { x: 2070, y:  700, ability: AbilityType.BlackDragon },
+    { x: 2190, y:  400, ability: AbilityType.BlackDragon },
+    { x: 2310, y: 1000, ability: AbilityType.BlackDragon },
+    { x: 2430, y:  600, ability: AbilityType.BlackDragon },
+    { x: 2550, y: 1300, ability: AbilityType.BlackDragon },
+    { x: 2670, y:  850, ability: AbilityType.BlackDragon },
+    { x: 2790, y:  500, ability: AbilityType.BlackDragon },
+    { x: 2880, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 2960, y:  750, ability: AbilityType.BlackDragon },
+    { x: 3040, y:  400, ability: AbilityType.BlackDragon },
+    { x: 3100, y: 1000, ability: AbilityType.BlackDragon },
+  ],
+  destructibles: [],
+  furnitureSpawns: [],
+  spikeBalls: [
+    { x:  450, y: 1400, count: 2 },
+    { x:  850, y:  900, count: 2 },
+    { x: 1250, y: 1400, count: 2 },
+    { x: 1650, y:  900, count: 2 },
+    { x: 2050, y: 1400, count: 3 },
+    { x: 2450, y:  900, count: 2 },
+    { x: 2850, y: 1400, count: 2 },
+  ],
+  crates: [],
+  items: [
+    { x: 1906, y: 284, type: 'invulnerability' },
+  ],
+}
+
+const LEVEL7_WORLD_ROOM: RoomConfig = {
+  name: 'The Dragon\'s Approach',
+  ...HALL,
+  worldWidth:  100 * 32,  // 3200
+  worldHeight:  58 * 32,  // 1856
+  worldMap: { ...MAP_SEVEN },
+  isDark: true,
+  defaultSpawn: { x: 204, y: 1724 },
+  exits: ['left'],
+  exitPositions: { left: 1724 },
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 3080, y: 1724 } },
+  bossPortal: { x: 1630, y: 604 },
+  platforms: [],
+  enemies: [
+    { x:  300, y:  700, ability: AbilityType.BlackDragon },
+    { x:  420, y: 1100, ability: AbilityType.BlackDragon },
+    { x:  540, y:  500, ability: AbilityType.BlackDragon },
+    { x:  660, y:  900, ability: AbilityType.BlackDragon },
+    { x:  780, y: 1300, ability: AbilityType.BlackDragon },
+    { x:  950, y:  600, ability: AbilityType.BlackDragon },
+    { x: 1070, y:  400, ability: AbilityType.BlackDragon },
+    { x: 1190, y: 1000, ability: AbilityType.BlackDragon },
+    { x: 1310, y:  800, ability: AbilityType.BlackDragon },
+    // skip x~1630 area (boss portal)
+    { x: 1960, y:  500, ability: AbilityType.BlackDragon },
+    { x: 2080, y: 1200, ability: AbilityType.BlackDragon },
+    { x: 2200, y:  750, ability: AbilityType.BlackDragon },
+    { x: 2320, y:  400, ability: AbilityType.BlackDragon },
+    { x: 2440, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 2560, y:  650, ability: AbilityType.BlackDragon },
+    { x: 2680, y:  950, ability: AbilityType.BlackDragon },
+    { x: 2800, y:  500, ability: AbilityType.BlackDragon },
+    { x: 2900, y: 1300, ability: AbilityType.BlackDragon },
+    { x: 2980, y:  700, ability: AbilityType.BlackDragon },
+    { x: 3060, y: 1000, ability: AbilityType.BlackDragon },
+    // extra 5 clustered in second half
+    { x: 1800, y:  800, ability: AbilityType.BlackDragon },
+    { x: 1880, y: 1200, ability: AbilityType.BlackDragon },
+    { x: 2150, y:  450, ability: AbilityType.BlackDragon },
+    { x: 2750, y: 1100, ability: AbilityType.BlackDragon },
+    { x: 3020, y:  400, ability: AbilityType.BlackDragon },
+  ],
+  destructibles: [],
+  furnitureSpawns: [],
+  spikeBalls: [
+    { x:  400, y: 1400, count: 2 },
+    { x:  800, y:  950, count: 2 },
+    { x: 1200, y: 1400, count: 2 },
+    { x: 1900, y:  950, count: 3 },
+    { x: 2300, y: 1400, count: 2 },
+    { x: 2700, y:  950, count: 2 },
+    { x: 3050, y: 1400, count: 2 },
+  ],
+  crates: [],
+  items: [],
+}
+
+// ─── Final Boss Room ──────────────────────────────────────────────────────────
+// Map: tileset/boss_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+
+const BOSS_FINAL_ROOM: RoomConfig = {
+  name: "The Dragon's Lair",
+  ...SANCTUM,
+  worldWidth:  40 * 32,   // 1280
+  worldHeight: 50 * 32,   // 1600
+  worldMap: { ...BOSS_MAP_FINAL },
+  isDark: true,
+  exits: ['left', 'right'],
+  exitPositions: { left: 1200, right: 1200 },
+  entrySpawns: { left: { x: 200, y: 1400 } },
+  backPortal: { x: 200, y: 1400 },
+  hiddenPortal: { x: 218, y: 604 },
+  isBossRoom: true,
+  bossDefeatedKey: 'dragonDefeated',
+  bossHp: 30,
+  bossName: 'RED DRAGON',
+  bossKey: 'sheet-red-dragon',
+  bossFlying: true,
+  bossSpawnX: 900,
+  bossSpawnY: 700,
+  bossScale: 3,
+  bossAttackRate: 1500,
+  bossRightBarrierX: 1200,
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
+// ─── Final Final Boss Room ────────────────────────────────────────────────────
+// Map: tileset/boss_final_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+// Secret room accessible only via the hidden portal in the Dragon's Lair.
+
+const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
+  name: "The True Lair",
+  ...SANCTUM,
+  worldWidth:  40 * 32,   // 1280
+  worldHeight: 50 * 32,   // 1600
+  worldMap: { ...BOSS_MAP_FINAL_FINAL },
+  isDark: true,
+  isSecretBonus: true,
+  exits: ['left', 'right'],
+  exitPositions: { left: 1200, right: 1200 },
+  entrySpawns: { left: { x: 200, y: 1400 } },
+  isBossRoom: true,
+  bossDefeatedKey: 'trueDragonDefeated',
+  bossHp: 1,
+  bossName: 'SILLY DRAGON',
+  bossKey: 'sheet-gold-dragon',
+  bossFlying: false,
+  bossStationary: true,
+  bossNoAttack: true,
+  bossSpawnX: 640,
+  bossSpawnY: 1200,
+  bossScale: 7,
+  bossRightBarrierX: 1200,
   platforms: [],
   enemies: [],
   destructibles: [],
@@ -479,13 +740,18 @@ export const TOTAL_ROLY_POLYS = 3
 
 export function generateRun(): RoomConfig[] {
   return [
-    WORLD_ROOM,
-    BOSS_TILEMAP_ROOM,
-    LEVEL2_WORLD_ROOM,
-    LEVEL2_BOSS_ROOM,
-    LEVEL3_WORLD_ROOM,
-    BOSS_THREE_ROOM,
-    LEVEL4_WORLD_ROOM,
+    WORLD_ROOM,           // 0 — Level 1
+    BOSS_TILEMAP_ROOM,    // 1 — Boss 1: Skeleton King
+    LEVEL2_WORLD_ROOM,    // 2 — Level 2
+    LEVEL2_BOSS_ROOM,     // 3 — Boss 2: Zombie King
+    LEVEL3_WORLD_ROOM,    // 4 — Level 3
+    BOSS_THREE_ROOM,      // 5 — Boss 3: Celery Man
+    LEVEL4_WORLD_ROOM,    // 6 — Level 4 (outside)
+    LEVEL5_WORLD_ROOM,    // 7 — Level 5
+    LEVEL6_WORLD_ROOM,    // 8 — Level 6
+    LEVEL7_WORLD_ROOM,    // 9 — Level 7 (boss portal TBD)
+    BOSS_FINAL_ROOM,       // 10 — Final Boss: The Dragon
+    BOSS_FINAL_FINAL_ROOM, // 11 — Secret: The True Dragon (hidden portal only)
   ]
 }
 
