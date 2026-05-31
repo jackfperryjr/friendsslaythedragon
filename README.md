@@ -1,6 +1,6 @@
 # Friends Slay the Dragon
 
-![Friends Slay the Dragon](web/public/assets/friendsslay.jpg)
+![Friends Slay the Dragon](web/public/assets/app_icons/friendsslay.jpg)
 
 A chaotic, couch-ready castle brawler where you and your friends charge through gothic halls, inhale terrifying monsters, and steal their powers to take down a dragon that absolutely has it coming.
 
