@@ -3,7 +3,20 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: './',
-  build: { target: 'esnext' },
+  build: {
+    target: 'esnext',
+    // Phaser minifies to ~1.5 MB — suppress the warning for that known chunk
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        // Split Phaser into its own chunk so game code stays lean and the
+        // Phaser bundle can be cached independently between deploys.
+        manualChunks: {
+          phaser: ['phaser'],
+        },
+      },
+    },
+  },
   plugins: [
     VitePWA({
       devOptions: { enabled: false },
@@ -24,7 +37,10 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,jpg,svg,ogg,mp3,wav}']
+        globPatterns: ['**/*.{js,css,html,png,jpg,svg,ogg,mp3,wav}'],
+        // Raise the precache limit to 5 MiB to accommodate large cutscene images
+        // (victory.png ≈ 2.1 MB, celery_man_down.png ≈ 1.5 MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       }
     })
   ]
