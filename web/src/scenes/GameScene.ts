@@ -20,8 +20,8 @@ const SCORE_ENEMY = 200
 const SCORE_DESTRUCT = 100
 
 const KEYBOARD_CONFIGS: Record<string, string>[] = [
-  { left: 'A',    right: 'D',     jump: 'W',  inhale: 'C',     ability: 'X' },
-  { left: 'LEFT', right: 'RIGHT', jump: 'UP', inhale: 'COMMA', ability: 'L' },
+  { left: 'A',    right: 'D',     jump: 'W',  inhale: 'C',     ability: 'X', down: 'S'    },
+  { left: 'LEFT', right: 'RIGHT', jump: 'UP', inhale: 'COMMA', ability: 'L', down: 'DOWN' },
 ]
 
 const OPPOSITE: Record<ExitDir, ExitDir> = { left:'right', right:'left', top:'bottom', bottom:'top' }
@@ -90,6 +90,9 @@ export class GameScene extends Phaser.Scene {
   private carterDuplicates: CarterDuplicate[] = []
   private conradTrucks: ConradArmyTruck[] = []
   private cocoShadow: CocoShadow | null = null
+  private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
+  private cocoSpinTween: Phaser.Tweens.Tween | null = null
+  private cocoDashHitDestructibles = new Set<Destructible>()
   private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
 
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
@@ -117,6 +120,7 @@ export class GameScene extends Phaser.Scene {
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
+    this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
@@ -2335,7 +2339,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.isTruck || player.isTrex) {
+        if (player.isTruck || player.isTrex || player.isSpindashing) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
           this.trackEnemyKill()
@@ -2354,7 +2358,7 @@ export class GameScene extends Phaser.Scene {
           const player = _p as Player
           const boss   = _b as unknown as Boss
           if (Math.abs(player.y - boss.y) > 350) return
-          if (player.isTruck || player.isTrex) this.hitBoss(player)
+          if (player.isTruck || player.isTrex || player.isSpindashing) this.hitBoss(player)
           else player.hitByEnemy()
         })
       })
@@ -2595,149 +2599,149 @@ export class GameScene extends Phaser.Scene {
   // ── Coco shadow ability ───────────────────────────────────────────────────────
 
   private handleCocoShadow(coco: Player) {
-    if (this.cocoShadow?.active) {
-      this.cocoShadow.release()
-    } else {
-      this.spawnCocoShadow(coco)
+    if (!coco.isShadowForm) {
+      this.transformCocoIn(coco)
+    } else if (!coco.isSpindashing && this.cocoSpindashState === 'none') {
+      // Only exit if DOWN is not held (DOWN+ability starts spindash instead)
+      const keys = this.playerKeysets.get(coco.playerId)
+      const pad  = this.input.gamepad?.getPad(this.nm ? 0 : coco.playerId)
+      const downHeld = (keys?.['down']?.isDown ?? false) ||
+                       (pad?.connected ? !!(pad.down || pad.buttons[13]?.pressed) : false)
+      if (!downHeld) this.transformCocoOut(coco)
     }
   }
 
-  private spawnCocoShadow(coco: Player) {
-    if (!this.textures.exists('sheet-shadow')) return
-    const shadow = new CocoShadow(this, coco.x, coco.y)
-    this.cocoShadow = shadow
+  // ── Coco Shadow-form transform ────────────────────────────────────────────────
 
-    this.physics.add.collider(shadow, this.platforms)
-    this.tilemapLayers.forEach(l => this.physics.add.collider(shadow, l))
-
-    // When shadow is ready to charge, set its velocity toward the target
-    shadow.on('startCharge', (_s: CocoShadow, target: Phaser.GameObjects.Sprite) => {
-      if (!shadow.active) return
-      const body = shadow.body as Phaser.Physics.Arcade.Body
-      const flying = (target as Enemy).flying ?? false
-      if (flying) {
-        const angle = Phaser.Math.Angle.Between(shadow.x, shadow.y, target.x, target.y)
-        body.setAllowGravity(false)
-        body.setVelocity(
-          Math.cos(angle) * CocoShadow.chargeSpeed,
-          Math.sin(angle) * CocoShadow.chargeSpeed,
-        )
-      } else {
-        const dir = target.x >= shadow.x ? 1 : -1
-        body.setAllowGravity(false)
-        body.setVelocity(dir * CocoShadow.chargeSpeed, 0)
-        shadow.setFlipX(dir < 0)
-      }
+  private transformCocoIn(coco: Player) {
+    if (coco.isShadowForm || coco.isTransforming) return
+    coco.isTransforming = true
+    coco.play('coco-transform-in', true)
+    coco.once('animationcomplete-coco-transform-in', () => {
+      if (!coco.active) return
+      coco.isShadowForm  = true
+      coco.isTransforming = false
+      this.cocoSpindashState = 'none'
+      coco.play('coco-shadow-idle', true)
     })
-
-    // Enemy collider while charging — 3× damage = instant kill, then spin-down
-    this.enemies.forEach(e => {
-      this.physics.add.overlap(shadow, e, () => {
-        if (shadow.shadowState !== 'charging') return
-        e.die()
-        this.addScore(SCORE_ENEMY)
-        shadow.hitEnemy()
-        ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
-      })
-    })
-    if (this.boss?.active) {
-      this.physics.add.overlap(shadow, this.boss, () => {
-        if (shadow.shadowState !== 'charging') return
-        if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
-            (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
-        SoundManager.bossHit()
-        this.boss!.hit()
-        shadow.hitEnemy()
-        ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
-      })
-    }
-
-    // Absorb enemy projectiles while spindashing
-    this.physics.add.overlap(shadow, this.enemyProjectiles, (_s, proj) => {
-      if (shadow.shadowState === 'charging') (proj as Phaser.Physics.Arcade.Image).destroy()
-    })
-
-    shadow.on('shadowReleased', () => { this.cocoShadow = null })
   }
 
-  private shadowHasLineOfSight(ax: number, ay: number, bx: number, by: number): boolean {
-    if (this.tilemapLayers.length === 0) return true
-    const STEPS = 14
-    for (let i = 1; i < STEPS; i++) {
-      const t = i / STEPS
-      const x = ax + (bx - ax) * t
-      const y = ay + (by - ay) * t
-      for (const layer of this.tilemapLayers) {
-        const tile = layer.getTileAtWorldXY(x, y)
-        if (tile && tile.index >= 0) return false
-      }
-    }
-    return true
+  private transformCocoOut(coco: Player) {
+    if (!coco.isShadowForm || coco.isTransforming || coco.isSpindashing) return
+    this.stopCocoSpin(coco)
+    coco.isTransforming = true
+    coco.play('coco-transform-out', true)
+    coco.once('animationcomplete-coco-transform-out', () => {
+      if (!coco.active) return
+      coco.isShadowForm   = false
+      coco.isSpindashing  = false
+      coco.isTransforming = false
+      this.cocoSpindashState = 'none'
+      coco.play(`char-${coco.charKey}-idle`, true)
+    })
   }
+
+  // ── Spindash helpers ──────────────────────────────────────────────────────────
+
+  private startCocoSpin(coco: Player, fast: boolean) {
+    this.cocoSpinTween?.stop()
+    this.cocoSpinTween = this.tweens.add({
+      targets: coco, angle: coco.flipX ? -360 : 360,
+      duration: fast ? 160 : 340, repeat: -1,
+    })
+  }
+
+  private stopCocoSpin(coco: Player) {
+    this.cocoSpinTween?.stop()
+    this.cocoSpinTween = null
+    coco.setAngle(0)
+  }
+
+  private enterCocoSpindash(coco: Player) {
+    if (this.cocoSpindashState !== 'none') return
+    this.cocoSpindashState = 'windup'
+    coco.isSpindashing = true
+    this.cocoDashHitDestructibles.clear()
+    coco.play('coco-spindash-windup', true)
+    coco.once('animationcomplete-coco-spindash-windup', () => {
+      if (!coco.active) return
+      this.cocoSpindashState = 'dashing'
+      coco.play('coco-spindash-dash', true)
+      this.startCocoSpin(coco, true)
+    })
+  }
+
+  private endCocoSpindash(coco: Player) {
+    if (this.cocoSpindashState !== 'dashing') return
+    this.cocoSpindashState = 'exit'
+    this.stopCocoSpin(coco)
+    coco.play('coco-spindash-exit', true)
+    coco.once('animationcomplete-coco-spindash-exit', () => {
+      if (!coco.active) return
+      this.cocoSpindashState = 'none'
+      coco.isSpindashing = false
+      coco.play('coco-shadow-idle', true)
+    })
+  }
+
+  // spawnCocoShadow kept as stub so wirePlayerUIEvents persistence still compiles
+  private spawnCocoShadow(_coco: Player) { /* replaced by transformCocoIn */ }
 
   private updateCocoShadow() {
-    const shadow = this.cocoShadow
-    if (!shadow?.active) return
-
-    // Find Coco (the player who owns the shadow)
     const coco = this.players.find(p => p.charKey === 'coco' && p.isAlive)
+    if (!coco?.isShadowForm) return
+    if (coco.isTransforming) return   // transform animation in progress — don't override it
 
-    if (shadow.shadowState === 'idle') {
-      // Re-enable gravity in case a flying charge just finished
-      ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
+    const body = coco.body as Phaser.Physics.Arcade.Body
+    const keys = this.playerKeysets.get(coco.playerId)
+    const pad  = this.input.gamepad?.getPad(this.nm ? 0 : coco.playerId)
 
-      // Follow Coco
-      if (coco) {
-        const cocoBody   = coco.body as Phaser.Physics.Arcade.Body
-        const shadowBody = shadow.body as Phaser.Physics.Arcade.Body
+    const downHeld    = (keys?.['down']?.isDown    ?? false) || (pad?.connected ? !!(pad.down    || pad.buttons[13]?.pressed) : false)
+    const abilityHeld = (keys?.['ability']?.isDown ?? false) || (pad?.connected ? !!(pad.buttons[1]?.pressed) : false)
 
-        // Jump when Coco jumps (Coco going up and Shadow still grounded)
-        if (cocoBody.velocity.y < -300 && shadowBody.blocked.down) {
-          shadowBody.setVelocityY(cocoBody.velocity.y)
-        }
-
-        const targetX = coco.x + (coco.flipX ? 60 : -60)
-        const dx = targetX - shadow.x
-        if (Math.abs(dx) > 12) {
-          const dir = dx > 0 ? 1 : -1
-          shadowBody.setVelocityX(dir * 350)
-          shadow.setFlipX(dir < 0)
+    switch (this.cocoSpindashState) {
+      case 'none': {
+        const airborne = !body.blocked.down
+        if (airborne && body.velocity.y < -60) {
+          if (coco.anims.currentAnim?.key !== 'coco-shadow-jump') { coco.play('coco-shadow-jump', true); this.startCocoSpin(coco, false) }
+        } else if (airborne) {
+          if (coco.anims.currentAnim?.key !== 'coco-shadow-fall') coco.play('coco-shadow-fall', true)
+          if (!this.cocoSpinTween) this.startCocoSpin(coco, false)
         } else {
-          shadowBody.setVelocityX(0)
+          if (this.cocoSpinTween) this.stopCocoSpin(coco)
+          const animKey = Math.abs(body.velocity.x) > 10 ? 'coco-shadow-walk' : 'coco-shadow-idle'
+          if (coco.anims.currentAnim?.key !== animKey) coco.play(animKey, true)
         }
+        // DOWN + ABILITY held while grounded → start windup then dash
+        if (downHeld && abilityHeld && body.blocked.down) this.enterCocoSpindash(coco)
+        break
       }
 
-      // Scan for nearest enemy to trigger spin-dash
-      let nearTarget: Phaser.GameObjects.Sprite | null = null
-      let nearDist = CocoShadow.detectRange
+      case 'windup':
+        break  // animation auto-transitions to 'dashing' on complete
 
-      for (const e of this.enemies) {
-        if (!e.active) continue
-        const d = Phaser.Math.Distance.Between(shadow.x, shadow.y, e.x, e.y)
-        if (d < nearDist && this.shadowHasLineOfSight(shadow.x, shadow.y, e.x, e.y)) {
-          nearDist = d; nearTarget = e
+      case 'dashing': {
+        // Release ability → exit (wall hits no longer end the dash)
+        if (!abilityHeld) { this.endCocoSpindash(coco); break }
+
+        // Amplify horizontal movement to 3× speed
+        if (Math.abs(body.velocity.x) > 10)
+          body.setVelocityX(Math.sign(body.velocity.x) * 1050)
+
+        // Enemy + boss damage handled by the physics collider in setupCollision (isSpindashing flag).
+        // Destroy nearby furniture/chests before the physics collider can stop the player.
+        for (const d of this.destructibles) {
+          if (!d.active || this.cocoDashHitDestructibles.has(d)) continue
+          if (Phaser.Math.Distance.Between(coco.x, coco.y, d.x, d.y) < 72) {
+            this.cocoDashHitDestructibles.add(d)
+            d.takeDamage(100, DamageType.Physical)
+          }
         }
-      }
-      if (this.boss?.active) {
-        const d = Phaser.Math.Distance.Between(shadow.x, shadow.y, this.boss.x, this.boss.y)
-        if (d < nearDist && this.shadowHasLineOfSight(shadow.x, shadow.y, this.boss.x, this.boss.y)) {
-          nearDist = d; nearTarget = this.boss
-        }
+        break
       }
 
-      if (nearTarget) {
-        // Begin moving toward the target in a straight line as the spin-up winds up
-        const dir = nearTarget.x >= shadow.x ? 1 : -1
-        ;(shadow.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 350)
-        shadow.setFlipX(dir < 0)
-        shadow.beginSpinUp(nearTarget)
-      } else {
-        // Walk or idle animation — only while truly idle (no spin-up in progress)
-        const shadowBody = shadow.body as Phaser.Physics.Arcade.Body
-        const moving  = Math.abs(shadowBody.velocity.x) > 10
-        const animKey = moving ? 'shadow-charge' : 'shadow-idle'
-        if (shadow.anims.currentAnim?.key !== animKey) shadow.play(animKey, true)
-      }
+      case 'exit':
+        break  // animationcomplete handler in endCocoSpindash takes over
     }
   }
 
@@ -2862,95 +2866,192 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Abby star ability ─────────────────────────────────────────────────────────
+  // ── Abby star burst ability ───────────────────────────────────────────────────
+  // Abby dissolves into 7 shooting stars that sweep outward in all directions,
+  // hit anything in range, then arc back to reform Abby.
 
   private spawnAbbyStars(src: Player) {
-    src.swingMelee()
-    // Gather all live targets sorted by distance
-    const allTargets = [
-      ...this.enemies.filter(e => e.active),
-      ...(this.boss?.active ? [this.boss] : []),
-    ].sort((a, b) =>
-      Phaser.Math.Distance.Between(src.x, src.y, a.x, a.y) -
-      Phaser.Math.Distance.Between(src.x, src.y, b.x, b.y)
-    ) as Phaser.GameObjects.Sprite[]
+    if (src.getData('abbyBurstActive')) return
+    src.setData('abbyBurstActive', true)
+    src.play(`char-${src.charKey}-ability`, true)
 
-    if (allTargets.length === 0) return
+    const COUNT        = 7
+    const ORBIT_RADIUS = 120    // px — stars never exceed this distance
+    const EXPAND_MS    = 180    // time for stars to burst out to orbit radius
+    const ORBIT_MS     = 900    // time spinning in the ring
+    const TOTAL_MS     = EXPAND_MS + ORBIT_MS
+    const RETURN_SPEED = 1000
+    const SPIN_RATE    = 6.0    // rad/s ring rotation speed
 
-    for (let i = 0; i < 5; i++) {
-      this.time.delayedCall(i * 90, () => {
-        if (!src.active) return
+    this.tweens.killTweensOf(src)
+    src.setAlpha(0)
 
-        const target = allTargets.find(t => t.active) ?? null
-        if (!target) return
+    // baseAngle is mutable so we can re-anchor it after the burst phase
+    type StarEntry = { star: Phaser.GameObjects.Text; body: Phaser.Physics.Arcade.Body; baseAngle: number }
+    const starEntries: StarEntry[] = []
 
-        const star = this.add.text(
-          src.x + Phaser.Math.Between(-18, 18),
-          src.y - Phaser.Math.Between(10, 40),
-          '★', {
-            fontSize: '38px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#ffd700',
-            stroke: '#aa6600',
-            strokeThickness: 3,
+    let groupAngle = 0
+    let orbiting = false
+
+    // Phase 1 (0 → EXPAND_MS): accumulate groupAngle only.
+    // Phase 2 (EXPAND_MS → TOTAL_MS): lock each star to its orbit position via body.reset().
+    const spinTimer = this.time.addEvent({
+      delay: 16,
+      loop: true,
+      callback: () => {
+        groupAngle += SPIN_RATE * 0.016
+        if (!orbiting) return
+        for (const entry of starEntries) {
+          if (!entry.star.active) continue
+          const a = entry.baseAngle + groupAngle
+          // body.reset(x, y) calls gameObject.setPosition(x, y) — perfect lock, no drift
+          entry.body.reset(
+            src.x + Math.cos(a) * ORBIT_RADIUS,
+            src.y + Math.sin(a) * ORBIT_RADIUS,
+          )
+        }
+      },
+    })
+
+    // At the end of the burst phase, re-anchor each star's baseAngle to its actual
+    // position so the orbital lock has zero snap/jump.
+    this.time.delayedCall(EXPAND_MS, () => {
+      for (const entry of starEntries) {
+        if (!entry.star.active) continue
+        const actualAngle = Math.atan2(entry.star.y - src.y, entry.star.x - src.x)
+        entry.baseAngle = actualAngle - groupAngle
+      }
+      orbiting = true
+    })
+
+    // ── Central spiral ─────────────────────────────────────────────────────────
+    // Two counter-rotating arms drawn as a chain of dots, blended ADD for glow.
+    const spiralGfx = this.add.graphics().setDepth(13).setBlendMode(Phaser.BlendModes.ADD)
+    let spiralAngle = 0
+    const spiralTimer = this.time.addEvent({
+      delay: 16,
+      loop: true,
+      callback: () => {
+        spiralAngle += 8 * 0.016
+        spiralGfx.clear()
+        for (let arm = 0; arm < 2; arm++) {
+          const armBase = arm * Math.PI
+          for (let t = 0; t < 14; t++) {
+            const pct   = t / 13
+            const r     = pct * ORBIT_RADIUS * 0.78
+            const a     = spiralAngle + armBase + pct * Math.PI * 1.5
+            const alpha = (1 - pct) * 0.92
+            const radius = 4.5 - pct * 3
+            spiralGfx.fillStyle(pct < 0.45 ? 0xffffff : 0xffee44, alpha)
+            spiralGfx.fillCircle(src.x + Math.cos(a) * r, src.y + Math.sin(a) * r, radius)
           }
-        ).setOrigin(0.5).setDepth(12)
-
-        this.physics.add.existing(star)
-        const body = star.body as Phaser.Physics.Arcade.Body
-        body.setAllowGravity(false)
-
-        const angle = Phaser.Math.Angle.Between(star.x, star.y, target.x, target.y)
-        body.setVelocity(Math.cos(angle) * 500, Math.sin(angle) * 500)
-        this.tweens.add({ targets: star, angle: 360, duration: 400, repeat: -1 })
-
-        // Glowing shooting-star trail that follows the star automatically
-        const trail = this.add.particles(star.x, star.y, '__DEFAULT', {
-          lifespan: 300,
-          speed: 0,
-          scale: { start: 0.35, end: 0 },
-          alpha: { start: 0.85, end: 0 },
-          tint: [0xffd700, 0xffeeaa, 0xffffff, 0xff8800],
-          quantity: 2,
-          frequency: 18,
-          blendMode: 'ADD',
-        }).setDepth(11)
-        trail.startFollow(star)
-
-        let didHit = false
-        const destroyTrail = () => { trail.stopFollow(); trail.destroy() }
-        const onHit = () => {
-          if (didHit || !star.active) return
-          didHit = true
-          destroyTrail()
-          if (target === this.boss) {
-            if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
-                (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
-            SoundManager.bossHit()
-            this.boss!.hit()
-          } else {
-            SoundManager.enemyHit()
-            ;(target as Enemy).hit()
-            this.addScore(SCORE_ENEMY)
-          }
-          this.tweens.add({
-            targets: star, alpha: 0, scaleX: 2, scaleY: 2,
-            duration: 150, onComplete: () => { if (star.active) star.destroy() },
-          })
         }
+      },
+    })
 
-        for (const e of this.enemies) {
-          if (e === target) { this.physics.add.overlap(star, e, onHit); break }
-        }
-        if (target === this.boss && this.boss?.active) {
-          this.physics.add.overlap(star, this.boss, onHit)
-        }
+    // When the ability ends, stop ring + spiral, then stars fly home
+    this.time.delayedCall(TOTAL_MS, () => {
+      spinTimer.remove()
+      spiralTimer.remove()
+      spiralGfx.destroy()
+    })
 
-        this.time.delayedCall(3000, () => {
-          if (!star.active) return
-          destroyTrail()
-          this.tweens.add({ targets: star, alpha: 0, duration: 200, onComplete: () => { if (star.active) star.destroy() } })
+    let returnedCount = 0
+    const onStarReturned = () => {
+      returnedCount++
+      if (returnedCount < COUNT) return
+      src.setData('abbyBurstActive', false)
+      if (src.active && src.isAlive) {
+        src.setAlpha(1)
+        this.cameras.main.flash(200, 255, 240, 120, false)
+      }
+    }
+
+    for (let i = 0; i < COUNT; i++) {
+      const baseAngle = (i / COUNT) * Math.PI * 2
+
+      const star = this.add.text(src.x, src.y, '★', {
+        fontSize: '34px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffee44',
+        stroke: '#ffffff',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(12)
+
+      this.physics.add.existing(star)
+      const body = star.body as Phaser.Physics.Arcade.Body
+      body.setAllowGravity(false)
+      // Burst outward — orbit lock takes over after EXPAND_MS
+      body.setVelocity(Math.cos(baseAngle) * 720, Math.sin(baseAngle) * 720)
+      this.tweens.add({ targets: star, angle: 360, duration: 300, repeat: -1 })
+
+      starEntries.push({ star, body, baseAngle })
+
+      // White-yellow comet tail
+      const trail = this.add.particles(src.x, src.y, '__DEFAULT', {
+        lifespan: 280,
+        speed: 0,
+        scale: { start: 0.60, end: 0 },
+        alpha: { start: 1, end: 0 },
+        tint: [0xffffff, 0xffffff, 0xffee44, 0xffd700],
+        quantity: 5,
+        frequency: 10,
+        blendMode: 'ADD',
+      }).setDepth(11)
+      trail.startFollow(star)
+
+      // Each star passes through, dealing one hit per target
+      const hitTargets = new Set<Enemy | Boss>()
+      const tryHit = (target: Enemy | Boss) => {
+        if (!star.active || !target.active || hitTargets.has(target)) return
+        hitTargets.add(target)
+        const fx = this.add.graphics().setDepth(15)
+        fx.fillStyle(0xffffff, 0.90); fx.fillCircle(target.x, target.y, 22)
+        fx.lineStyle(3, 0xffee44, 1); fx.strokeCircle(target.x, target.y, 22)
+        this.tweens.add({
+          targets: fx, alpha: 0, scaleX: 3.5, scaleY: 3.5,
+          duration: 220, ease: 'Quad.Out',
+          onComplete: () => fx.destroy(),
         })
+        if (target === this.boss) {
+          if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+              (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+          SoundManager.bossHit()
+          this.boss!.hit()
+        } else {
+          SoundManager.enemyHit()
+          ;(target as Enemy).hit()
+          this.addScore(SCORE_ENEMY)
+        }
+      }
+      this.enemies.forEach(e => { if (e.active) this.physics.add.overlap(star, e, () => tryHit(e)) })
+      if (this.boss?.active) this.physics.add.overlap(star, this.boss, () => tryHit(this.boss!))
+
+      let returned = false
+      const returnStar = () => {
+        if (returned) return
+        returned = true
+        trail.stopFollow()
+        if (trail.active) trail.destroy()
+        if (star.active) star.destroy()
+        onStarReturned()
+      }
+
+      this.time.delayedCall(TOTAL_MS, () => {
+        if (!star.active) { returnStar(); return }
+        const retAngle = Phaser.Math.Angle.Between(star.x, star.y, src.x, src.y)
+        body.setVelocity(Math.cos(retAngle) * RETURN_SPEED, Math.sin(retAngle) * RETURN_SPEED)
+
+        const poll = this.time.addEvent({
+          delay: 20,
+          loop: true,
+          callback: () => {
+            if (!star.active || Phaser.Math.Distance.Between(star.x, star.y, src.x, src.y) < 48) {
+              poll.remove(); returnStar()
+            }
+          },
+        })
+        this.time.delayedCall(2500, () => { poll.remove(); returnStar() })
       })
     }
   }
@@ -3646,7 +3747,12 @@ export class GameScene extends Phaser.Scene {
     else p.jumpReleased()
 
     p.setShielding(!!keys['inhale']?.isDown)
-    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) p.useCharacterAbility()
+    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) {
+      // Down + ability while in shadow form starts spindash — don't toggle transform
+      const downHeld = !!keys['down']?.isDown
+      if (p.charKey === 'coco' && p.isShadowForm && downHeld) { /* handled in updateCocoShadow */ }
+      else p.useCharacterAbility()
+    }
   }
 
   private handleGamepad(p: Player, pad: Phaser.Input.Gamepad.Gamepad) {

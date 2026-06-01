@@ -128,7 +128,6 @@ const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkSta
   { key: 'sheet-enemy-duck',     file: 'enemies/duck.png',          fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
   { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
   { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-dragon',         file: 'enemies/dragon.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
@@ -179,6 +178,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('sheet-shadow',           'assets/players/shadow.png',           { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-scarlett-transformer',   'assets/players/scarlett_transform.png',     { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-coco-transform',         'assets/players/coco_transform.png',         { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-coco-spindash',          'assets/players/coco_spindash.png',          { frameWidth: 64, frameHeight: 64 })
     this.load.image('logo', 'assets/app_icons/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
@@ -239,6 +240,7 @@ export class BootScene extends Phaser.Scene {
     this.setupEricTransformerAnimations()
     this.setupConradTruckAnimations()
     this.setupCocoShadowAnimations()
+    this.setupCocoShadowFormAnimations()
     this.setupScarlettTRexAnimations()
     this.setupScarlettTransformAnimations()
     this.scene.start('IntroScene')
@@ -304,6 +306,28 @@ export class BootScene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers(key, { start: 12, end: 15 }),
       frameRate: 10, repeat: 0,
     })
+  }
+
+  private setupCocoShadowFormAnimations() {
+    const tf = 'sheet-coco-transform'
+    const sd = 'sheet-coco-spindash'
+    if (!this.textures.exists(tf) || !this.textures.exists(sd)) return
+
+    // coco_transform sheet: transformation in (0-7), out (7-0), shadow idle (frame 7)
+    this.anims.create({ key: 'coco-transform-in',    frames: this.anims.generateFrameNumbers(tf, { start: 0, end: 7 }),              frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'coco-transform-out',   frames: this.anims.generateFrameNumbers(tf, { frames: [7,6,5,4,3,2,1,0] }),    frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'coco-shadow-idle',      frames: this.anims.generateFrameNumbers(tf, { frames: [7] }),                  frameRate: 1,  repeat: -1 })
+
+    // coco_spindash sheet: locomotion
+    this.anims.create({ key: 'coco-shadow-walk',      frames: this.anims.generateFrameNumbers(sd, { start: 0, end: 3 }),          frameRate: 10, repeat: -1 })
+    this.anims.create({ key: 'coco-shadow-jump',      frames: this.anims.generateFrameNumbers(sd, { frames: [7,6,8,9,10] }),      frameRate: 8,  repeat: 0  })
+    this.anims.create({ key: 'coco-shadow-fall',      frames: this.anims.generateFrameNumbers(sd, { frames: [10,9,8,6,7] }),      frameRate: 8,  repeat: 0  })
+
+    // coco_spindash sheet: spindash sequence
+    this.anims.create({ key: 'coco-spindash-windup',  frames: this.anims.generateFrameNumbers(sd, { frames: [9, 10] }),           frameRate: 8,  repeat: 0  })
+    this.anims.create({ key: 'coco-spindash-charge',  frames: this.anims.generateFrameNumbers(sd, { frames: [11] }),              frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'coco-spindash-dash',    frames: this.anims.generateFrameNumbers(sd, { frames: [12] }),              frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'coco-spindash-exit',    frames: this.anims.generateFrameNumbers(sd, { start: 13, end: 15 }),        frameRate: 10, repeat: 0  })
   }
 
   private setupScarlettTransformAnimations() {
