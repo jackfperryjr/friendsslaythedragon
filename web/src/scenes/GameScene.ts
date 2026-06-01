@@ -84,7 +84,7 @@ export class GameScene extends Phaser.Scene {
   private pauseFocusIdx = 0
   private pauseCursor: Phaser.GameObjects.Text | null = null
   private wordMenuObjects: Phaser.GameObjects.GameObject[] = []
-  private wordMenuNav: { up: () => void; down: () => void; confirm: () => void } | null = null
+  private wordMenuNav: { up: () => void; down: () => void; left?: () => void; right?: () => void; confirm: () => void } | null = null
 
   private collectibleSprites: (Phaser.GameObjects.Image | Phaser.GameObjects.Container)[] = []
   private celeryNpcX: number | null = null
@@ -2191,66 +2191,102 @@ export class GameScene extends Phaser.Scene {
 
     const { width, height } = this.scale
     const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? 'BUG'
-    const wordList = keyLevel === 1 ? WORD_LIST_L1 : WORD_LIST_L2
-    const distractors = Phaser.Utils.Array.Shuffle([...wordList].filter(w => w !== targetWord)) as string[]
-    const options = Phaser.Utils.Array.Shuffle([targetWord, distractors[0] ?? 'CAT', distractors[1] ?? 'DOG']) as string[]
+    const collected: string[] = this.registry.get('collectedLetters') ?? []
+    const D    = 150
+    const TILE = 52
+    const GAP  = 12
 
     this.gm.pause()
     this.physics.world.isPaused = true
 
-    const collected: string[] = this.registry.get('collectedLetters') ?? []
-    const D = 150  // above pause menu (depth 100)
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.78)
+      .setScrollFactor(0).setDepth(D).setInteractive()
 
-    // All objects are direct scene children (no container) so scrollFactor:0
-    // hit-testing is always in screen space regardless of camera scroll position.
-
-    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
-      .setScrollFactor(0).setDepth(D).setInteractive()  // blocks clicks reaching the pause menu
-
-    const title = this.add.text(width / 2, height * 0.28, 'MAGIC JAR!', {
-      fontSize: '32px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
+    const title = this.add.text(width / 2, height * 0.18, 'MAGIC JAR!', {
+      fontSize: '28px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
-    const lbl = this.add.text(width / 2, height * 0.42, 'Your letters:', {
+    const sub = this.add.text(width / 2, height * 0.27, 'Spell the word:', {
       fontSize: '9px', fontFamily: FONT, color: '#aabbcc',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
-    const lettersDisplay = this.add.text(width / 2, height * 0.48, collected.join('  '), {
-      fontSize: '18px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
+    // Target word displayed clearly
+    const wordDisplay = this.add.text(width / 2, height * 0.36, targetWord, {
+      fontSize: '28px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000', strokeThickness: 4,
+      letterSpacing: 18,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
-    const escHint = this.add.text(width / 2, height * 0.85, 'UP / DOWN to move   ENTER to pick', {
+    // Progress slots
+    const N = targetWord.length
+    const slotRowW   = N * TILE + (N - 1) * GAP
+    const slotStartX = width / 2 - slotRowW / 2 + TILE / 2
+    const slotY = height * 0.50
+
+    const slotBoxes: Phaser.GameObjects.Rectangle[] = []
+    const slotTexts: Phaser.GameObjects.Text[] = []
+    for (let i = 0; i < N; i++) {
+      const sx = slotStartX + i * (TILE + GAP)
+      const box = this.add.rectangle(sx, slotY, TILE, TILE, 0x141428)
+        .setStrokeStyle(2, 0x334455).setScrollFactor(0).setDepth(D)
+      const txt = this.add.text(sx, slotY, '_', {
+        fontSize: '20px', fontFamily: FONT, color: '#334455',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1)
+      slotBoxes.push(box)
+      slotTexts.push(txt)
+    }
+
+    // Collected letter tiles
+    const M = collected.length
+    const tileRowW   = M * TILE + (M - 1) * GAP
+    const tileStartX = width / 2 - tileRowW / 2 + TILE / 2
+    const tileY = height * 0.60
+
+    const tileBoxes: Phaser.GameObjects.Rectangle[] = []
+    const tileTxts: Phaser.GameObjects.Text[] = []
+    for (let i = 0; i < M; i++) {
+      const tx = tileStartX + i * (TILE + GAP)
+      const box = this.add.rectangle(tx, tileY, TILE, TILE, 0x223344)
+        .setStrokeStyle(2, 0x556677).setScrollFactor(0).setDepth(D).setInteractive({ useHandCursor: true })
+      const txt = this.add.text(tx, tileY, collected[i], {
+        fontSize: '18px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1)
+      tileBoxes.push(box)
+      tileTxts.push(txt)
+    }
+
+    const hint = this.add.text(width / 2, height * 0.76,
+      '\u2190 \u2192 to move   ENTER / tap to select', {
       fontSize: '9px', fontFamily: FONT, color: '#556677',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
-    // Word-option buttons — identical style to pause menu buttons
-    const btns: Phaser.GameObjects.Text[] = []
-    options.forEach((word, i) => {
-      const btn = this.add.text(width / 2, height * 0.60 + i * 54, word, {
-        fontSize: '16px', fontFamily: FONT, color: '#ffffff',
-        stroke: '#000', strokeThickness: 3,
-        backgroundColor: '#00000055', padding: { x: 22, y: 12 },
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(D).setInteractive({ useHandCursor: true })
-      btns.push(btn)
-    })
+    this.wordMenuObjects = [overlay, title, sub, wordDisplay, hint, ...slotBoxes, ...slotTexts, ...tileBoxes, ...tileTxts]
 
-    // Cursor lives as its own scene object — same pattern as pauseCursor
-    const cursor = this.add.text(0, 0, '►', {
-      fontSize: '16px', fontFamily: FONT, color: '#ffe066',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 1).setVisible(false)
-
-    this.wordMenuObjects = [overlay, title, lbl, lettersDisplay, escHint, ...btns, cursor]
-
-    // ── helpers ───────────────────────────────────────────────────────────────
     let focusIdx = 0
+    let progress = 0
     let shaking  = false
+    const usedSet = new Set<number>()
     const keyListeners: { key: string; fn: () => void }[] = []
 
+    const applyTileStyle = (i: number) => {
+      if (usedSet.has(i)) {
+        tileBoxes[i].setFillStyle(0x1a2a1a).setStrokeStyle(2, 0x336633)
+        tileTxts[i].setColor('#336633')
+      } else if (i === focusIdx) {
+        tileBoxes[i].setFillStyle(0x2a3d55).setStrokeStyle(3, 0xffe066)
+        tileTxts[i].setColor('#ffe066')
+      } else {
+        tileBoxes[i].setFillStyle(0x223344).setStrokeStyle(2, 0x556677)
+        tileTxts[i].setColor('#ffffff')
+      }
+    }
+
     const moveFocus = (idx: number) => {
-      focusIdx = idx
-      btns.forEach((b, i) => b.setColor(i === idx ? '#ffe066' : '#ffffff'))
-      const b = btns[idx].getBounds()
-      cursor.setPosition(b.left - 12, b.centerY).setVisible(true)
+      if (shaking) return
+      const prev = focusIdx
+      focusIdx = idx       // update BEFORE applyTileStyle so the condition i===focusIdx is correct
+      applyTileStyle(prev) // de-highlights old tile (prev !== focusIdx → normal style)
+      applyTileStyle(idx)  // highlights new tile
     }
 
     const closeMenu = () => {
@@ -2265,58 +2301,72 @@ export class GameScene extends Phaser.Scene {
     const shake = () => {
       if (shaking) return
       shaking = true
-      const targets = [title, lbl, lettersDisplay, ...btns, cursor]
       this.tweens.add({
-        targets,
-        x: '+=8',
-        duration: 40,
-        yoyo: true,
-        repeat: 4,
-        ease: 'Linear',
-        onComplete: () => { shaking = false; moveFocus(focusIdx) },
+        targets: [...tileBoxes, ...tileTxts, ...slotBoxes, ...slotTexts],
+        x: '+=7', duration: 35, yoyo: true, repeat: 4, ease: 'Linear',
+        onComplete: () => { shaking = false; applyTileStyle(focusIdx) },
       })
     }
 
     const pick = (i: number) => {
-      if (shaking) return
-      const word = options[i]
-      if (!word) return
-      if (word === targetWord) {
-        closeMenu()
-        onCorrect()
-        this.showPopup(jarX, jarY, 'MAGIC WORD!', '#ffe066')
-        SoundManager.collectAbility()
+      if (shaking || usedSet.has(i)) return
+      const letter = collected[i]
+      if (letter === targetWord[progress]) {
+        usedSet.add(i)
+        applyTileStyle(i)
+        slotBoxes[progress].setFillStyle(0x1a3a1a).setStrokeStyle(2, 0x44cc44)
+        slotTexts[progress].setText(letter).setColor('#44cc44')
+        progress++
+        if (progress === N) {
+          this.time.delayedCall(300, () => {
+            closeMenu()
+            onCorrect()
+            this.showPopup(jarX, jarY, 'MAGIC WORD!', '#ffe066')
+            SoundManager.collectAbility()
+          })
+        } else {
+          for (let s = 1; s <= M; s++) {
+            const c = (focusIdx + s) % M
+            if (!usedSet.has(c)) { moveFocus(c); break }
+          }
+        }
       } else {
-        moveFocus(i)
-        btns[i]?.setColor('#ff4444')
+        tileBoxes[i].setFillStyle(0x440000).setStrokeStyle(2, 0xff4444)
+        tileTxts[i].setColor('#ff4444')
         shake()
+        this.time.delayedCall(350, () => { if (!usedSet.has(i)) applyTileStyle(i) })
       }
     }
 
-    btns.forEach((btn, i) => {
-      btn.on('pointerover', () => { if (!shaking) moveFocus(i) })
-      btn.on('pointerdown', () => pick(i))
+    tileBoxes.forEach((box, i) => {
+      box.on('pointerover', () => { if (!shaking && !usedSet.has(i)) moveFocus(i) })
+      box.on('pointerdown', () => pick(i))
     })
 
     moveFocus(0)
 
-    // ── keyboard navigation ────────────────────────────────────────────────────
-    const onUp    = () => { if (!shaking) moveFocus((focusIdx - 1 + 3) % 3) }
-    const onDown  = () => { if (!shaking) moveFocus((focusIdx + 1) % 3) }
+    const onLeft  = () => { if (!shaking) moveFocus((focusIdx - 1 + M) % M) }
+    const onRight = () => { if (!shaking) moveFocus((focusIdx + 1) % M) }
     const onEnter = () => pick(focusIdx)
+
     keyListeners.push(
-      { key: 'keydown-UP',    fn: onUp    },
-      { key: 'keydown-DOWN',  fn: onDown  },
-      { key: 'keydown-W',     fn: onUp    },
-      { key: 'keydown-S',     fn: onDown  },
+      { key: 'keydown-LEFT',  fn: onLeft  },
+      { key: 'keydown-RIGHT', fn: onRight },
+      { key: 'keydown-UP',    fn: onLeft  },
+      { key: 'keydown-DOWN',  fn: onRight },
+      { key: 'keydown-A',     fn: onLeft  },
+      { key: 'keydown-D',     fn: onRight },
+      { key: 'keydown-W',     fn: onLeft  },
+      { key: 'keydown-S',     fn: onRight },
       { key: 'keydown-ENTER', fn: onEnter },
       { key: 'keydown-SPACE', fn: onEnter },
     )
-    this.wordMenuNav = { up: onUp, down: onDown, confirm: onEnter }
     keyListeners.forEach(({ key, fn }) => this.input.keyboard?.on(key, fn))
+
+    this.wordMenuNav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
   }
 
-  private spawnKeyDrop(x: number, y: number, keyLevel: number) {
+    private spawnKeyDrop(x: number, y: number, keyLevel: number) {
     const dropY = y - 16
     const glow = this.add.circle(x, dropY, 22, 0xffffff, 0.55).setDepth(7)
     this.tweens.add({ targets: glow, alpha: 0.2, scaleX: 1.5, scaleY: 1.5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
@@ -4173,9 +4223,11 @@ export class GameScene extends Phaser.Scene {
         // D-pad navigates whichever menu is currently open
         if (!this.gm.isPlaying()) {
           if (this.wordMenuNav) {
-            if (button.index === 12) { this.wordMenuNav.up();      return }
-            if (button.index === 13) { this.wordMenuNav.down();    return }
-            if (button.index === 0)  { this.wordMenuNav.confirm(); return }
+            if (button.index === 12) { this.wordMenuNav.up();       return }
+            if (button.index === 13) { this.wordMenuNav.down();     return }
+            if (button.index === 14) { this.wordMenuNav.left?.();   return }
+            if (button.index === 15) { this.wordMenuNav.right?.();  return }
+            if (button.index === 0)  { this.wordMenuNav.confirm();  return }
             return
           }
           if (button.index === 12) { this.movePauseFocus(-1); return }
