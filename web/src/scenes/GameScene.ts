@@ -9,7 +9,7 @@ import { CocoShadow } from '../game/CocoShadow'
 import { GameManager } from '../game/GameManager'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
-import { RoomConfig, ExitDir, generateRun, TOTAL_WORMS, TOTAL_ROLY_POLYS } from '../levels'
+import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2 } from '../levels'
 import { AbilityType, DamageType } from '../types'
 import { ItemSpawn } from '../levels'
 import { NetworkManager, RemoteInput } from '../network/NetworkManager'
@@ -83,8 +83,10 @@ export class GameScene extends Phaser.Scene {
   private pauseItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private pauseFocusIdx = 0
   private pauseCursor: Phaser.GameObjects.Text | null = null
+  private wordMenuObjects: Phaser.GameObjects.GameObject[] = []
+  private wordMenuNav: { up: () => void; down: () => void; confirm: () => void } | null = null
 
-  private collectibleSprites: Phaser.GameObjects.Image[] = []
+  private collectibleSprites: (Phaser.GameObjects.Image | Phaser.GameObjects.Container)[] = []
   private celeryNpcX: number | null = null
   private shieldGraphics: Phaser.GameObjects.Graphics[] = []
   private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
@@ -120,7 +122,7 @@ export class GameScene extends Phaser.Scene {
 
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
-    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
+    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
@@ -194,6 +196,7 @@ export class GameScene extends Phaser.Scene {
 
     this.buildBackground()
     this.buildScenery()
+    this.initLevelWords()
     this.buildLevel()
     this.setupCollectibles()
     this.spawnPlayers()
@@ -218,8 +221,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.wirePlayerUIEvents()
-    this.ui.updateWormCount(this.registry.get('wormCount') ?? 0)
-    this.ui.updateRolyPolyCount(this.registry.get('rolyPolyCount') ?? 0)
+    this.ui.updateLetters(this.registry.get('collectedLetters') ?? [])
     this.buildNPCs()
     this.buildTorches()
     this.buildPauseMenu()
@@ -764,6 +766,7 @@ export class GameScene extends Phaser.Scene {
       })
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0 }
     for (const item of this.cfg.items) {
       if (isInsideWall(item.x, item.y)) continue
 
@@ -774,12 +777,37 @@ export class GameScene extends Phaser.Scene {
         continue
       }
 
+      // Letter bug: colored beetle with a letter on its back
+      if (item.type === 'letter-bug') {
+        const kl = item.keyLevel ?? 1
+        const idx = letterBugIdx[kl] ?? 0
+        letterBugIdx[kl] = idx + 1
+        const storedPositions: Array<{x: number, y: number}> | null = this.registry.get(`level${kl}BugPositions`)
+        const bugX = storedPositions?.[idx]?.x ?? item.x
+        const bugY = storedPositions?.[idx]?.y ?? item.y
+        item.x = bugX; item.y = bugY
+        const bugLetters: string[] = this.registry.get(`level${kl}BugLetters`) ?? []
+        item.letter = bugLetters[idx] ?? '?'
+        const frame = Phaser.Math.Between(0, 15)
+        const bugImg = this.add.image(0, 0, 'letter-bugs', frame).setScale(0.8)
+        const txt    = this.add.text(0, 2, item.letter, {
+          fontSize: '13px', fontFamily: FONT, color: '#ffffff',
+          stroke: '#000', strokeThickness: 4,
+        }).setOrigin(0.5)
+        const container = this.add.container(bugX, bugY, [bugImg, txt]).setDepth(8)
+        container.setData('item', item)
+        this.tweens.add({
+          targets: container, y: bugY - 12,
+          duration: 900 + Phaser.Math.Between(-100, 100), yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+        this.collectibleSprites.push(container as unknown as Phaser.GameObjects.Image)
+        continue
+      }
+
       const isSuperAbility = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
       if (isSuperAbility && !isLocalhost) continue
       const tex = item.type === 'heart'            ? 'item-heart'
                 : item.type === 'pizza'            ? 'item-pizza'
-                : item.type === 'worm'             ? 'item-worm'
-                : item.type === 'roly-poly'        ? 'item-roly-poly'
                 : item.type === 'life'             ? 'item-life'
                 : item.type === 'mystery'          ? 'item-mystery'
                 : item.type === 'invulnerability'  ? 'invulnerability_icon'
@@ -787,8 +815,7 @@ export class GameScene extends Phaser.Scene {
                 : 'item-orb'
       const isHidden = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
-        .setScale(item.type === 'mystery' ? 2.2
-          : item.type === 'worm' || item.type === 'roly-poly' ? 1.0 : 1.2)
+        .setScale(item.type === 'mystery' ? 2.2 : 1.2)
       if (item.type === 'pizza') img.setDisplaySize(56, 56)
       if (isHidden) img.setAlpha(0)
       img.setData('item', item)
@@ -821,17 +848,13 @@ export class GameScene extends Phaser.Scene {
       player.applyStrengthBoost(true)
       this.showPopup(item.x, item.y, 'POWER UP!', '#ff4444')
       SoundManager.collectAbility()
-    } else if (item.type === 'worm') {
-      const wc = (this.registry.get('wormCount') ?? 0) + 1
-      this.registry.set('wormCount', wc)
-      this.ui.updateWormCount(wc)
-      this.showPopup(item.x, item.y, 'WORM!', '#aaffaa')
-      SoundManager.collectHeart()
-    } else if (item.type === 'roly-poly') {
-      const rc = (this.registry.get('rolyPolyCount') ?? 0) + 1
-      this.registry.set('rolyPolyCount', rc)
-      this.ui.updateRolyPolyCount(rc)
-      this.showPopup(item.x, item.y, 'ROLY POLY!', '#ffddaa')
+    } else if (item.type === 'letter-bug') {
+      const letter = item.letter ?? '?'
+      const collected: string[] = [...(this.registry.get('collectedLetters') ?? [])]
+      collected.push(letter)
+      this.registry.set('collectedLetters', collected)
+      this.ui.updateLetters(collected)
+      this.showPopup(item.x, item.y, `LETTER  ${letter}!`, '#aaffcc')
       SoundManager.collectHeart()
     } else if (item.type === 'invulnerability') {
       player.applyInvulnerability(true)
@@ -840,7 +863,7 @@ export class GameScene extends Phaser.Scene {
     } else if (item.type === 'key') {
       const lvl = item.keyLevel ?? 1
       this.registry.set(`hasLevel${lvl}Key`, true)
-      this.showPopup(item.x, item.y, 'KEY GET!', '#ffdd00')
+      this.showPopup(item.x, item.y, 'YOU FOUND A KEY!', '#ffdd00')
       SoundManager.collectAbility()
     }
     this.addScore(500)
@@ -951,6 +974,20 @@ export class GameScene extends Phaser.Scene {
       const bx = x - hw + i * (w / N)
       g.fillRect(bx - BAR / 2, y - hh, BAR, h)
     }
+
+    // Padlock centered slightly below the cage midpoint
+    const lx = x, ly = y + 10
+    const bw = 26, bh = 20, sr = 9
+    g.lineStyle(5, 0xcc9900, 1)
+    g.beginPath()
+    g.arc(lx, ly - bh / 2, sr, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false)
+    g.strokePath()
+    g.fillStyle(0xffd700, 1)
+    g.fillRoundedRect(lx - bw / 2, ly - bh / 2, bw, bh, 3)
+    g.fillStyle(0x553300, 1)
+    g.fillCircle(lx, ly + 2, 3.5)
+    g.fillRect(lx - 2, ly + 2, 4, 7)
+
     return g
   }
 
@@ -974,10 +1011,11 @@ export class GameScene extends Phaser.Scene {
   private buildWorldOneNPCs() {
     this.add.image(602, 892, 'sheet-enemy-duck', 11).setDepth(2).setScale(1.5).setFlipX(true)
     this.showNpcBubble(602, 808, [
-      'Collect 3 worms &',
-      '3 roly polies.',
-      'Find key jars to',
-      'save Mom & Dad!',
+      'Find the letter bugs ',
+      'hidden in each level!',
+      'Collect them all. Only',
+      'the magic jar knows ',
+      'the secret word.',
     ], null)
   }
 
@@ -986,7 +1024,7 @@ export class GameScene extends Phaser.Scene {
 
     this.dadNpcSprite  = this.add.image(633, 791, 'npc-dad', 14).setDepth(2).setScale(1.5)
     this.dadCageGfx    = this.drawCage(633, 791, 80, 100)
-    this.dadCageBubble = this.showNpcBubble(633, 710, ['Help! Need 3 worms', '& key jar to free me!'], null)
+    this.dadCageBubble = this.showNpcBubble(633, 710, ['Help! Find letter', 'bugs & magic jar!'], null)
   }
 
   private buildZombieKingNPCs() {
@@ -994,7 +1032,7 @@ export class GameScene extends Phaser.Scene {
 
     this.momNpcSprite  = this.add.image(542, 1079, 'npc-mom', 12).setDepth(2).setScale(1.5)
     this.momCageGfx    = this.drawCage(542, 1079, 80, 100)
-    this.momCageBubble = this.showNpcBubble(542, 998, ['Help! Need 3 roly', 'polies & key jar!'], null)
+    this.momCageBubble = this.showNpcBubble(542, 998, ['Help! Find letter', 'bugs & magic jar!'], null)
   }
 
   private buildCeleryManNPCs() {
@@ -1086,14 +1124,56 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private canSpellWord(word: string, collected: string[]): boolean {
+    const pool = [...collected]
+    for (const letter of word.split('')) {
+      const idx = pool.indexOf(letter)
+      if (idx === -1) return false
+      pool.splice(idx, 1)
+    }
+    return true
+  }
+
+  private assignLetterBugLetters(word: string, numBugs: number): string[] {
+    const wordLetters = word.split('')
+    const usedSet = new Set(wordLetters)
+    const distPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(l => !usedSet.has(l))
+    Phaser.Utils.Array.Shuffle(distPool)
+    const extras = distPool.slice(0, Math.max(0, numBugs - wordLetters.length))
+    return Phaser.Utils.Array.Shuffle([...wordLetters, ...extras]) as string[]
+  }
+
+  private initLevelWords() {
+    const runIndex: number = this.registry.get('runIndex') ?? 0
+    if (runIndex === 0 && !this.cfg.isBossRoom && !this.registry.get('level1Word')) {
+      const word = WORD_LIST_L1[Math.floor(Math.random() * WORD_LIST_L1.length)]
+      this.registry.set('level1Word', word)
+      this.registry.set('level1BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      if (this.cfg.letterBugPool) {
+        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+        this.registry.set('level1BugPositions', positions)
+      }
+    }
+    if (runIndex === 2 && !this.cfg.isBossRoom && !this.registry.get('level2Word')) {
+      const word = WORD_LIST_L2[Math.floor(Math.random() * WORD_LIST_L2.length)]
+      this.registry.set('level2Word', word)
+      this.registry.set('level2BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      if (this.cfg.letterBugPool) {
+        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+        this.registry.set('level2BugPositions', positions)
+      }
+    }
+  }
+
   private updateParentHints() {
     const PROX = 140
+
+    const collected: string[] = this.registry.get('collectedLetters') ?? []
 
     const handleParent = (
       sprite:    Phaser.GameObjects.Image | null,
       bossKey:   string,
-      countKey:  string,
-      total:     number,
+      levelWord: string,
       keyReg:    string,
       freeFn:    () => void,
       bubble:    Phaser.GameObjects.Container | null,
@@ -1101,7 +1181,7 @@ export class GameScene extends Phaser.Scene {
     ) => {
       if (!sprite?.active) return
       const bossOk  = !!(this.registry.get(bossKey))
-      const countOk = (this.registry.get(countKey) ?? 0) >= total
+      const countOk = levelWord ? this.canSpellWord(levelWord, collected) : false
       const keyOk   = !!(this.registry.get(keyReg))
 
       const near = this.players.some(p =>
@@ -1118,12 +1198,9 @@ export class GameScene extends Phaser.Scene {
       // Only show hints once the boss is beaten
       if (!bossOk) return
 
-      const needCount = countKey === 'wormCount'
-        ? `Need ${total - (this.registry.get(countKey) ?? 0)} more worms!`
-        : `Need ${total - (this.registry.get(countKey) ?? 0)} more roly polies!`
-      const lines = (!countOk && !keyOk) ? [needCount, 'Also find key jar!']
-                  : !countOk             ? [needCount]
-                  :                        ['Find the key jar!']
+      const lines = (!countOk && !keyOk) ? ['Find letter bugs!', 'Also find magic jar!']
+                  : !countOk             ? ['Find more letter bugs!']
+                  :                        ['Find the magic jar!']
 
       if (near && !bubble?.active) {
         setBubble(this.showNpcBubble(sprite.x, sprite.y - 160, lines, null))
@@ -1133,14 +1210,17 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    const level1Word: string = this.registry.get('level1Word') ?? ''
+    const level2Word: string = this.registry.get('level2Word') ?? ''
+
     handleParent(
-      this.dadNpcSprite, 'skeletonKingDefeated', 'wormCount', TOTAL_WORMS, 'hasLevel1Key',
+      this.dadNpcSprite, 'skeletonKingDefeated', level1Word, 'hasLevel1Key',
       () => this.freeDad(),
       this.dadHintBubble, b => { this.dadHintBubble = b },
     )
 
     handleParent(
-      this.momNpcSprite, 'zombieKingDefeated', 'rolyPolyCount', TOTAL_ROLY_POLYS, 'hasLevel2Key',
+      this.momNpcSprite, 'zombieKingDefeated', level2Word, 'hasLevel2Key',
       () => this.freeMom(),
       this.momHintBubble, b => { this.momHintBubble = b },
     )
@@ -2033,38 +2113,207 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnKeyJar(x: number, y: number, keyLevel: number) {
-    const img = this.add.image(x, y, 'item-key-jar').setDepth(3).setScale(1.5)
+    const img  = this.add.image(x, y, 'item-key-jar').setDepth(3).setScale(1.5)
+    const sign = this.spawnJarSign(x, y, keyLevel)
 
-    const dest = new Destructible(this, x, y, 2, AbilityType.None, {})
+    // High health so it never shatters naturally — opening is handled via the word menu
+    const dest = new Destructible(this, x, y, 9999, AbilityType.None, {})
     dest.setDisplaySize(40, 40)
     dest.setAlpha(0)
-
-    dest.damageGuard = () => {
-      return keyLevel === 1
-        ? (this.registry.get('wormCount') ?? 0) >= TOTAL_WORMS
-        : (this.registry.get('rolyPolyCount') ?? 0) >= TOTAL_ROLY_POLYS
-    }
+    dest.damageGuard = () => false  // always block damage, open only via word menu
 
     dest.on('blocked', () => {
-      const lastHint: number = dest.getData('lastHintTime') ?? 0
-      if (this.time.now - lastHint > 2000) {
-        dest.setData('lastHintTime', this.time.now)
-        const msg = keyLevel === 1 ? 'Need 3 worms first!' : 'Need 3 roly polies first!'
-        this.showPopup(x, y, msg, '#ff8888')
+      // Visual flash on every hit
+      img.setAlpha(0.3)
+      this.time.delayedCall(90, () => { if (img.active) img.setAlpha(1) })
+
+      const lastAction: number = dest.getData('lastActionTime') ?? 0
+      if (this.time.now - lastAction < 1200) return
+      dest.setData('lastActionTime', this.time.now)
+
+      const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? ''
+      const collected: string[] = this.registry.get('collectedLetters') ?? []
+
+      if (!targetWord || !this.canSpellWord(targetWord, collected)) {
+        this.showPopup(x, y, 'Need letter bugs!', '#ff8888')
+      } else {
+        this.showWordMenu(x, y, keyLevel, () => {
+          this.destructibles = this.destructibles.filter(z => z !== dest)
+          if (dest.active) dest.destroy()
+          if (img.active) img.destroy()
+          if (sign.active) sign.destroy()
+          this.spawnKeyDrop(x, y, keyLevel)
+        })
       }
     })
 
-    dest.on('hit', () => {
-      img.setAlpha(0.3)
-      this.time.delayedCall(90, () => { if (img.active) img.setAlpha(1) })
+    this.destructibles.push(dest)
+  }
+
+  private spawnJarSign(jarX: number, jarY: number, keyLevel: number): Phaser.GameObjects.Container {
+    const BOARD_W = 160, BOARD_H = 62, POLE_H = 56
+
+    const pole  = this.add.rectangle(0, BOARD_H / 2 + POLE_H / 2, 6, POLE_H, 0x5c3317)
+    const board = this.add.rectangle(0, 0, BOARD_W, BOARD_H, 0xc49a44)
+      .setStrokeStyle(2, 0x4a2a0a)
+    const grain1 = this.add.rectangle(0, -10, BOARD_W - 12, 2, 0x8a6422, 0.45)
+    const grain2 = this.add.rectangle(0,   2, BOARD_W - 12, 2, 0x8a6422, 0.45)
+    const grain3 = this.add.rectangle(0,  14, BOARD_W - 12, 2, 0x8a6422, 0.45)
+
+    const txt = this.add.text(0, 0, '', {
+      fontSize: '8px', fontFamily: FONT, color: '#2a1505', align: 'center',
+      wordWrap: { width: BOARD_W - 18 },
+    }).setOrigin(0.5)
+
+    const container = this.add.container(jarX - 200, jarY - 50, [pole, board, grain1, grain2, grain3, txt]).setDepth(3)
+
+    const update = () => {
+      if (!container.active) return
+      const collected: string[] = this.registry.get('collectedLetters') ?? []
+      const word: string        = this.registry.get(`level${keyLevel}Word`) ?? ''
+      txt.setText(word && this.canSpellWord(word, collected)
+        ? 'Break the jar!\nThat opens the\nmenu to select\nthe word.'
+        : 'Find all of the\ncorrect letters\nto break the jar!')
+    }
+    update()
+
+    let timer: Phaser.Time.TimerEvent
+    timer = this.time.addEvent({ delay: 400, loop: true, callback: () => {
+      if (!container.active) { timer.remove(); return }
+      update()
+    }})
+
+    return container
+  }
+
+  private showWordMenu(jarX: number, jarY: number, keyLevel: number, onCorrect: () => void) {
+    if (this.wordMenuObjects.length > 0) return
+
+    const { width, height } = this.scale
+    const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? 'BUG'
+    const wordList = keyLevel === 1 ? WORD_LIST_L1 : WORD_LIST_L2
+    const distractors = Phaser.Utils.Array.Shuffle([...wordList].filter(w => w !== targetWord)) as string[]
+    const options = Phaser.Utils.Array.Shuffle([targetWord, distractors[0] ?? 'CAT', distractors[1] ?? 'DOG']) as string[]
+
+    this.gm.pause()
+    this.physics.world.isPaused = true
+
+    const collected: string[] = this.registry.get('collectedLetters') ?? []
+    const D = 150  // above pause menu (depth 100)
+
+    // All objects are direct scene children (no container) so scrollFactor:0
+    // hit-testing is always in screen space regardless of camera scroll position.
+
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
+      .setScrollFactor(0).setDepth(D).setInteractive()  // blocks clicks reaching the pause menu
+
+    const title = this.add.text(width / 2, height * 0.28, 'MAGIC JAR!', {
+      fontSize: '32px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const lbl = this.add.text(width / 2, height * 0.42, 'Your letters:', {
+      fontSize: '9px', fontFamily: FONT, color: '#aabbcc',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const lettersDisplay = this.add.text(width / 2, height * 0.48, collected.join('  '), {
+      fontSize: '18px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const escHint = this.add.text(width / 2, height * 0.85, 'UP / DOWN to move   ENTER to pick', {
+      fontSize: '9px', fontFamily: FONT, color: '#556677',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    // Word-option buttons — identical style to pause menu buttons
+    const btns: Phaser.GameObjects.Text[] = []
+    options.forEach((word, i) => {
+      const btn = this.add.text(width / 2, height * 0.60 + i * 54, word, {
+        fontSize: '16px', fontFamily: FONT, color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+        backgroundColor: '#00000055', padding: { x: 22, y: 12 },
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D).setInteractive({ useHandCursor: true })
+      btns.push(btn)
     })
 
-    this.destructibles.push(dest)
-    dest.on('destroyed', (_obj: Destructible) => {
-      this.destructibles = this.destructibles.filter(z => z !== dest)
-      img.destroy()
-      this.spawnKeyDrop(x, y, keyLevel)
+    // Cursor lives as its own scene object — same pattern as pauseCursor
+    const cursor = this.add.text(0, 0, '►', {
+      fontSize: '16px', fontFamily: FONT, color: '#ffe066',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 1).setVisible(false)
+
+    this.wordMenuObjects = [overlay, title, lbl, lettersDisplay, escHint, ...btns, cursor]
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+    let focusIdx = 0
+    let shaking  = false
+    const keyListeners: { key: string; fn: () => void }[] = []
+
+    const moveFocus = (idx: number) => {
+      focusIdx = idx
+      btns.forEach((b, i) => b.setColor(i === idx ? '#ffe066' : '#ffffff'))
+      const b = btns[idx].getBounds()
+      cursor.setPosition(b.left - 12, b.centerY).setVisible(true)
+    }
+
+    const closeMenu = () => {
+      this.wordMenuObjects.forEach(o => { if (o.active) (o as Phaser.GameObjects.Image).destroy() })
+      this.wordMenuObjects = []
+      this.wordMenuNav = null
+      keyListeners.forEach(({ key, fn }) => this.input.keyboard?.off(key, fn))
+      this.gm.resume()
+      this.physics.world.isPaused = false
+    }
+
+    const shake = () => {
+      if (shaking) return
+      shaking = true
+      const targets = [title, lbl, lettersDisplay, ...btns, cursor]
+      this.tweens.add({
+        targets,
+        x: '+=8',
+        duration: 40,
+        yoyo: true,
+        repeat: 4,
+        ease: 'Linear',
+        onComplete: () => { shaking = false; moveFocus(focusIdx) },
+      })
+    }
+
+    const pick = (i: number) => {
+      if (shaking) return
+      const word = options[i]
+      if (!word) return
+      if (word === targetWord) {
+        closeMenu()
+        onCorrect()
+        this.showPopup(jarX, jarY, 'MAGIC WORD!', '#ffe066')
+        SoundManager.collectAbility()
+      } else {
+        moveFocus(i)
+        btns[i]?.setColor('#ff4444')
+        shake()
+      }
+    }
+
+    btns.forEach((btn, i) => {
+      btn.on('pointerover', () => { if (!shaking) moveFocus(i) })
+      btn.on('pointerdown', () => pick(i))
     })
+
+    moveFocus(0)
+
+    // ── keyboard navigation ────────────────────────────────────────────────────
+    const onUp    = () => { if (!shaking) moveFocus((focusIdx - 1 + 3) % 3) }
+    const onDown  = () => { if (!shaking) moveFocus((focusIdx + 1) % 3) }
+    const onEnter = () => pick(focusIdx)
+    keyListeners.push(
+      { key: 'keydown-UP',    fn: onUp    },
+      { key: 'keydown-DOWN',  fn: onDown  },
+      { key: 'keydown-W',     fn: onUp    },
+      { key: 'keydown-S',     fn: onDown  },
+      { key: 'keydown-ENTER', fn: onEnter },
+      { key: 'keydown-SPACE', fn: onEnter },
+    )
+    this.wordMenuNav = { up: onUp, down: onDown, confirm: onEnter }
+    keyListeners.forEach(({ key, fn }) => this.input.keyboard?.on(key, fn))
   }
 
   private spawnKeyDrop(x: number, y: number, keyLevel: number) {
@@ -2075,6 +2324,10 @@ export class GameScene extends Phaser.Scene {
     img.setData('item', { type: 'key', x, y: dropY, keyLevel } as ItemSpawn)
     img.setData('ring', glow)
     this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    const parent = keyLevel === 1 ? 'dad' : 'mom'
+    const bubble = this.showNpcBubble(x, dropY - 72, ['You did it!', 'Grab the magic key', `to save ${parent}!`], null)
+    bubble.setDepth(10)
+    img.setData('keyBubble', bubble)
     this.collectibleSprites.push(img)
   }
 
@@ -2593,9 +2846,12 @@ export class GameScene extends Phaser.Scene {
       if (nearTarget) {
         // Enemy in range — stop, face them, shoot; lock in shoot state briefly to dampen oscillation
         body.setVelocityX(0)
+        const wasAlreadyShooting = truck.isShooting
         truck.isShooting = true
         truck.setData('shootHold', now + 800)
         truck.setFlipX(nearTarget.x < truck.x)
+        // Fire immediately the moment the truck stops rather than waiting for the timer
+        if (!wasAlreadyShooting) this.fireConradTruckShot(truck)
       } else if (truck.isShooting && now < holdUntil) {
         // Still within the shoot-hold window — stay put
         body.setVelocityX(0)
@@ -2634,19 +2890,27 @@ export class GameScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss.x, this.boss.y)
       if (d < best) { best = d; target = this.boss }
     }
-    if (!target) return
-
-    const angle = Phaser.Math.Angle.Between(truck.x, truck.y - 10, target.x, target.y)
-    const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
-    const proj = this.physics.add.image(truck.x, truck.y - 10, texKey)
-    proj.setTint(0x44cc44)
-    this.projectiles.add(proj)
+    type TruckEffect = 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning'
+    const effectType = Phaser.Math.RND.pick(['fire', 'ice', 'explode', 'blackhole', 'lightning'] as TruckEffect[])
+    const frame = effectType === 'fire' ? 1 : effectType === 'ice' ? 2 : effectType === 'explode' ? 3 : effectType === 'blackhole' ? 7 : 9
+    // If no target in range, fire horizontally in the direction the truck faces
+    const angle = target
+      ? Phaser.Math.Angle.Between(truck.x, truck.y - 10, target.x, target.y)
+      : (truck.flipX ? Math.PI : 0)
+    const proj = this.physics.add.image(truck.x, truck.y - 10, 'sheet-truck-projectiles', frame)
+    proj.setScale(1.8).setRotation(angle)
     ;(proj.body as Phaser.Physics.Arcade.Body)
       .setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
       .setGravityY(-800)
 
+    const onHit = (hx: number, hy: number) => {
+      if (!proj.active) return
+      this.triggerTruckBulletEffect(effectType, hx, hy)
+      proj.destroy()
+    }
+
     this.enemies.forEach(e => {
-      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, this.players[0]); proj.destroy() })
+      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, this.players[0]); onHit(e.x, e.y) })
     })
     if (this.boss?.active) {
       this.physics.add.overlap(proj, this.boss, () => {
@@ -2654,10 +2918,96 @@ export class GameScene extends Phaser.Scene {
             (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
         SoundManager.bossHit()
         this.boss!.hit()
-        proj.destroy()
+        onHit(this.boss!.x, this.boss!.y)
       })
     }
-    this.time.delayedCall(2200, () => { if (proj.active) proj.destroy() })
+    // Delay surface colliders so the bullet escapes the truck's spawn tile first
+    this.time.delayedCall(150, () => {
+      if (!proj.active) return
+      this.physics.add.collider(proj, this.platforms, () => onHit(proj.x, proj.y))
+      this.tilemapLayers.forEach(l => this.physics.add.collider(proj, l, () => onHit(proj.x, proj.y)))
+    })
+    this.time.delayedCall(2200, () => { if (proj.active) onHit(proj.x, proj.y) })
+  }
+
+  private triggerTruckBulletEffect(type: 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning', x: number, y: number) {
+    const src = this.players[0]
+
+    if (type === 'explode') {
+      const RADIUS = 110
+      if (src) {
+        this.enemies.forEach(e => {
+          if (!e.active) return
+          if (Phaser.Math.Distance.Between(x, y, e.x, e.y) < RADIUS) this.hitEnemy(e, src)
+        })
+        if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
+          SoundManager.bossHit(); this.boss.hit()
+        }
+      }
+    } else if (type === 'blackhole') {
+      const RADIUS = 180
+      const pulled = this.enemies.filter(e => e.active && Phaser.Math.Distance.Between(x, y, e.x, e.y) < RADIUS)
+      // Repeatedly override enemy velocity toward the impact point for ~600 ms
+      for (let t = 0; t < 600; t += 60) {
+        this.time.delayedCall(t, () => {
+          pulled.forEach(e => {
+            if (!e.active) return
+            const ang = Phaser.Math.Angle.Between(e.x, e.y, x, y)
+            ;(e.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(ang) * 520, Math.sin(ang) * 520)
+          })
+        })
+      }
+      if (src) {
+        this.time.delayedCall(620, () => {
+          pulled.forEach(e => { if (e.active) this.hitEnemy(e, src) })
+          if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
+            SoundManager.bossHit(); this.boss.hit()
+          }
+        })
+      }
+    } else if (type === 'lightning') {
+      const RADIUS = 220
+      const targets = this.enemies
+        .filter(e => e.active && Phaser.Math.Distance.Between(x, y, e.x, e.y) < RADIUS)
+        .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))
+        .slice(0, 3)
+      if (src) targets.forEach(e => this.hitEnemy(e, src))
+      if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
+        SoundManager.bossHit(); this.boss.hit()
+      }
+      targets.forEach((e, i) => {
+        this.time.delayedCall(i * 80, () => {
+          if (!e.active) return
+          const g = this.add.graphics().setDepth(15)
+          g.lineStyle(3, 0xffff44, 1)
+          g.strokeLineShape(new Phaser.Geom.Line(x, y, e.x, e.y))
+          this.tweens.add({ targets: g, alpha: 0, duration: 280, onComplete: () => g.destroy() })
+        })
+      })
+    }
+
+    const color  = type === 'fire' ? 0xff5500 : type === 'ice' ? 0x22ddff : type === 'explode' ? 0xffee00
+                 : type === 'blackhole' ? 0x220033 : 0xffff44
+    const radius = type === 'explode' ? 55 : type === 'blackhole' ? 65 : 18
+    const flash  = this.add.circle(x, y, radius, color, 0.9).setDepth(15)
+
+    if (type === 'blackhole') {
+      this.tweens.add({
+        targets: flash, scaleX: 2.5, scaleY: 2.5, alpha: 0.4, duration: 300,
+        onComplete: () => {
+          this.tweens.add({ targets: flash, scaleX: 0, scaleY: 0, alpha: 0, duration: 350,
+            onComplete: () => { if (flash.active) flash.destroy() } })
+        },
+      })
+    } else {
+      this.tweens.add({
+        targets: flash,
+        scaleX: type === 'explode' ? 4 : 2.5, scaleY: type === 'explode' ? 4 : 2.5,
+        alpha: 0,
+        duration: type === 'explode' ? 420 : 240,
+        onComplete: () => { if (flash.active) flash.destroy() },
+      })
+    }
   }
 
   // ── Coco shadow ability ───────────────────────────────────────────────────────
@@ -3417,8 +3767,13 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('celeryManDefeated', null)
     this.registry.set('dadSaved', null)
     this.registry.set('momSaved', null)
-    this.registry.set('wormCount', 0)
-    this.registry.set('rolyPolyCount', 0)
+    this.registry.set('collectedLetters', [])
+    this.registry.set('level1Word', null)
+    this.registry.set('level2Word', null)
+    this.registry.set('level1BugLetters', null)
+    this.registry.set('level2BugLetters', null)
+    this.registry.set('level1BugPositions', null)
+    this.registry.set('level2BugPositions', null)
     this.registry.set('hasLevel1Key', null)
     this.registry.set('hasLevel2Key', null)
     this.registry.set('runRooms', null)
@@ -3812,10 +4167,17 @@ export class GameScene extends Phaser.Scene {
       Phaser.Input.Gamepad.Events.BUTTON_DOWN,
       (pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
         // Start button (9) always toggles pause regardless of player state
-        if (button.index === 9) { this.togglePause(); return }
+        // Start button is blocked while the word menu is open (it is modal)
+        if (button.index === 9) { if (!this.wordMenuNav) this.togglePause(); return }
 
-        // D-pad navigates pause menu when paused
+        // D-pad navigates whichever menu is currently open
         if (!this.gm.isPlaying()) {
+          if (this.wordMenuNav) {
+            if (button.index === 12) { this.wordMenuNav.up();      return }
+            if (button.index === 13) { this.wordMenuNav.down();    return }
+            if (button.index === 0)  { this.wordMenuNav.confirm(); return }
+            return
+          }
           if (button.index === 12) { this.movePauseFocus(-1); return }
           if (button.index === 13) { this.movePauseFocus(1);  return }
           if (button.index === 0)  { this.pauseItems[this.pauseFocusIdx]?.action(); return }
@@ -3877,8 +4239,13 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('celeryManDefeated',    null)
       this.registry.set('dadSaved',             null)
       this.registry.set('momSaved',             null)
-      this.registry.set('wormCount',            0)
-      this.registry.set('rolyPolyCount',        0)
+      this.registry.set('collectedLetters',     [])
+      this.registry.set('level1Word',           null)
+      this.registry.set('level2Word',           null)
+      this.registry.set('level1BugLetters',     null)
+      this.registry.set('level2BugLetters',     null)
+      this.registry.set('level1BugPositions',   null)
+      this.registry.set('level2BugPositions',   null)
       this.registry.set('hasLevel1Key',         null)
       this.registry.set('hasLevel2Key',         null)
       SoundManager.stopTrack()
@@ -3913,6 +4280,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private togglePause() {
+    if (this.wordMenuNav) return  // word menu is modal — ESC/Start cannot interrupt it
     const nowPaused = this.gm.isPlaying()
     if (nowPaused) this.gm.pause()
     else this.gm.resume()
@@ -4139,6 +4507,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
         if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, img.x, img.y) < 32) {
           this.collectItem(p, img.getData('item') as ItemSpawn)
           ;(img.getData('ring') as Phaser.GameObjects.Arc | undefined)?.destroy()
+          ;(img.getData('keyBubble') as Phaser.GameObjects.Container | undefined)?.destroy()
           img.destroy()
           return false
         }

@@ -12,12 +12,13 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability' | 'key-jar' | 'key'
+export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'letter-bug' | 'invulnerability' | 'key-jar' | 'key'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
   ability?: AbilityType
   keyLevel?: number   // for key-jar / key: which level's key (1 or 2)
+  letter?: string     // for letter-bug: assigned at runtime from registry
 }
 
 export interface FurnitureSpawn {
@@ -105,6 +106,7 @@ export interface RoomConfig {
   spikeBalls?: SpikeBallSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
+  letterBugPool?: Array<{x: number, y: number}>
 }
 
 const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
@@ -232,11 +234,17 @@ const WORLD_ROOM: RoomConfig = {
     { x: 1456, y:  502, type: 'attack-boost' },
     { x:  176, y: 1870, type: 'speed' },
     { x:  780, y:  426, type: 'invulnerability' },
-    { x: 1778, y: 2460, type: 'worm' },
-    { x:  369, y: 1948, type: 'worm' },
-    { x: 3196, y: 1660, type: 'worm' },
-    { x: 4620, y:  640, type: 'worm' },
-    { x: 1218, y: 2940, type: 'worm' },
+    { x: 1778, y: 2460, type: 'letter-bug', keyLevel: 1 },
+    { x:  369, y: 1948, type: 'letter-bug', keyLevel: 1 },
+    { x: 3196, y: 1660, type: 'letter-bug', keyLevel: 1 },
+    { x: 4620, y:  640, type: 'letter-bug', keyLevel: 1 },
+    { x: 1218, y: 2940, type: 'letter-bug', keyLevel: 1 },
+  ],
+  letterBugPool: [
+    { x: 1778, y: 2460 }, { x:  369, y: 1948 }, { x: 3196, y: 1660 },
+    { x: 4620, y:  640 }, { x: 1218, y: 2940 }, { x: 2500, y:  640 },
+    { x: 3300, y:  640 }, { x: 2807, y: 1664 }, { x: 3685, y: 1152 },
+    { x: 5065, y: 2209 },
   ],
 }
 
@@ -354,11 +362,17 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   crates: [],
   items: [
     { x:  281, y: 2748, type: 'key-jar', keyLevel: 2 },
-    { x: 2056, y: 3500, type: 'roly-poly' },
-    { x: 5404, y: 2012, type: 'roly-poly' },
-    { x: 3666, y: 1116, type: 'roly-poly' },
-    { x: 1100, y: 3324, type: 'roly-poly' },
-    { x: 4650, y:  860, type: 'roly-poly' },
+    { x: 2056, y: 3500, type: 'letter-bug', keyLevel: 2 },
+    { x: 5404, y: 2012, type: 'letter-bug', keyLevel: 2 },
+    { x: 3666, y: 1116, type: 'letter-bug', keyLevel: 2 },
+    { x: 1100, y: 3324, type: 'letter-bug', keyLevel: 2 },
+    { x: 4650, y:  860, type: 'letter-bug', keyLevel: 2 },
+  ],
+  letterBugPool: [
+    { x: 2056, y: 3500 }, { x: 5404, y: 2012 }, { x: 3666, y: 1116 },
+    { x: 1100, y: 3324 }, { x: 4650, y:  860 }, { x:  488, y: 3369 },
+    { x: 3676, y:  508 }, { x: 4988, y:  860 }, { x: 3503, y: 3500 },
+    { x: 1521, y: 3324 },
   ],
 }
 
@@ -736,8 +750,11 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
 }
 
 export const RUN_LENGTH = 6
-export const TOTAL_WORMS = 3
-export const TOTAL_ROLY_POLYS = 3
+export const TOTAL_LETTER_BUGS = 5
+
+// Phonics word lists — 3-letter for level 1, 4-letter for level 2
+export const WORD_LIST_L1 = ['BUG', 'CAT', 'DOG', 'HAT', 'MAP', 'SUN', 'FLY', 'ANT', 'BEE', 'RUN', 'JAM', 'BAT', 'HOP', 'PIG', 'WEB']
+export const WORD_LIST_L2 = ['FROG', 'FISH', 'LEAF', 'TREE', 'DUCK', 'JUMP', 'SLUG', 'WING', 'STAR', 'WORM', 'FLEA', 'TOAD', 'MOTH', 'GNAT', 'WASP']
 
 export function generateRun(): RoomConfig[] {
   return [

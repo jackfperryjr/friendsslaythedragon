@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 
 const FIRE_RATE    = 1600   // ms between bursts while stopped
-const ATTACK_RANGE = 180    // px — stop and shoot within this distance
+const ATTACK_RANGE = 240    // px — stop and shoot within this distance
 const MOVE_SPEED   = 700    // 2× player speed
 const LIFETIME_MS  = 10000
 

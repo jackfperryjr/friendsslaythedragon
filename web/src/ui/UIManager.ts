@@ -12,8 +12,7 @@ export class UIManager {
   private speedBoostIcons: Phaser.GameObjects.Image[] = []
   private strengthBoostIcons: Phaser.GameObjects.Image[] = []
   private invulnerabilityIcons: Phaser.GameObjects.Image[] = []
-  private wormCountText: Phaser.GameObjects.Text | null = null
-  private rolyPolyCountText: Phaser.GameObjects.Text | null = null
+  private letterSlots: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
 
   constructor(
     scene: Phaser.Scene,
@@ -94,27 +93,19 @@ export class UIManager {
       this.invulnerabilityIcons.push(invulnIcon)
     }
 
-    // Worm + roly-poly counters
-    const CTR_Y   = 22
-    const WORM_IX = 334
-    const ROLY_IX = 394
-    if (scene.textures.exists('item-worm')) {
-      scene.add.image(WORM_IX, CTR_Y, 'item-worm')
-        .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
+    // Letter bug tray — up to 5 collected-letter slots, offset from player HUD with a gap
+    const LETTER_Y = 22
+    const LETTER_START_X = 350  // 30px gap after the player HUD block (~320px wide)
+    for (let i = 0; i < 5; i++) {
+      const slotX = LETTER_START_X + i * 36
+      const bg = scene.add.rectangle(slotX, LETTER_Y, 30, 30, 0x000000, 0.55)
+        .setStrokeStyle(1, 0x556677).setScrollFactor(0).setDepth(20)
+      const text = scene.add.text(slotX, LETTER_Y + 1, '', {
+        fontSize: '12px', fontFamily: FONT, color: '#ffe066',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(21)
+      this.letterSlots.push({ bg, text })
     }
-    this.wormCountText = scene.add.text(WORM_IX + 17, CTR_Y, '0', {
-      fontSize: '10px', fontFamily: FONT, color: '#aaffaa',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(20)
-
-    if (scene.textures.exists('item-roly-poly')) {
-      scene.add.image(ROLY_IX, CTR_Y, 'item-roly-poly')
-        .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
-    }
-    this.rolyPolyCountText = scene.add.text(ROLY_IX + 17, CTR_Y, '0', {
-      fontSize: '10px', fontFamily: FONT, color: '#ffddaa',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(20)
   }
 
   update(players: Player[]) {
@@ -132,8 +123,11 @@ export class UIManager {
     this.bossBarFill.width = Math.round(200 * pct)
   }
 
-  updateWormCount(n: number) { this.wormCountText?.setText(`${n}`) }
-  updateRolyPolyCount(n: number) { this.rolyPolyCountText?.setText(`${n}`) }
+  updateLetters(letters: string[]) {
+    this.letterSlots.forEach((slot, i) => {
+      slot.text.setText(letters[i] ?? '')
+    })
+  }
 
   hideBossBar() {
     if (!this.bossHudObjects.length) return
