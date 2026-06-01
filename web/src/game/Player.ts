@@ -23,6 +23,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isTruck          = false
   isTrex           = false
   isTransforming   = false   // true during transform/untransform animation
+  isShadowForm     = false   // Coco wearing the Shadow costume
+  isSpindashing    = false   // Coco executing a spindash
 
   private hitCount        = 0
   private isFloating      = false
@@ -158,7 +160,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private updateAnimation() {
     if (!this.animPrefix) return
-    if (this.isTruck || this.isTrex || this.isTransforming) return  // managed externally
+    if (this.isTruck || this.isTrex || this.isTransforming || this.isShadowForm || this.isSpindashing) return  // managed externally
     const body = this.body as Phaser.Physics.Arcade.Body
     const vx = Math.abs(body.velocity.x)
 
@@ -198,7 +200,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // ── damage ──────────────────────────────────────────────────────────────────
 
   hitByEnemy() {
-    if (this.invincible || this.invulnerabilityActive || this.isShielding || this.isTruck || !this.isAlive) return
+    if (this.invincible || this.invulnerabilityActive || this.isShielding || this.isTruck || this.isSpindashing || !this.isAlive) return
     SoundManager.playerHit()
 
     this.hitCount++

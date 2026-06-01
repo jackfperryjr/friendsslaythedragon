@@ -26,7 +26,7 @@ export class Boss extends Enemy {
     y: number,
     hp: number,
     _attackInterval = 3000,
-    textureKey = 'sheet-dragon',
+    textureKey = 'sheet-king-skeleton',
     flying = true,
     stationary = false,
     attackRate = 3000,
