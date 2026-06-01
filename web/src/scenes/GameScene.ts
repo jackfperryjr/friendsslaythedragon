@@ -2339,7 +2339,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.isTruck || player.isTrex || player.isSpindashing) {
+        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold')) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
           this.trackEnemyKill()
@@ -2878,7 +2878,7 @@ export class GameScene extends Phaser.Scene {
 
     const FRAME_MS  = 80    // ms per frame (~12.5 fps)
     const HOLD_MS   = 5000  // 5-second spiral hold on frame 10
-    const KILL_R    = 88    // kill radius while at 3× scale
+    const KILL_R    = 96    // kill radius while at 3× scale (half of 64px frame × 3)
     const origScale = src.scale  // preserve player's default scale (1.3)
 
     src.setTexture('sheet-abby-transformer', 1)
@@ -2922,6 +2922,7 @@ export class GameScene extends Phaser.Scene {
       const body = src.body as Phaser.Physics.Arcade.Body
       body.setAllowGravity(false)
       body.setVelocityY(0)
+      src.setData('abbySpinHold', true)
 
       const hitSet         = new Set<Enemy>()
       const destroyedBreak = new Set<Destructible>()
@@ -2955,6 +2956,7 @@ export class GameScene extends Phaser.Scene {
         holdTimer.remove()
         killTimer.remove()
         body.setAllowGravity(true)
+        src.setData('abbySpinHold', false)
         src.setData('abbyEarlyExit', null)
 
         if (!src.active) {
