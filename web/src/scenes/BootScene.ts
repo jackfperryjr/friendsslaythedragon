@@ -180,6 +180,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('sheet-scarlett-transformer',   'assets/players/scarlett_transform.png',     { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-coco-transform',         'assets/players/coco_transform.png',         { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-coco-spindash',          'assets/players/coco_spindash.png',          { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-abby-transformer',       'assets/players/abby_transform.png',         { frameWidth: 64, frameHeight: 64 })
     this.load.image('logo', 'assets/app_icons/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')

@@ -2866,194 +2866,137 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Abby star burst ability ───────────────────────────────────────────────────
-  // Abby dissolves into 7 shooting stars that sweep outward in all directions,
-  // hit anything in range, then arc back to reform Abby.
+  // ── Abby transform ability ───────────────────────────────────────────────────
+  // Abby animates through abby_transform frames 1-9, with frames 8-11 rotating.
+  // Holds on frame 10 for 5 seconds at 3× scale, instantly killing any enemy
+  // that comes into contact. Then reforms through frames 11-15 at normal size.
 
-  private spawnAbbyStars(src: Player) {
-    if (src.getData('abbyBurstActive')) return
-    src.setData('abbyBurstActive', true)
-    src.play(`char-${src.charKey}-ability`, true)
+  private handleAbbyTransform(src: Player) {
+    if (src.isTransforming) return
+    src.isTransforming = true
+    src.stop()  // halt any currently playing animation before manual frame stepping
 
-    const COUNT        = 7
-    const ORBIT_RADIUS = 120    // px — stars never exceed this distance
-    const EXPAND_MS    = 180    // time for stars to burst out to orbit radius
-    const ORBIT_MS     = 900    // time spinning in the ring
-    const TOTAL_MS     = EXPAND_MS + ORBIT_MS
-    const RETURN_SPEED = 1000
-    const SPIN_RATE    = 6.0    // rad/s ring rotation speed
+    const FRAME_MS  = 80    // ms per frame (~12.5 fps)
+    const HOLD_MS   = 5000  // 5-second spiral hold on frame 10
+    const KILL_R    = 88    // kill radius while at 3× scale
+    const origScale = src.scale  // preserve player's default scale (1.3)
 
-    this.tweens.killTweensOf(src)
-    src.setAlpha(0)
+    src.setTexture('sheet-abby-transformer', 1)
 
-    // baseAngle is mutable so we can re-anchor it after the burst phase
-    type StarEntry = { star: Phaser.GameObjects.Text; body: Phaser.Physics.Arcade.Body; baseAngle: number }
-    const starEntries: StarEntry[] = []
+    let rotTween: Phaser.Tweens.Tween | null = null
 
-    let groupAngle = 0
-    let orbiting = false
-
-    // Phase 1 (0 → EXPAND_MS): accumulate groupAngle only.
-    // Phase 2 (EXPAND_MS → TOTAL_MS): lock each star to its orbit position via body.reset().
-    const spinTimer = this.time.addEvent({
-      delay: 16,
-      loop: true,
-      callback: () => {
-        groupAngle += SPIN_RATE * 0.016
-        if (!orbiting) return
-        for (const entry of starEntries) {
-          if (!entry.star.active) continue
-          const a = entry.baseAngle + groupAngle
-          // body.reset(x, y) calls gameObject.setPosition(x, y) — perfect lock, no drift
-          entry.body.reset(
-            src.x + Math.cos(a) * ORBIT_RADIUS,
-            src.y + Math.sin(a) * ORBIT_RADIUS,
-          )
-        }
-      },
-    })
-
-    // At the end of the burst phase, re-anchor each star's baseAngle to its actual
-    // position so the orbital lock has zero snap/jump.
-    this.time.delayedCall(EXPAND_MS, () => {
-      for (const entry of starEntries) {
-        if (!entry.star.active) continue
-        const actualAngle = Math.atan2(entry.star.y - src.y, entry.star.x - src.x)
-        entry.baseAngle = actualAngle - groupAngle
-      }
-      orbiting = true
-    })
-
-    // ── Central spiral ─────────────────────────────────────────────────────────
-    // Two counter-rotating arms drawn as a chain of dots, blended ADD for glow.
-    const spiralGfx = this.add.graphics().setDepth(13).setBlendMode(Phaser.BlendModes.ADD)
-    let spiralAngle = 0
-    const spiralTimer = this.time.addEvent({
-      delay: 16,
-      loop: true,
-      callback: () => {
-        spiralAngle += 8 * 0.016
-        spiralGfx.clear()
-        for (let arm = 0; arm < 2; arm++) {
-          const armBase = arm * Math.PI
-          for (let t = 0; t < 14; t++) {
-            const pct   = t / 13
-            const r     = pct * ORBIT_RADIUS * 0.78
-            const a     = spiralAngle + armBase + pct * Math.PI * 1.5
-            const alpha = (1 - pct) * 0.92
-            const radius = 4.5 - pct * 3
-            spiralGfx.fillStyle(pct < 0.45 ? 0xffffff : 0xffee44, alpha)
-            spiralGfx.fillCircle(src.x + Math.cos(a) * r, src.y + Math.sin(a) * r, radius)
-          }
-        }
-      },
-    })
-
-    // When the ability ends, stop ring + spiral, then stars fly home
-    this.time.delayedCall(TOTAL_MS, () => {
-      spinTimer.remove()
-      spiralTimer.remove()
-      spiralGfx.destroy()
-    })
-
-    let returnedCount = 0
-    const onStarReturned = () => {
-      returnedCount++
-      if (returnedCount < COUNT) return
-      src.setData('abbyBurstActive', false)
-      if (src.active && src.isAlive) {
-        src.setAlpha(1)
-        this.cameras.main.flash(200, 255, 240, 120, false)
-      }
+    const startRot = (dur: number) => {
+      rotTween?.stop()
+      rotTween = this.tweens.add({ targets: src, angle: '+=360', duration: dur, repeat: -1 })
     }
 
-    for (let i = 0; i < COUNT; i++) {
-      const baseAngle = (i / COUNT) * Math.PI * 2
-
-      const star = this.add.text(src.x, src.y, '★', {
-        fontSize: '34px',
-        fontFamily: 'Arial, sans-serif',
-        color: '#ffee44',
-        stroke: '#ffffff',
-        strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(12)
-
-      this.physics.add.existing(star)
-      const body = star.body as Phaser.Physics.Arcade.Body
-      body.setAllowGravity(false)
-      // Burst outward — orbit lock takes over after EXPAND_MS
-      body.setVelocity(Math.cos(baseAngle) * 720, Math.sin(baseAngle) * 720)
-      this.tweens.add({ targets: star, angle: 360, duration: 300, repeat: -1 })
-
-      starEntries.push({ star, body, baseAngle })
-
-      // White-yellow comet tail
-      const trail = this.add.particles(src.x, src.y, '__DEFAULT', {
-        lifespan: 280,
-        speed: 0,
-        scale: { start: 0.60, end: 0 },
-        alpha: { start: 1, end: 0 },
-        tint: [0xffffff, 0xffffff, 0xffee44, 0xffd700],
-        quantity: 5,
-        frequency: 10,
-        blendMode: 'ADD',
-      }).setDepth(11)
-      trail.startFollow(star)
-
-      // Each star passes through, dealing one hit per target
-      const hitTargets = new Set<Enemy | Boss>()
-      const tryHit = (target: Enemy | Boss) => {
-        if (!star.active || !target.active || hitTargets.has(target)) return
-        hitTargets.add(target)
-        const fx = this.add.graphics().setDepth(15)
-        fx.fillStyle(0xffffff, 0.90); fx.fillCircle(target.x, target.y, 22)
-        fx.lineStyle(3, 0xffee44, 1); fx.strokeCircle(target.x, target.y, 22)
-        this.tweens.add({
-          targets: fx, alpha: 0, scaleX: 3.5, scaleY: 3.5,
-          duration: 220, ease: 'Quad.Out',
-          onComplete: () => fx.destroy(),
-        })
-        if (target === this.boss) {
-          if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
-              (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
-          SoundManager.bossHit()
-          this.boss!.hit()
-        } else {
-          SoundManager.enemyHit()
-          ;(target as Enemy).hit()
-          this.addScore(SCORE_ENEMY)
-        }
-      }
-      this.enemies.forEach(e => { if (e.active) this.physics.add.overlap(star, e, () => tryHit(e)) })
-      if (this.boss?.active) this.physics.add.overlap(star, this.boss, () => tryHit(this.boss!))
-
-      let returned = false
-      const returnStar = () => {
-        if (returned) return
-        returned = true
-        trail.stopFollow()
-        if (trail.active) trail.destroy()
-        if (star.active) star.destroy()
-        onStarReturned()
-      }
-
-      this.time.delayedCall(TOTAL_MS, () => {
-        if (!star.active) { returnStar(); return }
-        const retAngle = Phaser.Math.Angle.Between(star.x, star.y, src.x, src.y)
-        body.setVelocity(Math.cos(retAngle) * RETURN_SPEED, Math.sin(retAngle) * RETURN_SPEED)
-
-        const poll = this.time.addEvent({
-          delay: 20,
-          loop: true,
-          callback: () => {
-            if (!star.active || Phaser.Math.Distance.Between(star.x, star.y, src.x, src.y) < 48) {
-              poll.remove(); returnStar()
-            }
-          },
-        })
-        this.time.delayedCall(2500, () => { poll.remove(); returnStar() })
+    // Frames 2-7: advance without rotation
+    for (let f = 2; f <= 7; f++) {
+      this.time.delayedCall((f - 1) * FRAME_MS, () => {
+        if (!src.active) return
+        src.setFrame(f)
       })
     }
+
+    // Frame 8: rotation begins
+    this.time.delayedCall(7 * FRAME_MS, () => {
+      if (!src.active) return
+      src.setFrame(8)
+      startRot(400)
+    })
+
+    // Frame 9
+    this.time.delayedCall(8 * FRAME_MS, () => {
+      if (!src.active) return
+      src.setFrame(9)
+    })
+
+    // Frame 10: enlarge 3×, raise 10px, hover (no gravity), spin, kill enemies + breakables
+    this.time.delayedCall(9 * FRAME_MS, () => {
+      if (!src.active) return
+      src.setFrame(10)
+      src.setScale(3)
+      src.setY(src.y - 10)
+      startRot(350)
+
+      const body = src.body as Phaser.Physics.Arcade.Body
+      body.setAllowGravity(false)
+      body.setVelocityY(0)
+
+      const hitSet         = new Set<Enemy>()
+      const destroyedBreak = new Set<Destructible>()
+      const killTimer = this.time.addEvent({
+        delay: 20,
+        loop: true,
+        callback: () => {
+          if (!src.active) return
+          for (const e of this.enemies) {
+            if (!e.active || hitSet.has(e)) continue
+            if (Phaser.Math.Distance.Between(src.x, src.y, e.x, e.y) < KILL_R) {
+              hitSet.add(e)
+              e.die()
+              this.addScore(SCORE_ENEMY)
+            }
+          }
+          for (const d of this.destructibles) {
+            if (!d.active || destroyedBreak.has(d)) continue
+            if (Phaser.Math.Distance.Between(src.x, src.y, d.x, d.y) < KILL_R) {
+              destroyedBreak.add(d)
+              d.takeDamage(100, DamageType.Physical)
+            }
+          }
+        },
+      })
+
+      let reformFired = false
+      const doReform = () => {
+        if (reformFired) return
+        reformFired = true
+        holdTimer.remove()
+        killTimer.remove()
+        body.setAllowGravity(true)
+        src.setData('abbyEarlyExit', null)
+
+        if (!src.active) {
+          rotTween?.stop()
+          src.setY(src.y + 10)
+          src.setScale(origScale)
+          src.setAngle(0)
+          src.isTransforming = false
+          return
+        }
+
+        // Frame 11: restore gravity/position, scale back to normal, rotation continues
+        src.setY(src.y + 10)
+        src.setScale(origScale)
+        src.setFrame(11)
+        startRot(400)
+
+        // After frame 11, stop rotation and play reform frames 12-15
+        this.time.delayedCall(FRAME_MS, () => {
+          rotTween?.stop()
+          rotTween = null
+          src.setAngle(0)
+
+          const reformFrames = [12, 13, 14, 15]
+          for (let i = 0; i < reformFrames.length; i++) {
+            this.time.delayedCall(i * FRAME_MS, () => {
+              if (src.active) src.setFrame(reformFrames[i])
+            })
+          }
+
+          this.time.delayedCall(reformFrames.length * FRAME_MS, () => {
+            src.setScale(origScale)
+            src.setAngle(0)
+            src.isTransforming = false
+            // updateAnimation() resumes on next tick and restores sheet-abby
+          })
+        })
+      }
+
+      src.setData('abbyEarlyExit', doReform)
+      const holdTimer = this.time.delayedCall(HOLD_MS, doReform)
+    })
   }
 
   // ── Scarlett T-Rex transformation ────────────────────────────────────────────
@@ -3095,7 +3038,11 @@ export class GameScene extends Phaser.Scene {
     else if (src.charKey === 'conrad') this.spawnConradTruck(src)
     else if (src.charKey === 'coco') this.handleCocoShadow(src)
     else if (src.charKey === 'callum') this.spawnCallumNumber(src)
-    else if (src.charKey === 'abby') this.spawnAbbyStars(src)
+    else if (src.charKey === 'abby') {
+      const earlyExit = src.getData('abbyEarlyExit') as (() => void) | null
+      if (earlyExit) earlyExit()
+      else this.handleAbbyTransform(src)
+    }
     else if (src.charKey === 'scarlett') {
       if (src.isTrex) this.untransformScarlett(src)
       else this.transformScarlettToTrex(src)
