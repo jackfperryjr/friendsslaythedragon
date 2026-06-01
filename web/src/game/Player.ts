@@ -83,7 +83,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   jump() {
     const body = this.body as Phaser.Physics.Arcade.Body
     if (body.blocked.down) {
-      body.setVelocityY(JUMP_VELOCITY * this.speedMultiplier)
+      const vel = this.isSpindashing ? JUMP_VELOCITY * 1.5 : JUMP_VELOCITY
+      body.setVelocityY(vel * this.speedMultiplier)
       this.isFloating = false
     } else if (!this.isFloating) {
       this.isFloating = true

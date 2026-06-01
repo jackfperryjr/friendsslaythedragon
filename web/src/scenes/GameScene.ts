@@ -85,6 +85,7 @@ export class GameScene extends Phaser.Scene {
   private pauseCursor: Phaser.GameObjects.Text | null = null
 
   private collectibleSprites: Phaser.GameObjects.Image[] = []
+  private celeryNpcX: number | null = null
   private shieldGraphics: Phaser.GameObjects.Graphics[] = []
   private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
   private carterDuplicates: CarterDuplicate[] = []
@@ -119,7 +120,7 @@ export class GameScene extends Phaser.Scene {
 
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
-    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
+    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
@@ -765,6 +766,14 @@ export class GameScene extends Phaser.Scene {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     for (const item of this.cfg.items) {
       if (isInsideWall(item.x, item.y)) continue
+
+      // Key jar: breakable destructible — player attacks break it and drop the key
+      if (item.type === 'key-jar') {
+        const alreadyHaveKey = !!(this.registry.get(`hasLevel${item.keyLevel ?? 1}Key`))
+        if (!alreadyHaveKey) this.spawnKeyJar(item.x, item.y, item.keyLevel ?? 1)
+        continue
+      }
+
       const isSuperAbility = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
       if (isSuperAbility && !isLocalhost) continue
       const tex = item.type === 'heart'            ? 'item-heart'
@@ -774,12 +783,13 @@ export class GameScene extends Phaser.Scene {
                 : item.type === 'life'             ? 'item-life'
                 : item.type === 'mystery'          ? 'item-mystery'
                 : item.type === 'invulnerability'  ? 'invulnerability_icon'
+                : item.type === 'key'              ? 'item-key'
                 : 'item-orb'
       const isHidden = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
         .setScale(item.type === 'mystery' ? 2.2
           : item.type === 'worm' || item.type === 'roly-poly' ? 1.0 : 1.2)
-      if (item.type === 'pizza') img.setDisplaySize(26, 26)
+      if (item.type === 'pizza') img.setDisplaySize(56, 56)
       if (isHidden) img.setAlpha(0)
       img.setData('item', item)
       this.tweens.add({
@@ -826,6 +836,11 @@ export class GameScene extends Phaser.Scene {
     } else if (item.type === 'invulnerability') {
       player.applyInvulnerability(true)
       this.showPopup(item.x, item.y, 'INVINCIBLE!', '#4499ff')
+      SoundManager.collectAbility()
+    } else if (item.type === 'key') {
+      const lvl = item.keyLevel ?? 1
+      this.registry.set(`hasLevel${lvl}Key`, true)
+      this.showPopup(item.x, item.y, 'KEY GET!', '#ffdd00')
       SoundManager.collectAbility()
     }
     this.addScore(500)
@@ -959,10 +974,10 @@ export class GameScene extends Phaser.Scene {
   private buildWorldOneNPCs() {
     this.add.image(602, 892, 'sheet-enemy-duck', 11).setDepth(2).setScale(1.5).setFlipX(true)
     this.showNpcBubble(602, 808, [
-      'Collect ALL worms &',
-      'roly polies to save',
-      'Mom & Dad before the',
-      'final boss!',
+      'Collect 3 worms &',
+      '3 roly polies.',
+      'Find key jars to',
+      'save Mom & Dad!',
     ], null)
   }
 
@@ -971,8 +986,7 @@ export class GameScene extends Phaser.Scene {
 
     this.dadNpcSprite  = this.add.image(633, 791, 'npc-dad', 14).setDepth(2).setScale(1.5)
     this.dadCageGfx    = this.drawCage(633, 791, 80, 100)
-    this.dadCageBubble = this.showNpcBubble(633, 710, ['Help me!'], null)
-    this.checkDadFreed()
+    this.dadCageBubble = this.showNpcBubble(633, 710, ['Help! Need 3 worms', '& key jar to free me!'], null)
   }
 
   private buildZombieKingNPCs() {
@@ -980,8 +994,7 @@ export class GameScene extends Phaser.Scene {
 
     this.momNpcSprite  = this.add.image(542, 1079, 'npc-mom', 12).setDepth(2).setScale(1.5)
     this.momCageGfx    = this.drawCage(542, 1079, 80, 100)
-    this.momCageBubble = this.showNpcBubble(542, 998, ['Help me!'], null)
-    this.checkMomFreed()
+    this.momCageBubble = this.showNpcBubble(542, 998, ['Help! Need 3 roly', 'polies & key jar!'], null)
   }
 
   private buildCeleryManNPCs() {
@@ -994,19 +1007,13 @@ export class GameScene extends Phaser.Scene {
       const momImg = this.add.image(npcX + 35, npcY, 'npc-mom', 15).setDepth(2).setScale(1.5)
 
       this.showNpcBubble(npcX, npcY - 100, [
-        `You saved us, ${this.npcCharNames()}!`,
-        'Take our power and',
-        'defeat Celery Man!',
+        `Keep going, ${this.npcCharNames()}!`,
+        'Walk past us for',
+        'a special boost!',
       ], 6000)
 
-      // Grant boosts after a short delay so players are settled
-      this.time.delayedCall(800, () => {
-        this.players.forEach(p => {
-          if (!p.invulnerabilityActive) p.applyInvulnerability(true)
-          if (!p.speedBoostActive)      p.applySpeedBoost(true)
-          if (!p.strengthBoostActive)   p.applyStrengthBoost(true)
-        })
-      })
+      // Abilities granted once players walk past the NPCs (checkCeleryBoost in update loop)
+      this.celeryNpcX = npcX
 
       this.time.delayedCall(6500, () => {
         if (!dadImg.active) return
@@ -1026,22 +1033,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── parent freed logic ───────────────────────────────────────────────────────
-
-  private checkDadFreed(): boolean {
-    if (this.registry.get('dadSaved')) return true
-    const bossBeaten = !!(this.registry.get('skeletonKingDefeated'))
-    const wormsOk    = (this.registry.get('wormCount') ?? 0) >= TOTAL_WORMS
-    if (bossBeaten && wormsOk) { this.freeDad(); return true }
-    return false
-  }
-
-  private checkMomFreed(): boolean {
-    if (this.registry.get('momSaved')) return true
-    const bossBeaten = !!(this.registry.get('zombieKingDefeated'))
-    const rolysOk    = (this.registry.get('rolyPolyCount') ?? 0) >= TOTAL_ROLY_POLYS
-    if (bossBeaten && rolysOk) { this.freeMom(); return true }
-    return false
-  }
 
   private freeDad() {
     if (!this.dadNpcSprite?.active) return
@@ -1079,11 +1070,11 @@ export class GameScene extends Phaser.Scene {
     this.momCageBubble = null
     this.momNpcSprite.setFrame(15)
 
-    const dadSaved = !!(this.registry.get('dadSaved'))
     const momBubble = this.showNpcBubble(this.momNpcSprite.x, this.momNpcSprite.y - 100, [
       `Thank you, ${this.npcCharNames()}!`,
-      dadSaved ? "I'll have something" : 'Now hurry and',
-      dadSaved ? 'special waiting!'    : 'save Dad!',
+      "I'll have special",
+      'abilities waiting',
+      'at Celery Man!',
     ], null)
 
     this.time.delayedCall(30000, () => {
@@ -1098,42 +1089,59 @@ export class GameScene extends Phaser.Scene {
   private updateParentHints() {
     const PROX = 140
 
-    const updateHint = (
+    const handleParent = (
       sprite:    Phaser.GameObjects.Image | null,
       bossKey:   string,
       countKey:  string,
       total:     number,
-      lines:     string[],
+      keyReg:    string,
+      freeFn:    () => void,
       bubble:    Phaser.GameObjects.Container | null,
       setBubble: (b: Phaser.GameObjects.Container | null) => void,
     ) => {
       if (!sprite?.active) return
-      if (!this.registry.get(bossKey)) return          // boss not beaten yet
-      if ((this.registry.get(countKey) ?? 0) >= total) return  // already collected all
+      const bossOk  = !!(this.registry.get(bossKey))
+      const countOk = (this.registry.get(countKey) ?? 0) >= total
+      const keyOk   = !!(this.registry.get(keyReg))
 
       const near = this.players.some(p =>
         p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, sprite.x, sprite.y) < PROX
       )
 
+      // All conditions met and player is close → liberate immediately
+      if (bossOk && countOk && keyOk && near) {
+        if (bubble?.active) { bubble.destroy(); setBubble(null) }
+        freeFn()
+        return
+      }
+
+      // Only show hints once the boss is beaten
+      if (!bossOk) return
+
+      const needCount = countKey === 'wormCount'
+        ? `Need ${total - (this.registry.get(countKey) ?? 0)} more worms!`
+        : `Need ${total - (this.registry.get(countKey) ?? 0)} more roly polies!`
+      const lines = (!countOk && !keyOk) ? [needCount, 'Also find key jar!']
+                  : !countOk             ? [needCount]
+                  :                        ['Find the key jar!']
+
       if (near && !bubble?.active) {
-        // "Help me!" bubble sits ~81px above the sprite; place hint ~70px above that
-        const hint = this.showNpcBubble(sprite.x, sprite.y - 160, lines, null)
-        setBubble(hint)
+        setBubble(this.showNpcBubble(sprite.x, sprite.y - 160, lines, null))
       } else if (!near && bubble?.active) {
         bubble.destroy()
         setBubble(null)
       }
     }
 
-    updateHint(
-      this.dadNpcSprite, 'skeletonKingDefeated', 'wormCount', TOTAL_WORMS,
-      ['Collect all worms', 'to free me!'],
+    handleParent(
+      this.dadNpcSprite, 'skeletonKingDefeated', 'wormCount', TOTAL_WORMS, 'hasLevel1Key',
+      () => this.freeDad(),
       this.dadHintBubble, b => { this.dadHintBubble = b },
     )
 
-    updateHint(
-      this.momNpcSprite, 'zombieKingDefeated', 'rolyPolyCount', TOTAL_ROLY_POLYS,
-      ['Collect all roly polies', 'to free me!'],
+    handleParent(
+      this.momNpcSprite, 'zombieKingDefeated', 'rolyPolyCount', TOTAL_ROLY_POLYS, 'hasLevel2Key',
+      () => this.freeMom(),
       this.momHintBubble, b => { this.momHintBubble = b },
     )
   }
@@ -1291,9 +1299,6 @@ export class GameScene extends Phaser.Scene {
             const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
             const runIndex: number       = this.registry.get('runIndex') ?? 0
             const dk = this.cfg.bossDefeatedKey
-            if (dk === 'skeletonKingDefeated') this.checkDadFreed()
-            else if (dk === 'zombieKingDefeated') this.checkMomFreed()
-
             const hasCutscene = dk === 'skeletonKingDefeated' || dk === 'zombieKingDefeated'
             const cutsceneSuffix = dk === 'skeletonKingDefeated' ? 'skeleton_king' : 'zombie_king'
 
@@ -2027,9 +2032,67 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private spawnKeyJar(x: number, y: number, keyLevel: number) {
+    const img = this.add.image(x, y, 'item-key-jar').setDepth(3).setScale(1.5)
+
+    const dest = new Destructible(this, x, y, 2, AbilityType.None, {})
+    dest.setDisplaySize(40, 40)
+    dest.setAlpha(0)
+
+    dest.damageGuard = () => {
+      return keyLevel === 1
+        ? (this.registry.get('wormCount') ?? 0) >= TOTAL_WORMS
+        : (this.registry.get('rolyPolyCount') ?? 0) >= TOTAL_ROLY_POLYS
+    }
+
+    dest.on('blocked', () => {
+      const lastHint: number = dest.getData('lastHintTime') ?? 0
+      if (this.time.now - lastHint > 2000) {
+        dest.setData('lastHintTime', this.time.now)
+        const msg = keyLevel === 1 ? 'Need 3 worms first!' : 'Need 3 roly polies first!'
+        this.showPopup(x, y, msg, '#ff8888')
+      }
+    })
+
+    dest.on('hit', () => {
+      img.setAlpha(0.3)
+      this.time.delayedCall(90, () => { if (img.active) img.setAlpha(1) })
+    })
+
+    this.destructibles.push(dest)
+    dest.on('destroyed', (_obj: Destructible) => {
+      this.destructibles = this.destructibles.filter(z => z !== dest)
+      img.destroy()
+      this.spawnKeyDrop(x, y, keyLevel)
+    })
+  }
+
+  private spawnKeyDrop(x: number, y: number, keyLevel: number) {
+    const dropY = y - 16
+    const glow = this.add.circle(x, dropY, 22, 0xffffff, 0.55).setDepth(7)
+    this.tweens.add({ targets: glow, alpha: 0.2, scaleX: 1.5, scaleY: 1.5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    const img = this.add.image(x, dropY, 'item-key').setDepth(8).setScale(1.5)
+    img.setData('item', { type: 'key', x, y: dropY, keyLevel } as ItemSpawn)
+    img.setData('ring', glow)
+    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    this.collectibleSprites.push(img)
+  }
+
+  private checkCeleryBoost() {
+    if (this.celeryNpcX === null) return
+    const past = this.players.some(p => p.isAlive && p.x > this.celeryNpcX! + 80)
+    if (!past) return
+    this.celeryNpcX = null
+    this.players.forEach(p => {
+      if (!p.invulnerabilityActive) p.applyInvulnerability(true)
+      if (!p.speedBoostActive)      p.applySpeedBoost(true)
+      if (!p.strengthBoostActive)   p.applyStrengthBoost(true)
+    })
+  }
+
   private spawnPizzaDrop(x: number, y: number) {
     const dropY = y - 16
-    const img = this.add.image(x, dropY, 'item-pizza').setDepth(8).setDisplaySize(26, 26)
+    const img = this.add.image(x, dropY, 'item-pizza').setDepth(8).setDisplaySize(56, 56)
     img.setData('item', { type: 'pizza', x, y: dropY } as ItemSpawn)
     this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     this.collectibleSprites.push(img)
@@ -2128,7 +2191,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.charKey === 'coco' && !!(this.cocoShadow?.active) })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -2202,7 +2265,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.charKey === 'coco' && !!(this.cocoShadow?.active) })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -2247,7 +2310,8 @@ export class GameScene extends Phaser.Scene {
           p.play('trex-idle', true)
         }
         if (pb?.hasShadow && p.charKey === 'coco') {
-          this.spawnCocoShadow(p)
+          p.isShadowForm = true
+          p.play('coco-shadow-idle', true)
         }
       })
     }
@@ -2339,7 +2403,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold')) {
+        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold') || this.cocoIsOnAttackFrame(player)) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
           this.trackEnemyKill()
@@ -2358,7 +2422,7 @@ export class GameScene extends Phaser.Scene {
           const player = _p as Player
           const boss   = _b as unknown as Boss
           if (Math.abs(player.y - boss.y) > 350) return
-          if (player.isTruck || player.isTrex || player.isSpindashing) this.hitBoss(player)
+          if (player.isTruck || player.isTrex || player.isSpindashing || this.cocoIsOnAttackFrame(player)) this.hitBoss(player)
           else player.hitByEnemy()
         })
       })
@@ -2684,9 +2748,6 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  // spawnCocoShadow kept as stub so wirePlayerUIEvents persistence still compiles
-  private spawnCocoShadow(_coco: Player) { /* replaced by transformCocoIn */ }
-
   private updateCocoShadow() {
     const coco = this.players.find(p => p.charKey === 'coco' && p.isAlive)
     if (!coco?.isShadowForm) return
@@ -2703,14 +2764,22 @@ export class GameScene extends Phaser.Scene {
       case 'none': {
         const airborne = !body.blocked.down
         if (airborne && body.velocity.y < -60) {
-          if (coco.anims.currentAnim?.key !== 'coco-shadow-jump') { coco.play('coco-shadow-jump', true); this.startCocoSpin(coco, false) }
+          if (coco.anims.currentAnim?.key !== 'coco-shadow-jump') coco.play('coco-shadow-jump', true)
         } else if (airborne) {
           if (coco.anims.currentAnim?.key !== 'coco-shadow-fall') coco.play('coco-shadow-fall', true)
-          if (!this.cocoSpinTween) this.startCocoSpin(coco, false)
         } else {
           if (this.cocoSpinTween) this.stopCocoSpin(coco)
           const animKey = Math.abs(body.velocity.x) > 10 ? 'coco-shadow-walk' : 'coco-shadow-idle'
           if (coco.anims.currentAnim?.key !== animKey) coco.play(animKey, true)
+        }
+        // Only spin on spindash frames 9-12
+        if (airborne) {
+          const frameNum = coco.anims.currentFrame?.textureFrame as number ?? -1
+          if (frameNum >= 9 && frameNum <= 12) {
+            if (!this.cocoSpinTween) this.startCocoSpin(coco, false)
+          } else {
+            if (this.cocoSpinTween) this.stopCocoSpin(coco)
+          }
         }
         // DOWN + ABILITY held while grounded → start windup then dash
         if (downHeld && abilityHeld && body.blocked.down) this.enterCocoSpindash(coco)
@@ -2743,6 +2812,12 @@ export class GameScene extends Phaser.Scene {
       case 'exit':
         break  // animationcomplete handler in endCocoSpindash takes over
     }
+  }
+
+  private cocoIsOnAttackFrame(player: Player): boolean {
+    if (player.charKey !== 'coco' || !player.isShadowForm) return false
+    const frame = player.anims.currentFrame?.textureFrame
+    return typeof frame === 'number' && frame >= 10 && frame <= 12
   }
 
   // ── Callum number ability ─────────────────────────────────────────────────────
@@ -3344,6 +3419,8 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('momSaved', null)
     this.registry.set('wormCount', 0)
     this.registry.set('rolyPolyCount', 0)
+    this.registry.set('hasLevel1Key', null)
+    this.registry.set('hasLevel2Key', null)
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
@@ -3802,6 +3879,8 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('momSaved',             null)
       this.registry.set('wormCount',            0)
       this.registry.set('rolyPolyCount',        0)
+      this.registry.set('hasLevel1Key',         null)
+      this.registry.set('hasLevel2Key',         null)
       SoundManager.stopTrack()
       this.scene.start('MenuScene')
     }
@@ -4083,6 +4162,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     this.updateConradTrucks()
     this.updateCocoShadow()
     this.updateCallumNumbers()
+    this.checkCeleryBoost()
     this.updateParentHints()
     this.ui.update(this.players)
 

@@ -169,6 +169,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('spike-floor1',   'assets/projectiles/spike_floor1.png')
     this.load.image('spike-floor2',   'assets/projectiles/spike_floor2.png')
     this.load.image('item-pizza',     'assets/items/pizza.png')
+    this.load.image('item-key-jar',   'assets/items/key_jar.png')
+    this.load.image('item-key',       'assets/items/key.png')
     this.load.image('item-worm',      'assets/npcs/worm.png')
     this.load.image('item-roly-poly', 'assets/npcs/roly_poly.png')
     this.load.spritesheet('npc-mom', 'assets/npcs/mom.png', { frameWidth: 64, frameHeight: 64 })

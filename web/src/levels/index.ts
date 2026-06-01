@@ -12,11 +12,12 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
+export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability' | 'key-jar' | 'key'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
   ability?: AbilityType
+  keyLevel?: number   // for key-jar / key: which level's key (1 or 2)
 }
 
 export interface FurnitureSpawn {
@@ -226,6 +227,7 @@ const WORLD_ROOM: RoomConfig = {
     { x: 3300, y: 580 }, { x: 4100, y: 580 },
   ],
   items: [
+    { x: 3741, y: 3196, type: 'key-jar', keyLevel: 1 },
     { x:  148, y:  502, type: 'speed' },
     { x: 1456, y:  502, type: 'attack-boost' },
     { x:  176, y: 1870, type: 'speed' },
@@ -233,6 +235,8 @@ const WORLD_ROOM: RoomConfig = {
     { x: 1778, y: 2460, type: 'worm' },
     { x:  369, y: 1948, type: 'worm' },
     { x: 3196, y: 1660, type: 'worm' },
+    { x: 4620, y:  640, type: 'worm' },
+    { x: 1218, y: 2940, type: 'worm' },
   ],
 }
 
@@ -349,9 +353,12 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   ],
   crates: [],
   items: [
+    { x:  281, y: 2748, type: 'key-jar', keyLevel: 2 },
     { x: 2056, y: 3500, type: 'roly-poly' },
     { x: 5404, y: 2012, type: 'roly-poly' },
     { x: 3666, y: 1116, type: 'roly-poly' },
+    { x: 1100, y: 3324, type: 'roly-poly' },
+    { x: 4650, y:  860, type: 'roly-poly' },
   ],
 }
 

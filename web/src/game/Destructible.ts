@@ -7,6 +7,7 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
   private health: number
   private resistances: Partial<Record<DamageType, number>>
   readonly abilityDrop: AbilityType
+  damageGuard?: () => boolean  // return false to block damage (and emit 'blocked' instead)
 
   constructor(
     scene: Phaser.Scene,
@@ -36,6 +37,10 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
   }
 
   takeDamage(amount: number, type: DamageType) {
+    if (this.damageGuard && !this.damageGuard()) {
+      this.emit('blocked')
+      return
+    }
     const resistance = this.resistances[type] ?? 0
     this.health -= amount * (1 - resistance)
     this.emit('hit')
