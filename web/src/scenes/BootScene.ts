@@ -106,7 +106,7 @@ const PLAYER_SHEETS: Record<number, string> = {
 
 // 4×4 grid layout (frames 0-15, 64×64 each):
 //  Row 0 (0–3)  — idle / walk cycle
-//  Row 1 (4–7)  — jump / float / fall / inhale
+//  Row 1 (4–7)  — jump / float / fall / shield
 //  Row 2 (8–11) — (reserved for future poses)
 //  Row 3 (12–15)— (reserved for puffed / special)
 // Adjust start/end once you confirm the actual frame order in the sheet.
@@ -115,7 +115,7 @@ const ANIM_FRAMES = {
   walk:    { start: 0,  end: 3  },
   jump:    { start: 7,  end: 7  },
   float:   { start: 9,  end: 9  },
-  inhale:  { start: 10, end: 10 },
+  shield:  { start: 10, end: 10 },
   puffed:  { start: 10, end: 10 },
   fall:    { start: 8,  end: 8  },
   melee:   { start: 12, end: 11 },
@@ -259,7 +259,7 @@ export class BootScene extends Phaser.Scene {
         this.anims.create({
           key:       `${prefix}-${name}`,
           frames:    this.anims.generateFrameNumbers(textureKey, range),
-          frameRate: name === 'walk' ? 8 : name === 'inhale' ? 10 : 6,
+          frameRate: name === 'walk' ? 8 : name === 'shield' ? 10 : 6,
           repeat:    name === 'jump' || name === 'fall' || name === 'melee' || name === 'ability' ? 0 : -1,
         })
       }

@@ -129,7 +129,7 @@ wss.on('connection', (ws) => {
           left:    !!msg.left,
           right:   !!msg.right,
           jump:    !!msg.jump,
-          inhale:  !!msg.inhale,
+          shield:  !!msg.shield,
           ability: !!msg.ability,
         }, ws)
         break
