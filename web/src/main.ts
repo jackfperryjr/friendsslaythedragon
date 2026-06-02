@@ -26,6 +26,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   input: {
     gamepad: true,
+    activePointers: 4,
   },
   scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene, LevelCompleteScene, LobbyScene],
 }
