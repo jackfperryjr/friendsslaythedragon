@@ -13,6 +13,18 @@ export class TouchControls {
   private _enabled = true
   private _allObjects: (Phaser.GameObjects.Arc | Phaser.GameObjects.Text)[] = []
 
+  private joystickBase!: Phaser.GameObjects.Arc
+  private joystickKnob!: Phaser.GameObjects.Arc
+  private joystickActive = false
+  private joystickPointer: Phaser.Input.Pointer | null = null
+  private joystickBaseX = 0
+  private joystickBaseY = 0
+  private wasInUpZone = false
+
+  private readonly JOYSTICK_RADIUS = 70
+  private readonly KNOB_RADIUS = 26
+  private readonly DEAD_ZONE = 15
+
   constructor(private scene: Phaser.Scene) {
     this.buildButtons()
   }
@@ -34,22 +46,17 @@ export class TouchControls {
       this.abilityJust = false
       this.meleeJust = false
       this._interactJust = false
+      this.joystickActive = false
+      this.joystickPointer = null
+      this.wasInUpZone = false
+      this.joystickKnob?.setPosition(this.joystickBaseX, this.joystickBaseY)
     }
   }
 
   private buildButtons() {
     const { width, height } = this.scene.scale
 
-    // D-pad (left side) — inverted-T layout
-    const dpx = 110
-    const dpy = height - 65
-    this.dpadBtn(dpx - 58, dpy,       '◄', 0x90caf9,
-      () => { this.dpadLeft = true  }, () => { this.dpadLeft = false })
-    this.dpadBtn(dpx + 58, dpy,       '►', 0x90caf9,
-      () => { this.dpadRight = true }, () => { this.dpadRight = false })
-    this.dpadBtn(dpx,      dpy - 65,  '▲', 0x90caf9,
-      () => { this.jumpHeld = true; this._interactJust = true },
-      () => { this.jumpHeld = false })
+    this.buildJoystick(height)
 
     // Action buttons (right side)
     const bx = width - 55
@@ -60,14 +67,85 @@ export class TouchControls {
     this.btn(bx - 70, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
-  private dpadBtn(x: number, y: number, label: string, color: number, onDown: () => void, onUp?: () => void) {
-    const circle = this.scene.add.circle(x, y, 30, color, 0.55)
-      .setScrollFactor(0).setDepth(50).setInteractive()
-    const lbl = this.scene.add.text(x, y, label, { fontSize: '18px', color: '#000', fontStyle: 'bold' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(51)
-    this._allObjects.push(circle, lbl)
-    circle.on('pointerdown', onDown)
-    if (onUp) { circle.on('pointerup', onUp); circle.on('pointerout', onUp) }
+  private buildJoystick(height: number) {
+    this.joystickBaseX = 110
+    this.joystickBaseY = height - 110
+
+    this.joystickBase = this.scene.add.circle(
+      this.joystickBaseX, this.joystickBaseY,
+      this.JOYSTICK_RADIUS, 0x90caf9, 0.25
+    ).setScrollFactor(0).setDepth(50).setInteractive()
+
+    this.joystickKnob = this.scene.add.circle(
+      this.joystickBaseX, this.joystickBaseY,
+      this.KNOB_RADIUS, 0x90caf9, 0.7
+    ).setScrollFactor(0).setDepth(51)
+
+    this._allObjects.push(this.joystickBase, this.joystickKnob)
+
+    this.joystickBase.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      this.joystickActive = true
+      this.joystickPointer = ptr
+      this.updateJoystick(ptr.x, ptr.y)
+    })
+
+    this.scene.input.on('pointermove', (ptr: Phaser.Input.Pointer) => {
+      if (this.joystickActive && ptr === this.joystickPointer) {
+        this.updateJoystick(ptr.x, ptr.y)
+      }
+    })
+
+    this.scene.input.on('pointerup', (ptr: Phaser.Input.Pointer) => {
+      if (this.joystickActive && ptr === this.joystickPointer) {
+        this.resetJoystick()
+      }
+    })
+  }
+
+  private updateJoystick(px: number, py: number) {
+    const dx = px - this.joystickBaseX
+    const dy = py - this.joystickBaseY
+    const mag = Math.sqrt(dx * dx + dy * dy)
+
+    if (mag > 0) {
+      const clamp = Math.min(mag, this.JOYSTICK_RADIUS)
+      const angle = Math.atan2(dy, dx)
+      this.joystickKnob.setPosition(
+        this.joystickBaseX + Math.cos(angle) * clamp,
+        this.joystickBaseY + Math.sin(angle) * clamp
+      )
+    }
+
+    if (mag < this.DEAD_ZONE) {
+      this.dpadLeft = false
+      this.dpadRight = false
+      this.jumpHeld = false
+      this.wasInUpZone = false
+      return
+    }
+
+    const inUpZone    = dy < 0 && Math.abs(dy) > Math.abs(dx)
+    const inLeftZone  = dx < 0 && Math.abs(dx) >= Math.abs(dy)
+    const inRightZone = dx > 0 && Math.abs(dx) >= Math.abs(dy)
+
+    this.dpadLeft  = inLeftZone
+    this.dpadRight = inRightZone
+    this.jumpHeld  = inUpZone
+
+    if (inUpZone && !this.wasInUpZone) {
+      this._interactJust = true
+    }
+    this.wasInUpZone = inUpZone
+  }
+
+  private resetJoystick() {
+    this.joystickActive = false
+    this.joystickPointer = null
+    this.dpadLeft = false
+    this.dpadRight = false
+    this.jumpHeld = false
+    this.wasInUpZone = false
+    this.joystickKnob.setPosition(this.joystickBaseX, this.joystickBaseY)
   }
 
   private btn(x: number, y: number, label: string, color: number, onDown: () => void, onUp?: () => void) {
