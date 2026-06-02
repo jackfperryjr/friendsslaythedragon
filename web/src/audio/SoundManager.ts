@@ -204,6 +204,43 @@ function scheduleWinLoop(start: number): void {
   }, Math.max(0, wait))
 }
 
+// ── speech voice selection ────────────────────────────────────────────────────
+
+// Friendly voices tried in priority order; first match wins.
+const VOICE_PRIORITY = [
+  'Google UK English Female',          // preferred default
+  'Google US English',
+  'Microsoft Zira Desktop - English (United States)',
+  'Microsoft Aria Online (Natural) - English (United States)',
+  'Samantha',                          // macOS / iOS
+  'Karen',                             // macOS / iOS
+  'Moira',                             // macOS
+  'Tessa',                             // macOS
+]
+
+let _cachedVoice: SpeechSynthesisVoice | null | undefined = undefined  // undefined = not yet resolved
+
+function _pickVoice(): SpeechSynthesisVoice | null {
+  if (_cachedVoice !== undefined) return _cachedVoice
+  const voices = window.speechSynthesis?.getVoices() ?? []
+  for (const name of VOICE_PRIORITY) {
+    const v = voices.find(v => v.name === name)
+    if (v) { _cachedVoice = v; return v }
+  }
+  // Fallback: any en-US, then any en-*, then any voice
+  const fallback = voices.find(v => v.lang === 'en-US')
+    ?? voices.find(v => v.lang.startsWith('en'))
+    ?? voices[0]
+    ?? null
+  _cachedVoice = fallback
+  return fallback
+}
+
+// Invalidate cache when the browser finishes loading voices
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => { _cachedVoice = undefined }
+}
+
 // ── music track ──────────────────────────────────────────────────────────────
 
 let _track: Phaser.Sound.BaseSound | null = null
@@ -452,6 +489,48 @@ export const SoundManager = {
       old?.stop(); old?.destroy()
       _startTrack(manager, key, volume)
     }
+  },
+
+  // ── music ducking ─────────────────────────────────────────────────────────
+
+  duckMusic(targetVol = 0.10) {
+    if (!_track) return
+    let v = (_track as Phaser.Sound.WebAudioSound).volume ?? 0.75
+    const iv = setInterval(() => {
+      if (!_track) { clearInterval(iv); return }
+      v = Math.max(targetVol, v - 0.07)
+      try { (_track as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+      if (v <= targetVol) clearInterval(iv)
+    }, 25)
+  },
+
+  unduckMusic(targetVol = 0.75) {
+    if (!_track) return
+    let v = (_track as Phaser.Sound.WebAudioSound).volume ?? 0
+    const iv = setInterval(() => {
+      if (!_track) { clearInterval(iv); return }
+      v = Math.min(targetVol, v + 0.07)
+      try { (_track as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+      if (v >= targetVol) clearInterval(iv)
+    }, 25)
+  },
+
+  // ── word-menu speech (Web Speech API) ────────────────────────────────────
+
+  speakWord(word: string) {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const w   = word.toLowerCase()
+    const msg = new SpeechSynthesisUtterance(`The word is ${w}. Can you spell ${w}?`)
+    msg.rate   = 0.88
+    msg.pitch  = 1.15
+    msg.volume = 1
+    msg.voice  = _pickVoice()
+    window.speechSynthesis.speak(msg)
+  },
+
+  stopSpeech() {
+    window.speechSynthesis?.cancel()
   },
 
   stopTrack() {

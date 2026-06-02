@@ -17,7 +17,7 @@ const ENEMY_SHEET: Record<AbilityType, string> = {
   [AbilityType.None]:        'sheet-enemy-mom',
   [AbilityType.Fire]:        'sheet-enemy-zombie',
   [AbilityType.Lightning]:   'sheet-enemy-skeleton',
-  [AbilityType.Ice]:         'sheet-enemy-duck',
+  [AbilityType.Ice]:         'npc-duck',
   [AbilityType.Bat]:         'sheet-enemy-bat',
   [AbilityType.BlackDragon]: 'sheet-black-dragon',
 }

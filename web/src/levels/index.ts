@@ -12,11 +12,13 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
+export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'letter-bug' | 'invulnerability' | 'key-jar' | 'key'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
   ability?: AbilityType
+  keyLevel?: number   // for key-jar / key: which level's key (1 or 2)
+  letter?: string     // for letter-bug: assigned at runtime from registry
 }
 
 export interface FurnitureSpawn {
@@ -104,6 +106,7 @@ export interface RoomConfig {
   spikeBalls?: SpikeBallSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
+  letterBugPool?: Array<{x: number, y: number}>
 }
 
 const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
@@ -226,13 +229,22 @@ const WORLD_ROOM: RoomConfig = {
     { x: 3300, y: 580 }, { x: 4100, y: 580 },
   ],
   items: [
+    { x: 3741, y: 3196, type: 'key-jar', keyLevel: 1 },
     { x:  148, y:  502, type: 'speed' },
     { x: 1456, y:  502, type: 'attack-boost' },
     { x:  176, y: 1870, type: 'speed' },
     { x:  780, y:  426, type: 'invulnerability' },
-    { x: 1778, y: 2460, type: 'worm' },
-    { x:  369, y: 1948, type: 'worm' },
-    { x: 3196, y: 1660, type: 'worm' },
+    { x: 1778, y: 2460, type: 'letter-bug', keyLevel: 1 },
+    { x:  369, y: 1948, type: 'letter-bug', keyLevel: 1 },
+    { x: 3196, y: 1660, type: 'letter-bug', keyLevel: 1 },
+    { x: 4620, y:  640, type: 'letter-bug', keyLevel: 1 },
+    { x: 1218, y: 2940, type: 'letter-bug', keyLevel: 1 },
+  ],
+  letterBugPool: [
+    { x: 1778, y: 2460 }, { x:  369, y: 1948 }, { x: 3196, y: 1660 },
+    { x: 4620, y:  640 }, { x: 1218, y: 2940 }, { x: 2500, y:  640 },
+    { x: 3300, y:  640 }, { x: 2807, y: 1664 }, { x: 3685, y: 1152 },
+    { x: 5065, y: 2209 },
   ],
 }
 
@@ -271,8 +283,8 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   ],
   crates: [],
   items: [
-    { x: 400,  y: 1260, type: 'heart' },
-    { x: 1300, y: 1260, type: 'heart' },
+    { x: 400,  y: 1260, type: 'pizza' },
+    { x: 1300, y: 1260, type: 'pizza' },
   ],
 }
 
@@ -318,8 +330,8 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   destructibles: [],
   furnitureSpawns: [
     // Bottom floor
-    { type: 'table',    x:  488, y: 3369 },
-    { type: 'bookcase', x:  544, y: 3356 },
+    { type: 'table',    x:  481, y: 3580 },
+    { type: 'bookcase', x:  537, y: 3567 },
     { type: 'bookcase', x: 1229, y: 3324 },
     { type: 'table',    x: 3003, y: 3337 },
     { type: 'table',    x: 3345, y: 3017 },
@@ -349,9 +361,18 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   ],
   crates: [],
   items: [
-    { x: 2056, y: 3500, type: 'roly-poly' },
-    { x: 5404, y: 2012, type: 'roly-poly' },
-    { x: 3666, y: 1116, type: 'roly-poly' },
+    { x: 1878, y:  732, type: 'key-jar', keyLevel: 2 },
+    { x: 2056, y: 3500, type: 'letter-bug', keyLevel: 2 },
+    { x: 5404, y: 2012, type: 'letter-bug', keyLevel: 2 },
+    { x: 3666, y: 1116, type: 'letter-bug', keyLevel: 2 },
+    { x: 1100, y: 3324, type: 'letter-bug', keyLevel: 2 },
+    { x: 4650, y:  860, type: 'letter-bug', keyLevel: 2 },
+  ],
+  letterBugPool: [
+    { x: 2056, y: 3500 }, { x: 5404, y: 2012 }, { x: 3666, y: 1116 },
+    { x: 1100, y: 3324 }, { x: 4650, y:  860 }, { x:  488, y: 3369 },
+    { x: 3676, y:  508 }, { x: 4988, y:  860 }, { x: 3503, y: 3500 },
+    { x: 1521, y: 3324 },
   ],
 }
 
@@ -426,7 +447,20 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
     { x: 2784, y: 2928, count: 5 },
   ],
   crates: [],
-  items: [],
+  items: [
+    // Anchored near known-accessible spots: chest at (680,686), right-entry platform at (5300,608)
+    { x:  680, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 1600, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 2784, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 4000, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 5200, y: 608, type: 'letter-bug', keyLevel: 3 },
+  ],
+  letterBugPool: [
+    { x:  680, y: 640 }, { x: 1600, y: 640 }, { x: 2784, y: 640 },
+    { x: 4000, y: 640 }, { x: 5200, y: 608 }, { x: 5300, y: 608 },
+    { x:  800, y: 640 }, { x: 2000, y: 640 }, { x: 3500, y: 640 },
+    { x: 4500, y: 640 },
+  ],
 }
 
 // ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
@@ -494,8 +528,6 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [
-    { x: 5916, y: 1072, type: 'attack-boost' },
-    { x: 2490, y: 1628, type: 'speed' },
     { x: 1600, y: 1640, type: 'pizza' },
     { x: 4800, y: 1050, type: 'pizza' },
     { x: 7400, y: 1380, type: 'pizza' },
@@ -544,17 +576,21 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
   spikeFloors: [
     { x: 178, y: 1729, xEnd: 2780, scale: 2 },
   ],
-  spikeBalls: [
-    { x:  500, y: 1400, count: 1 },
-    { x:  900, y: 1000, count: 1 },
-    { x: 1300, y: 1400, count: 1 },
-    { x: 1700, y: 1000, count: 1 },
-    { x: 2100, y: 1400, count: 1 },
-    { x: 2500, y: 1000, count: 1 },
-    { x: 2900, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
-  items: [],
+  items: [
+    { x:  500, y: 420,  type: 'letter-bug', keyLevel: 5 },
+    { x:  900, y: 800,  type: 'letter-bug', keyLevel: 5 },
+    { x: 1400, y: 420,  type: 'letter-bug', keyLevel: 5 },
+    { x: 1800, y: 800,  type: 'letter-bug', keyLevel: 5 },
+    { x: 2500, y: 420,  type: 'letter-bug', keyLevel: 5 },
+  ],
+  letterBugPool: [
+    { x:  500, y: 420 }, { x:  900, y: 800 }, { x: 1400, y: 420 },
+    { x: 1800, y: 800 }, { x: 2500, y: 420 }, { x:  700, y: 600 },
+    { x: 1100, y: 420 }, { x: 1600, y: 800 }, { x: 2100, y: 420 },
+    { x: 2800, y: 800 },
+  ],
 }
 
 const LEVEL6_WORLD_ROOM: RoomConfig = {
@@ -592,18 +628,20 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
-  spikeBalls: [
-    { x:  450, y: 1400, count: 1 },
-    { x:  850, y:  900, count: 1 },
-    { x: 1250, y: 1400, count: 1 },
-    { x: 1650, y:  900, count: 1 },
-    { x: 2050, y: 1400, count: 1 },
-    { x: 2450, y:  900, count: 1 },
-    { x: 2850, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
   items: [
-    { x: 1906, y: 284, type: 'invulnerability' },
+    { x:  500, y: 1600, type: 'letter-bug', keyLevel: 6 },
+    { x:  900, y:  800, type: 'letter-bug', keyLevel: 6 },
+    { x: 1400, y: 1600, type: 'letter-bug', keyLevel: 6 },
+    { x: 1800, y:  800, type: 'letter-bug', keyLevel: 6 },
+    { x: 2500, y: 1600, type: 'letter-bug', keyLevel: 6 },
+  ],
+  letterBugPool: [
+    { x:  500, y: 1600 }, { x:  900, y:  800 }, { x: 1400, y: 1600 },
+    { x: 1800, y:  800 }, { x: 2500, y: 1600 }, { x:  700, y:  900 },
+    { x: 1100, y: 1600 }, { x: 1600, y:  800 }, { x: 2100, y: 1600 },
+    { x: 2800, y:  800 },
   ],
 }
 
@@ -618,7 +656,7 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   defaultSpawn: { x: 204, y: 1724 },
   exits: ['left'],
   exitPositions: { left: 1724 },
-  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 1700, y: 640 } },
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 1700, y: 590 } },
   bossPortal: { x: 1630, y: 604 },
   platforms: [],
   enemies: [
@@ -642,17 +680,21 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
-  spikeBalls: [
-    { x:  400, y: 1400, count: 1 },
-    { x:  800, y:  950, count: 1 },
-    { x: 1200, y: 1400, count: 1 },
-    { x: 1900, y:  950, count: 1 },
-    { x: 2300, y: 1400, count: 1 },
-    { x: 2700, y:  950, count: 1 },
-    { x: 3050, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
-  items: [],
+  items: [
+    { x:  400, y: 1500, type: 'letter-bug', keyLevel: 7 },
+    { x:  700, y:  800, type: 'letter-bug', keyLevel: 7 },
+    { x: 1000, y: 1500, type: 'letter-bug', keyLevel: 7 },
+    { x: 1200, y:  800, type: 'letter-bug', keyLevel: 7 },
+    { x: 1500, y: 1500, type: 'letter-bug', keyLevel: 7 },
+  ],
+  letterBugPool: [
+    { x:  400, y: 1500 }, { x:  700, y:  800 }, { x: 1000, y: 1500 },
+    { x: 1200, y:  800 }, { x: 1500, y: 1500 }, { x:  550, y:  900 },
+    { x:  850, y: 1500 }, { x: 1100, y:  900 }, { x: 1350, y: 1500 },
+    { x:  600, y: 1400 },
+  ],
 }
 
 // ─── Final Boss Room ──────────────────────────────────────────────────────────
@@ -669,9 +711,9 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   bossLeftBarrierX: 50,
   exits: ['left', 'right'],
   exitPositions: { left: 1200, right: 1200 },
-  entrySpawns: { left: { x: 200, y: 1400 } },
-  backPortal: { x: 200, y: 1400 },
-  hiddenPortal: { x: 218, y: 704 },
+  entrySpawns: { left: { x: 200, y: 1380 } },
+  backPortal: { x: 200, y: 1500 },
+  hiddenPortal: { x: 218, y: 604 },
   isBossRoom: true,
   bossDefeatedKey: 'dragonDefeated',
   bossHp: 30,
@@ -729,8 +771,12 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
 }
 
 export const RUN_LENGTH = 6
-export const TOTAL_WORMS = 3
-export const TOTAL_ROLY_POLYS = 3
+export const TOTAL_LETTER_BUGS = 5
+
+// Phonics word lists — 3-letter L1, 4-letter L2, 5-letter L3
+export const WORD_LIST_L1 = ['BUG', 'CAT', 'DOG', 'HAT', 'MAP', 'SUN', 'FLY', 'ANT', 'BEE', 'RUN', 'JAM', 'BAT', 'HOP', 'PIG', 'WEB']
+export const WORD_LIST_L2 = ['FROG', 'FISH', 'LEAF', 'TREE', 'DUCK', 'JUMP', 'SLUG', 'WING', 'STAR', 'WORM', 'FLEA', 'TOAD', 'MOTH', 'GNAT', 'WASP']
+export const WORD_LIST_L3 = ['SNAKE', 'MOUSE', 'HORSE', 'CRANE', 'TIGER', 'GOOSE', 'WHALE', 'EAGLE', 'SHARK', 'ZEBRA', 'SHEEP', 'OTTER', 'RAVEN', 'SQUID', 'BISON']
 
 export function generateRun(): RoomConfig[] {
   return [

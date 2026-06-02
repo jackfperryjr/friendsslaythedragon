@@ -84,6 +84,7 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private buildUI(cx: number, cy: number) {
+    const { height } = this.scale
     // Title — slides down from above
     const title = this.add.text(cx, cy - 260, 'YOU WIN!', {
       fontSize: '60px', fontFamily: FONT, color: '#ffe066',
@@ -104,11 +105,12 @@ export class VictoryScene extends Phaser.Scene {
     // Separator
     const sep = this.add.rectangle(cx, cy + 30, 400, 1, 0x334466, 0).setOrigin(0.5)
 
-    // Buttons
-    const btnMenu     = this.menuButton(cx - 160, cy + 120, 'MAIN MENU').setAlpha(0)
-    const btnContinue = this.menuButton(cx + 160, cy + 120, 'CONTINUE').setAlpha(0)
+    // Buttons — stacked at bottom centre; Continue on top as primary action
+    const btnContinue = this.menuButton(cx, height - 130, 'CONTINUE EXPLORING').setAlpha(0)
+    const btnMenu     = this.menuButton(cx, height -  70, 'MAIN MENU').setAlpha(0)
 
     btnMenu.on('pointerdown', () => {
+      btnMenu.disableInteractive(); btnContinue.disableInteractive()
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.time.delayedCall(450, () => {
         this.registry.set('runRooms',              null)
@@ -116,6 +118,7 @@ export class VictoryScene extends Phaser.Scene {
         this.registry.set('entryDir',              null)
         this.registry.set('persistedAbilities',    null)
         this.registry.set('persistedHearts',       null)
+        this.registry.set('persistedBoosts',       null)
         this.registry.set('score',                 0)
         this.registry.set('skeletonKingDefeated',  false)
         this.registry.set('zombieKingDefeated',    false)
@@ -124,11 +127,34 @@ export class VictoryScene extends Phaser.Scene {
         this.registry.set('momSaved',              false)
         this.registry.set('wormCount',             0)
         this.registry.set('rolyPolyCount',         0)
+        this.registry.set('level4Problem1', null)
+        this.registry.set('level4Problem2', null)
+        this.registry.set('level4Problem3', null)
+        this.registry.set('level4Problem1Solved', null)
+        this.registry.set('level4Problem2Solved', null)
+        this.registry.set('level4Problem3Solved', null)
+        ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('level5Word', null)
+        this.registry.set('level5BugLetters', null)
+        this.registry.set('level5BugPositions', null)
+        this.registry.set('level5CollectedLetters', null)
+        this.registry.set('level5WordSolved', null)
+        this.registry.set('level6Word', null)
+        this.registry.set('level6BugLetters', null)
+        this.registry.set('level6BugPositions', null)
+        this.registry.set('level6CollectedLetters', null)
+        this.registry.set('level6WordSolved', null)
+        this.registry.set('level7Word', null)
+        this.registry.set('level7BugLetters', null)
+        this.registry.set('level7BugPositions', null)
+        this.registry.set('level7CollectedLetters', null)
+        this.registry.set('level7WordSolved', null)
         this.scene.start('MenuScene')
       })
     })
 
     btnContinue.on('pointerdown', () => {
+      btnMenu.disableInteractive(); btnContinue.disableInteractive()
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.time.delayedCall(450, () => {
         const rooms = generateRun()
@@ -150,10 +176,10 @@ export class VictoryScene extends Phaser.Scene {
       })
     })
 
-    // Register buttons for gamepad navigation
+    // Register buttons for gamepad navigation — Continue is index 0 (default focus)
     this.menuItems = [
-      { text: btnMenu,     action: () => btnMenu.emit('pointerdown')     },
       { text: btnContinue, action: () => btnContinue.emit('pointerdown') },
+      { text: btnMenu,     action: () => btnMenu.emit('pointerdown')     },
     ]
 
     // Animation sequence
@@ -173,7 +199,7 @@ export class VictoryScene extends Phaser.Scene {
           targets: msg2, alpha: 1, duration: 400, delay: 350,
           onComplete: () => {
             this.tweens.add({ targets: sep, alpha: 0.5, duration: 500 })
-            this.tweens.add({ targets: [btnMenu, btnContinue], alpha: 1, duration: 400, delay: 200 })
+            this.tweens.add({ targets: [btnContinue, btnMenu], alpha: 1, duration: 400, delay: 200 })
           },
         })
       },
