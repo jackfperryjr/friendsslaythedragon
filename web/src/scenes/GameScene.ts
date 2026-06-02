@@ -2687,8 +2687,8 @@ export class GameScene extends Phaser.Scene {
     const collectedKey = keyLevel >= 3 ? `level${keyLevel}CollectedLetters` : 'collectedLetters'
     const collected: string[] = this.registry.get(collectedKey) ?? []
     const D    = 150
-    const TILE = 52
-    const GAP  = 12
+    const TILE = 64
+    const GAP  = 14
 
     this.gm.pause()
     this.physics.world.isPaused = true
@@ -2697,18 +2697,18 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(D).setInteractive()
 
     const title = this.add.text(width / 2, height * 0.18, 'MAGIC JAR!', {
-      fontSize: '28px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
+      fontSize: '34px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
     const sub = this.add.text(width / 2, height * 0.27, 'Spell the word:', {
-      fontSize: '9px', fontFamily: FONT, color: '#aabbcc',
+      fontSize: '14px', fontFamily: FONT, color: '#aabbcc',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
     // Target word displayed clearly
     const wordDisplay = this.add.text(width / 2, height * 0.36, targetWord, {
-      fontSize: '28px', fontFamily: FONT, color: '#ffffff',
+      fontSize: '34px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000', strokeThickness: 4,
-      letterSpacing: 18,
+      letterSpacing: 20,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
     // Progress slots
@@ -2724,7 +2724,7 @@ export class GameScene extends Phaser.Scene {
       const box = this.add.rectangle(sx, slotY, TILE, TILE, 0x141428)
         .setStrokeStyle(2, 0x334455).setScrollFactor(0).setDepth(D)
       const txt = this.add.text(sx, slotY, '_', {
-        fontSize: '20px', fontFamily: FONT, color: '#334455',
+        fontSize: '26px', fontFamily: FONT, color: '#334455',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1)
       slotBoxes.push(box)
       slotTexts.push(txt)
@@ -2743,7 +2743,7 @@ export class GameScene extends Phaser.Scene {
       const box = this.add.rectangle(tx, tileY, TILE, TILE, 0x223344)
         .setStrokeStyle(2, 0x556677).setScrollFactor(0).setDepth(D).setInteractive({ useHandCursor: true })
       const txt = this.add.text(tx, tileY, collected[i], {
-        fontSize: '18px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
+        fontSize: '24px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1)
       tileBoxes.push(box)
       tileTxts.push(txt)
@@ -2751,7 +2751,7 @@ export class GameScene extends Phaser.Scene {
 
     const hint = this.add.text(width / 2, height * 0.76,
       '\u2190 \u2192 to move   ENTER / tap to select', {
-      fontSize: '9px', fontFamily: FONT, color: '#556677',
+      fontSize: '13px', fontFamily: FONT, color: '#556677',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
     this.wordMenuObjects = [overlay, title, sub, wordDisplay, hint, ...slotBoxes, ...slotTexts, ...tileBoxes, ...tileTxts]
@@ -4667,6 +4667,7 @@ export class GameScene extends Phaser.Scene {
 
       const dismiss = () => {
         this.input.keyboard?.off('keydown', dismiss)
+        this.input.off('pointerdown', dismiss)
         this.physics.world.isPaused = false
         SoundManager.startTrack(this.sound, 'music-gameplay')
         elements.forEach(e => { if (e.active) e.destroy() })
@@ -4674,6 +4675,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.input.keyboard?.once('keydown', dismiss)
       this.input.gamepad?.once(Phaser.Input.Gamepad.Events.BUTTON_DOWN, dismiss)
+      this.input.once('pointerdown', dismiss)
     })
   }
 
@@ -4719,6 +4721,7 @@ export class GameScene extends Phaser.Scene {
 
       const dismiss = () => {
         this.input.keyboard?.off('keydown', dismiss)
+        this.input.off('pointerdown', dismiss)
         this.physics.world.isPaused = false
         SoundManager.startTrack(this.sound, 'music-gameplay')
         elements.forEach(e => { if (e.active) e.destroy() })
@@ -4726,6 +4729,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.input.keyboard?.once('keydown', dismiss)
       this.input.gamepad?.once(Phaser.Input.Gamepad.Events.BUTTON_DOWN, dismiss)
+      this.input.once('pointerdown', dismiss)
     })
   }
 
