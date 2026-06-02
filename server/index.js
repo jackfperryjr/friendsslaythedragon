@@ -1,10 +1,22 @@
 const { WebSocketServer } = require('ws')
 const http = require('http')
+const fs = require('fs')
+const path = require('path')
 
 const PORT = process.env.PORT || 3001
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const STATS_FILE = path.join(__dirname, 'stats.json')
 
 const rooms = new Map() // code → Room
+
+function loadStats() {
+  try { return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) } catch { return { totalPlayers: 0 } }
+}
+function saveStats(s) {
+  fs.writeFile(STATS_FILE, JSON.stringify(s), () => {})
+}
+
+const stats = loadStats()
 
 function genCode() {
   let code
@@ -24,8 +36,22 @@ function broadcast(room, msg, excludeWs = null) {
   }
 }
 
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' }
+
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' })
+  if (req.method === 'GET' && req.url === '/stats') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ totalPlayers: stats.totalPlayers, currentConnections: wss.clients.size }))
+    return
+  }
+  if (req.method === 'GET' && req.url === '/ping') {
+    stats.totalPlayers++
+    saveStats(stats)
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' })
+    res.end('ok')
+    return
+  }
+  res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' })
   res.end('Friends Slay the Dragon WS Server')
 })
 
@@ -45,6 +71,8 @@ wss.on('connection', (ws) => {
         room = { code, players: [{ ws, id: 0, charConfirmed: false, charIdx: 0 }], started: false }
         rooms.set(code, room)
         playerId = 0
+        stats.totalPlayers++
+        saveStats(stats)
         send(ws, { type: 'roomCreated', code, playerId: 0 })
         break
       }
@@ -59,6 +87,8 @@ wss.on('connection', (ws) => {
         playerId = target.players.length
         target.players.push({ ws, id: playerId, charConfirmed: false, charIdx: 0 })
         room = target
+        stats.totalPlayers++
+        saveStats(stats)
 
         const ids = room.players.map(p => p.id)
         send(ws, { type: 'roomJoined', code, playerId, players: ids })
