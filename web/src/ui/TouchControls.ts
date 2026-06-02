@@ -5,7 +5,7 @@ export class TouchControls {
   private dpadLeft  = false
   private dpadRight = false
   private jumpHeld    = false
-  private inhaleHeld  = false
+  private shieldHeld  = false
   private abilityJust = false
   private meleeJust   = false
   private _interactJust = false
@@ -42,7 +42,7 @@ export class TouchControls {
       this.dpadLeft = false
       this.dpadRight = false
       this.jumpHeld = false
-      this.inhaleHeld = false
+      this.shieldHeld = false
       this.abilityJust = false
       this.meleeJust = false
       this._interactJust = false
@@ -62,7 +62,7 @@ export class TouchControls {
     const by = height - 80
     this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this._interactJust = true })
     this.btn(bx,      by - 84, 'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
+    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.shieldHeld = true }, () => { this.shieldHeld = false })
     this.btn(bx - 84, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
@@ -141,7 +141,7 @@ export class TouchControls {
   }
 
   apply(player: Player) {
-    if (!this._enabled || !player.isAlive || player.isInhaled) return
+    if (!this._enabled || !player.isAlive) return
 
     if (this.dpadLeft) player.moveLeft()
     else if (this.dpadRight) player.moveRight()
@@ -150,7 +150,7 @@ export class TouchControls {
     if (this.jumpHeld) player.jump()
     else player.jumpReleased()
 
-    player.setShielding(this.inhaleHeld)
+    player.setShielding(this.shieldHeld)
     if (this.abilityJust) { player.useCharacterAbility(); this.abilityJust = false }
     if (this.meleeJust)   { player.swingMelee(); this.meleeJust = false }
   }

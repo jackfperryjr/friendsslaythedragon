@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Friends Slay the Dragon</title>
@@ -12,19 +12,73 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      html { height: 100%; }
       body {
         background: #080818;
         overflow: hidden;
         width: 100vw;
         height: 100vh;
+        height: 100dvh; /* mobile browsers: excludes collapsible chrome */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overscroll-behavior: none; /* prevent pull-to-refresh */
+        touch-action: none;        /* let Phaser own all touch events */
+      }
+      #game-container {
+        width: 100%;
+        height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
       }
-      canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+      canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+        /* keep canvas inside safe-area so it's not clipped by notches */
+        max-width: 100%;
+        max-height: 100%;
+      }
+      /* Portrait: show a soft rotate hint overlay without blocking play */
+      @media (orientation: portrait) and (max-width: 768px) {
+        #rotate-hint {
+          display: flex;
+        }
+      }
+      #rotate-hint {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 8, 24, 0.82);
+        color: #fff;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 10px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 9999;
+        pointer-events: none; /* tap-through so touch controls still work */
+        text-align: center;
+        padding: 24px;
+      }
+      #rotate-hint span { font-size: 40px; animation: spin 2s linear infinite; }
+      @keyframes spin {
+        0%   { transform: rotate(0deg); }
+        25%  { transform: rotate(-90deg); }
+        50%  { transform: rotate(-90deg); }
+        75%  { transform: rotate(0deg); }
+        100% { transform: rotate(0deg); }
+      }
     </style>
   </head>
   <body>
+    <div id="rotate-hint">
+      <span>&#x21BB;</span>
+      <p>Rotate for best experience</p>
+    </div>
     <div id="game-container"></div>
     <script>
       if ('serviceWorker' in navigator) {

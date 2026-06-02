@@ -2,7 +2,7 @@ export interface RemoteInput {
   left: boolean
   right: boolean
   jump: boolean
-  inhale: boolean
+  shield: boolean
   ability: boolean
 }
 
@@ -78,7 +78,7 @@ export class NetworkManager {
           left:    msg.left,
           right:   msg.right,
           jump:    msg.jump,
-          inhale:  msg.inhale,
+          shield:  msg.shield,
           ability: msg.ability,
         })
         break

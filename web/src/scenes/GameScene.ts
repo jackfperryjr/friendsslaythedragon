@@ -19,8 +19,8 @@ const SCORE_ENEMY = 200
 const SCORE_DESTRUCT = 100
 
 const KEYBOARD_CONFIGS: Record<string, string>[] = [
-  { left: 'A',    right: 'D',     jump: 'W',  inhale: 'C',     ability: 'X', down: 'S'    },
-  { left: 'LEFT', right: 'RIGHT', jump: 'UP', inhale: 'COMMA', ability: 'L', down: 'DOWN' },
+  { left: 'A',    right: 'D',     jump: 'W',  shield: 'C',     ability: 'X', down: 'S'    },
+  { left: 'LEFT', right: 'RIGHT', jump: 'UP', shield: 'COMMA', ability: 'L', down: 'DOWN' },
 ]
 
 const OPPOSITE: Record<ExitDir, ExitDir> = { left:'right', right:'left', top:'bottom', bottom:'top' }
@@ -4964,7 +4964,7 @@ export class GameScene extends Phaser.Scene {
   // ── input ─────────────────────────────────────────────────────────────────
 
   private handleKeyboard(p: Player, keys: Record<string, Phaser.Input.Keyboard.Key>) {
-    if (!p.isAlive || p.isInhaled) return
+    if (!p.isAlive) return
     if (keys['left']?.isDown) p.moveLeft()
     else if (keys['right']?.isDown) p.moveRight()
     else p.stopHorizontal()
@@ -4972,7 +4972,7 @@ export class GameScene extends Phaser.Scene {
     if (keys['jump']?.isDown) p.jump()
     else p.jumpReleased()
 
-    p.setShielding(!!keys['inhale']?.isDown)
+    p.setShielding(!!keys['shield']?.isDown)
     if (Phaser.Input.Keyboard.JustDown(keys['ability'])) {
       // Down + ability while in shadow form starts spindash — don't toggle transform
       const downHeld = !!keys['down']?.isDown
@@ -4982,7 +4982,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleGamepad(p: Player, pad: Phaser.Input.Gamepad.Gamepad) {
-    if (!p.isAlive || p.isInhaled) return
+    if (!p.isAlive) return
     const lx = pad.leftStick.x
     if (lx < -0.25 || pad.left) p.moveLeft()
     else if (lx > 0.25 || pad.right) p.moveRight()
@@ -4995,7 +4995,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleRemoteInput(p: Player, ri: RemoteInput) {
-    if (!p.isAlive || p.isInhaled) return
+    if (!p.isAlive) return
     if (ri.left)        p.moveLeft()
     else if (ri.right)  p.moveRight()
     else                p.stopHorizontal()
@@ -5003,7 +5003,7 @@ export class GameScene extends Phaser.Scene {
     if (ri.jump) p.jump()
     else         p.jumpReleased()
 
-    p.setShielding(ri.inhale)
+    p.setShielding(ri.shield)
     if (ri.ability) p.useCharacterAbility()
   }
 
@@ -5031,7 +5031,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const player = this.players.find((_, i) => this.input.gamepad?.getPad(i) === pad)
-        if (!player || !player.isAlive || player.isInhaled) return
+        if (!player || !player.isAlive) return
         if (button.index === 1) player.useCharacterAbility()
         if (button.index === 2) player.swingMelee()
         // D-pad up (12) near throne door — same as pressing Up on keyboard
@@ -5211,7 +5211,7 @@ export class GameScene extends Phaser.Scene {
           if (p.anims.currentAnim?.key !== animKey) p.play(animKey, true)
         }
 
-      if (p.isAlive && p.shielding && !p.isInhaled) {
+      if (p.isAlive && p.shielding) {
           const t   = this.time.now
           const R   = 58   // shield radius
 
@@ -5259,7 +5259,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Carter force field — expanding electric ring
-        if (p.isAlive && p.getData('carterFF') && !p.isInhaled) {
+        if (p.isAlive && p.getData('carterFF')) {
           const t        = this.time.now
           const elapsed  = t - (p.getData('carterFFStart') as number ?? t)
           const progress = Math.min(1, elapsed / 2000)
@@ -5318,7 +5318,7 @@ export class GameScene extends Phaser.Scene {
             left:    !!(pad2?.connected ? (pad2.leftStick.x < -0.25 || pad2.left) : keys?.['left']?.isDown),
             right:   !!(pad2?.connected ? (pad2.leftStick.x >  0.25 || pad2.right) : keys?.['right']?.isDown),
             jump:    !!(pad2?.connected ? pad2.A : keys?.['jump']?.isDown),
-            inhale:  !!(pad2?.connected ? (pad2.buttons[3]?.pressed) : keys?.['inhale']?.isDown),
+            shield:  !!(pad2?.connected ? (pad2.buttons[3]?.pressed) : keys?.['shield']?.isDown),
             ability: !!(pad2?.connected ? pad2.buttons[1]?.pressed : keys?.['ability']?.isDown),
           })
         }

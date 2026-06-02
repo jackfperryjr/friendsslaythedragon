@@ -195,7 +195,7 @@ export class MenuScene extends Phaser.Scene {
       ...row('MOVE',    'A / D',   'Left Stick'),
       ...row('JUMP',    'W',       'Cross  /  A'),
       ...row('FLOAT',   'Hold W',  'Hold Cross'),
-      ...row('INHALE',  'C',       'Triangle  /  Y'),
+      ...row('SHIELD',  'C',       'Triangle  /  Y'),
       ...row('ABILITY', 'X',       'Circle  /  B'),
       ...row('MELEE',   'Z',       'Square  /  X'),
       ...row('PAUSE',   'ESC',     'Start'),

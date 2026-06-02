@@ -13,7 +13,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   hearts        = 5
   isAlive       = true
-  isInhaled     = false   // still used when another player spits this one
   speedMultiplier  = 1.0
   controlsReversed = false
   speedBoostActive       = false
@@ -152,7 +151,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update() {
-    if (!this.isAlive || this.isInhaled) return
+    if (!this.isAlive) return
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setGravityY(this.isFloating ? FLOAT_GRAVITY * this.speedMultiplier : 0)
     if (body.blocked.down) this.isFloating = false
@@ -167,7 +166,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     let anim: string
     if (this.isMeleeing)       anim = 'melee'
-    else if (this.isShielding) anim = 'inhale'   // reuse inhale art for shield pose
+    else if (this.isShielding) anim = 'shield'
     else if (this.isFloating)  anim = 'float'
     else if (!body.blocked.down && body.velocity.y > 80) anim = 'fall'
     else if (!body.blocked.down) anim = 'jump'
@@ -187,14 +186,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // ── actions ─────────────────────────────────────────────────────────────────
 
   swingMelee() {
-    if (this.isMeleeing || !this.isAlive || this.isInhaled) return
+    if (this.isMeleeing || !this.isAlive) return
     this.isMeleeing = true
     this.emit('useMelee', this)
     this.scene.time.delayedCall(350, () => { if (this.active) this.isMeleeing = false })
   }
 
   useCharacterAbility() {
-    if (!this.isAlive || this.isInhaled) return
+    if (!this.isAlive) return
     this.emit('useCharacterAbility', this)
   }
 
