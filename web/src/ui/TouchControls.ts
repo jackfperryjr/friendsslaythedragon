@@ -23,6 +23,7 @@ export class TouchControls {
   private readonly JOYSTICK_RADIUS = 70
   private readonly KNOB_RADIUS = 26
   private readonly DEAD_ZONE = 15
+  private readonly H_DEAD_ZONE = 24
 
   constructor(private scene: Phaser.Scene) {
     this.buildButtons()
@@ -57,12 +58,12 @@ export class TouchControls {
     this.buildJoystick(height)
 
     // Action buttons (right side)
-    const bx = width - 55
-    const by = height - 65
+    const bx = width - 65
+    const by = height - 80
     this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this._interactJust = true })
-    this.btn(bx,      by - 70, 'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 70, by - 70, 'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
-    this.btn(bx - 70, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
+    this.btn(bx,      by - 84, 'X',  0xa5d6a7, () => { this.abilityJust = true })
+    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
+    this.btn(bx - 84, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
   private buildJoystick(height: number) {
@@ -114,9 +115,9 @@ export class TouchControls {
       )
     }
 
-    // Per-axis dead zones: each axis is independent so diagonals work
-    this.dpadLeft  = dx < -this.DEAD_ZONE
-    this.dpadRight = dx > this.DEAD_ZONE
+    // Per-axis dead zones: larger horizontal dead zone reduces left/right drift during jumps
+    this.dpadLeft  = dx < -this.H_DEAD_ZONE
+    this.dpadRight = dx > this.H_DEAD_ZONE
     this.jumpHeld  = dy < -this.DEAD_ZONE
   }
 
@@ -130,9 +131,9 @@ export class TouchControls {
   }
 
   private btn(x: number, y: number, label: string, color: number, onDown: () => void, onUp?: () => void) {
-    const circle = this.scene.add.circle(x, y, 28, color, 0.7)
+    const circle = this.scene.add.circle(x, y, 36, color, 0.7)
       .setScrollFactor(0).setDepth(50).setInteractive()
-    const lbl = this.scene.add.text(x, y, label, { fontSize: '16px', color: '#000', fontStyle: 'bold' })
+    const lbl = this.scene.add.text(x, y, label, { fontSize: '20px', color: '#000', fontStyle: 'bold' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(51)
     this._allObjects.push(circle, lbl)
     circle.on('pointerdown', onDown)
