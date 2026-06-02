@@ -1,5 +1,8 @@
 # Friends Slay the Dragon
 
+[![Players Online](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2FYOUR_RAILWAY_SERVER%2Fstats&query=currentConnections&label=players%20online&color=brightgreen)](https://www.friendsslay.com)
+[![Total Players](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2FYOUR_RAILWAY_SERVER%2Fstats&query=totalPlayers&label=total%20players&color=blue)](https://www.friendsslay.com)
+
 ![Friends Slay the Dragon](web/public/assets/app_icons/friendsslay.jpg)
 
 A chaotic, couch-ready castle brawler where you and your friends charge through gothic halls, inhale terrifying monsters, and steal their powers to take down a dragon that absolutely has it coming.

@@ -4,6 +4,9 @@ import { generateRun } from '../levels'
 
 type Screen = 'main' | 'controls'
 
+const _wsUrl: string = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WS_URL ?? 'ws://localhost:3001'
+const SERVER_URL = _wsUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://')
+
 const FONT = '"Press Start 2P", monospace'
 const CLR_TITLE  = '#ffe066'
 const CLR_SELECT = '#ffffff'
@@ -244,6 +247,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private startGame(playerCount: number) {
+    fetch(`${SERVER_URL}/ping`).catch(() => {})
     SoundManager.unlock()
     this.registry.set('playerCount',   playerCount)
     this.registry.set('currentLevel',  1)
