@@ -790,6 +790,11 @@ export class GameScene extends Phaser.Scene {
       // Letter bug: colored beetle with a letter on its back
       if (item.type === 'letter-bug') {
         const kl = item.keyLevel ?? 1
+        // Don't re-spawn once this level's duck puzzle is solved
+        const levelSolved = kl === 1 ? !!this.registry.get('hasLevel1Key')
+                          : kl === 2 ? !!this.registry.get('hasLevel2Key')
+                          : !!this.registry.get(`level${kl}WordSolved`)
+        if (levelSolved) continue
         const idx = letterBugIdx[kl] ?? 0
         letterBugIdx[kl] = idx + 1
         const storedPositions: Array<{x: number, y: number}> | null = this.registry.get(`level${kl}BugPositions`)
@@ -855,7 +860,7 @@ export class GameScene extends Phaser.Scene {
   private collectItem(player: Player, item: ItemSpawn) {
     if (item.type === 'heart' || item.type === 'pizza') {
       player.hearts = Math.min(5, player.hearts + 1)
-      this.showPopup(item.x, item.y, item.type === 'pizza' ? '+PIZZA' : '+HEART', '#ff4d6a')
+      this.showPopup(item.x, item.y, '+PIZZA', '#ff4d6a')
       SoundManager.collectHeart()
     } else if (item.type === 'life') {
       const lives: number = (this.registry.get('lives') ?? 1) + 1
@@ -909,7 +914,7 @@ export class GameScene extends Phaser.Scene {
       const r = Math.floor(Math.random() * 3)
       if (r === 0) {
         player.hearts = Math.min(5, player.hearts + 1)
-        this.showPopup(player.x, player.y - 32, '+ HEART!', '#ff4d6a')
+        this.showPopup(player.x, player.y - 32, '+ PIZZA!', '#ff4d6a')
       } else if (r === 1) {
         player.applyStrengthBoost(false)
         this.showPopup(player.x, player.y - 32, 'POWER UP!', '#ff4444')
@@ -1206,7 +1211,7 @@ export class GameScene extends Phaser.Scene {
           this.registry.set('persistedBoosts', this.players.map(p => ({
             speedBoostActive:      p.speedBoostActive,
             strengthBoostActive:   p.strengthBoostActive,
-            invulnerabilityActive: p.charKey === 'carter' ? false : p.invulnerabilityActive,
+            invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive,
             isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm,
           })))
           duck.bubble?.destroy(); duck.bubble = null
@@ -3060,21 +3065,8 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private spawnHeartDrop(x: number, y: number) {
-    const dropY = y - 16
-    const img = this.add.image(x, dropY, 'item-heart').setDepth(8).setScale(1.2)
-    img.setData('item', { type: 'heart', x, y: dropY } as ItemSpawn)
-    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    this.collectibleSprites.push(img)
-    this.time.delayedCall(10000, () => {
-      if (!img.active) return
-      this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
-      this.tweens.add({ targets: img, alpha: 0, duration: 500, onComplete: () => { if (img.active) img.destroy() } })
-    })
-  }
-
   private spawnFurnitureDrop(x: number, y: number) {
-    this.spawnHeartDrop(x, y)
+    this.spawnPizzaDrop(x, y)
   }
 
   private spawnRoomFurnitureRandom() {
@@ -3150,7 +3142,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === "carter" ? false : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3224,7 +3216,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === "carter" ? false : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3258,7 +3250,7 @@ export class GameScene extends Phaser.Scene {
         const saved = this.registry.get(`level4DuckBoost_${p.playerId}`) as { speed: boolean; strength: boolean; invuln: boolean } | null
         if (saved?.speed)    p.applySpeedBoost(true)
         if (saved?.strength) p.applyStrengthBoost(true)
-        if (saved?.invuln && p.charKey !== 'carter') p.applyInvulnerability(true)
+        if (saved?.invuln) p.applyInvulnerability(true)
       })
     }
 
@@ -4555,6 +4547,28 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('level3WordSolved', null)
     this.registry.set('hasLevel1Key', null)
     this.registry.set('hasLevel2Key', null)
+    this.registry.set('level4Problem1', null)
+    this.registry.set('level4Problem2', null)
+    this.registry.set('level4Problem3', null)
+    this.registry.set('level4Problem1Solved', null)
+    this.registry.set('level4Problem2Solved', null)
+    this.registry.set('level4Problem3Solved', null)
+    ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+    this.registry.set('level5Word', null)
+    this.registry.set('level5BugLetters', null)
+    this.registry.set('level5BugPositions', null)
+    this.registry.set('level5CollectedLetters', null)
+    this.registry.set('level5WordSolved', null)
+    this.registry.set('level6Word', null)
+    this.registry.set('level6BugLetters', null)
+    this.registry.set('level6BugPositions', null)
+    this.registry.set('level6CollectedLetters', null)
+    this.registry.set('level6WordSolved', null)
+    this.registry.set('level7Word', null)
+    this.registry.set('level7BugLetters', null)
+    this.registry.set('level7BugPositions', null)
+    this.registry.set('level7CollectedLetters', null)
+    this.registry.set('level7WordSolved', null)
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
@@ -4583,7 +4597,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
-      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === "carter" ? false : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.charKey === 'coco' && p.isShadowForm })))
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.charKey === 'coco' && p.isShadowForm })))
 
     const nextIndex = goBack ? runIndex - 1 : runIndex + 1
 
@@ -4773,9 +4787,32 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('entryDir',           null)
         this.registry.set('persistedAbilities', null)
         this.registry.set('persistedHearts',    null)
+        this.registry.set('persistedBoosts',    null)
         this.registry.set('score',              0)
         this.registry.set('zombieKingDefeated',  false)
         this.registry.set('celeryManDefeated',   false)
+        this.registry.set('level4Problem1', null)
+        this.registry.set('level4Problem2', null)
+        this.registry.set('level4Problem3', null)
+        this.registry.set('level4Problem1Solved', null)
+        this.registry.set('level4Problem2Solved', null)
+        this.registry.set('level4Problem3Solved', null)
+        ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('level5Word', null)
+        this.registry.set('level5BugLetters', null)
+        this.registry.set('level5BugPositions', null)
+        this.registry.set('level5CollectedLetters', null)
+        this.registry.set('level5WordSolved', null)
+        this.registry.set('level6Word', null)
+        this.registry.set('level6BugLetters', null)
+        this.registry.set('level6BugPositions', null)
+        this.registry.set('level6CollectedLetters', null)
+        this.registry.set('level6WordSolved', null)
+        this.registry.set('level7Word', null)
+        this.registry.set('level7BugLetters', null)
+        this.registry.set('level7BugPositions', null)
+        this.registry.set('level7CollectedLetters', null)
+        this.registry.set('level7WordSolved', null)
         this.scene.start('MenuScene')
       })
     })
@@ -4879,12 +4916,35 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('entryDir',           null)
         this.registry.set('persistedAbilities', null)
         this.registry.set('persistedHearts',    null)
+        this.registry.set('persistedBoosts',    null)
         this.registry.set('score',              0)
         this.registry.set('enemiesKilled',      0)
         this.registry.set('hitsTaken',          0)
         this.registry.set('runStartTime',       null)
         this.registry.set('zombieKingDefeated', false)
         this.registry.set('celeryManDefeated',  false)
+        this.registry.set('level4Problem1', null)
+        this.registry.set('level4Problem2', null)
+        this.registry.set('level4Problem3', null)
+        this.registry.set('level4Problem1Solved', null)
+        this.registry.set('level4Problem2Solved', null)
+        this.registry.set('level4Problem3Solved', null)
+        ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('level5Word', null)
+        this.registry.set('level5BugLetters', null)
+        this.registry.set('level5BugPositions', null)
+        this.registry.set('level5CollectedLetters', null)
+        this.registry.set('level5WordSolved', null)
+        this.registry.set('level6Word', null)
+        this.registry.set('level6BugLetters', null)
+        this.registry.set('level6BugPositions', null)
+        this.registry.set('level6CollectedLetters', null)
+        this.registry.set('level6WordSolved', null)
+        this.registry.set('level7Word', null)
+        this.registry.set('level7BugLetters', null)
+        this.registry.set('level7BugPositions', null)
+        this.registry.set('level7CollectedLetters', null)
+        this.registry.set('level7WordSolved', null)
         this.scene.start('MenuScene')
       })
     })
@@ -4978,7 +5038,9 @@ export class GameScene extends Phaser.Scene {
         if (button.index === 12 && this.bossPortalPos) {
           const nearPortal = Phaser.Math.Distance.Between(player.x, player.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
           const ri2: number = this.registry.get('runIndex') ?? 0
-          if (nearPortal && !(ri2 === 4 && !this.registry.get('level3WordSolved'))) this.winGame()
+          const portalBlocked2 = (ri2 === 4 && !this.registry.get('level3WordSolved'))
+                              || (ri2 === 9 && !this.registry.get('level7WordSolved'))
+          if (nearPortal && !portalBlocked2) this.winGame()
         }
         if (button.index === 12 && this.backPortalPos) {
           const nearBack = Phaser.Math.Distance.Between(player.x, player.y, this.backPortalPos.x, this.backPortalPos.y) < 90
@@ -5037,6 +5099,29 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('level3WordSolved',     null)
       this.registry.set('hasLevel1Key',         null)
       this.registry.set('hasLevel2Key',         null)
+      this.registry.set('level4Problem1', null)
+      this.registry.set('level4Problem2', null)
+      this.registry.set('level4Problem3', null)
+      this.registry.set('level4Problem1Solved', null)
+      this.registry.set('level4Problem2Solved', null)
+      this.registry.set('level4Problem3Solved', null)
+      ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+      this.registry.set('level5Word', null)
+      this.registry.set('level5BugLetters', null)
+      this.registry.set('level5BugPositions', null)
+      this.registry.set('level5CollectedLetters', null)
+      this.registry.set('level5WordSolved', null)
+      this.registry.set('level6Word', null)
+      this.registry.set('level6BugLetters', null)
+      this.registry.set('level6BugPositions', null)
+      this.registry.set('level6CollectedLetters', null)
+      this.registry.set('level6WordSolved', null)
+      this.registry.set('level7Word', null)
+      this.registry.set('level7BugLetters', null)
+      this.registry.set('level7BugPositions', null)
+      this.registry.set('level7CollectedLetters', null)
+      this.registry.set('level7WordSolved', null)
+      this.registry.set('persistedBoosts', null)
       SoundManager.stopTrack()
       this.scene.start('MenuScene')
     }

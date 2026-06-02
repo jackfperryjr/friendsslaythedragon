@@ -283,8 +283,8 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   ],
   crates: [],
   items: [
-    { x: 400,  y: 1260, type: 'heart' },
-    { x: 1300, y: 1260, type: 'heart' },
+    { x: 400,  y: 1260, type: 'pizza' },
+    { x: 1300, y: 1260, type: 'pizza' },
   ],
 }
 
