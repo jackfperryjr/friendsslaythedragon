@@ -8,6 +8,14 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const STATS_FILE = path.join(__dirname, 'stats.json')
 
 const rooms = new Map() // code → Room
+const singlePlayerSessions = new Map() // sessionId → lastSeen ms
+
+setInterval(() => {
+  const cutoff = Date.now() - 45_000
+  for (const [id, t] of singlePlayerSessions) {
+    if (t < cutoff) singlePlayerSessions.delete(id)
+  }
+}, 45_000)
 
 function loadStats() {
   try { return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) } catch { return { totalPlayers: 0 } }
@@ -36,17 +44,39 @@ function broadcast(room, msg, excludeWs = null) {
   }
 }
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' }
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST' }
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS)
+    res.end()
+    return
+  }
   if (req.method === 'GET' && req.url === '/stats') {
+    const cutoff = Date.now() - 45_000
+    const activeSingle = [...singlePlayerSessions.values()].filter(t => t > cutoff).length
     res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ totalPlayers: stats.totalPlayers, currentConnections: wss.clients.size }))
+    res.end(JSON.stringify({ totalPlayers: stats.totalPlayers, currentConnections: wss.clients.size + activeSingle }))
     return
   }
   if (req.method === 'GET' && req.url === '/ping') {
     stats.totalPlayers++
     saveStats(stats)
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' })
+    res.end('ok')
+    return
+  }
+  const parsedUrl = new URL(req.url, 'http://localhost')
+  if (parsedUrl.pathname === '/session/heartbeat') {
+    const id = parsedUrl.searchParams.get('id')
+    if (id) singlePlayerSessions.set(id, Date.now())
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' })
+    res.end('ok')
+    return
+  }
+  if (parsedUrl.pathname === '/session/end') {
+    const id = parsedUrl.searchParams.get('id')
+    if (id) singlePlayerSessions.delete(id)
     res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' })
     res.end('ok')
     return

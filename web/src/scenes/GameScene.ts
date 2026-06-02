@@ -18,6 +18,9 @@ const FONT = '"Press Start 2P", monospace'
 const SCORE_ENEMY = 200
 const SCORE_DESTRUCT = 100
 
+const _WS_URL: string = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WS_URL ?? `ws://${location.hostname}:3001`
+const _HTTP_BASE = _WS_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:')
+
 const KEYBOARD_CONFIGS: Record<string, string>[] = [
   { left: 'A',    right: 'D',     jump: 'W',  shield: 'C',     ability: 'X', down: 'S'    },
   { left: 'LEFT', right: 'RIGHT', jump: 'UP', shield: 'COMMA', ability: 'L', down: 'DOWN' },
@@ -122,6 +125,9 @@ export class GameScene extends Phaser.Scene {
   private localPlayerId = 0
   private remoteInputs = new Map<number, RemoteInput>()
 
+  private _heartbeatInterval: number | null = null
+  private _sessionId: string | null = null
+
   constructor() { super({ key: 'GameScene' }) }
 
   init() {
@@ -133,6 +139,8 @@ export class GameScene extends Phaser.Scene {
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
     this.nm = null
+    this._heartbeatInterval = null
+    this._sessionId = null
     this.score = 0
     this.boss = null
     this.throneLabel = null
@@ -195,6 +203,8 @@ export class GameScene extends Phaser.Scene {
     if (this.nm) {
       this.nm.onRemoteInput = (id, input) => this.remoteInputs.set(id, input)
       this.nm.onPlayerLeft  = (id) => this.removeRemotePlayer(id)
+    } else {
+      this.startSinglePlayerSession()
     }
 
     const W = this.cfg.worldWidth
@@ -5488,6 +5498,27 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
         this._lastPadConnected = padConnected
         this.touchControls.setEnabled(!padConnected)
       }
+    }
+  }
+
+  // ── single-player session heartbeat ─────────────────────────────────────────
+
+  private startSinglePlayerSession() {
+    this._sessionId = crypto.randomUUID()
+    const ping = () => fetch(`${_HTTP_BASE}/session/heartbeat?id=${this._sessionId}`, { keepalive: true }).catch(() => {})
+    ping()
+    this._heartbeatInterval = window.setInterval(ping, 30_000)
+    this.events.once('shutdown', () => this.endSinglePlayerSession())
+  }
+
+  private endSinglePlayerSession() {
+    if (this._heartbeatInterval !== null) {
+      clearInterval(this._heartbeatInterval)
+      this._heartbeatInterval = null
+    }
+    if (this._sessionId) {
+      navigator.sendBeacon(`${_HTTP_BASE}/session/end?id=${this._sessionId}`)
+      this._sessionId = null
     }
   }
 }
