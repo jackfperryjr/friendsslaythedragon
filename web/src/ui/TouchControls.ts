@@ -19,7 +19,6 @@ export class TouchControls {
   private joystickPointer: Phaser.Input.Pointer | null = null
   private joystickBaseX = 0
   private joystickBaseY = 0
-  private wasInUpZone = false
 
   private readonly JOYSTICK_RADIUS = 70
   private readonly KNOB_RADIUS = 26
@@ -48,7 +47,6 @@ export class TouchControls {
       this._interactJust = false
       this.joystickActive = false
       this.joystickPointer = null
-      this.wasInUpZone = false
       this.joystickKnob?.setPosition(this.joystickBaseX, this.joystickBaseY)
     }
   }
@@ -61,7 +59,7 @@ export class TouchControls {
     // Action buttons (right side)
     const bx = width - 55
     const by = height - 65
-    this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this.jumpHeld = true  }, () => { this.jumpHeld = false })
+    this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this._interactJust = true })
     this.btn(bx,      by - 70, 'X',  0xa5d6a7, () => { this.abilityJust = true })
     this.btn(bx - 70, by - 70, 'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
     this.btn(bx - 70, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
@@ -116,26 +114,10 @@ export class TouchControls {
       )
     }
 
-    if (mag < this.DEAD_ZONE) {
-      this.dpadLeft = false
-      this.dpadRight = false
-      this.jumpHeld = false
-      this.wasInUpZone = false
-      return
-    }
-
-    const inUpZone    = dy < 0 && Math.abs(dy) > Math.abs(dx)
-    const inLeftZone  = dx < 0 && Math.abs(dx) >= Math.abs(dy)
-    const inRightZone = dx > 0 && Math.abs(dx) >= Math.abs(dy)
-
-    this.dpadLeft  = inLeftZone
-    this.dpadRight = inRightZone
-    this.jumpHeld  = inUpZone
-
-    if (inUpZone && !this.wasInUpZone) {
-      this._interactJust = true
-    }
-    this.wasInUpZone = inUpZone
+    // Per-axis dead zones: each axis is independent so diagonals work
+    this.dpadLeft  = dx < -this.DEAD_ZONE
+    this.dpadRight = dx > this.DEAD_ZONE
+    this.jumpHeld  = dy < -this.DEAD_ZONE
   }
 
   private resetJoystick() {
@@ -144,7 +126,6 @@ export class TouchControls {
     this.dpadLeft = false
     this.dpadRight = false
     this.jumpHeld = false
-    this.wasInUpZone = false
     this.joystickKnob.setPosition(this.joystickBaseX, this.joystickBaseY)
   }
 
