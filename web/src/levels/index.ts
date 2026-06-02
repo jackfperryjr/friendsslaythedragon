@@ -528,8 +528,6 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [
-    { x: 5916, y: 1072, type: 'attack-boost' },
-    { x: 2490, y: 1628, type: 'speed' },
     { x: 1600, y: 1640, type: 'pizza' },
     { x: 4800, y: 1050, type: 'pizza' },
     { x: 7400, y: 1380, type: 'pizza' },
@@ -578,17 +576,21 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
   spikeFloors: [
     { x: 178, y: 1729, xEnd: 2780, scale: 2 },
   ],
-  spikeBalls: [
-    { x:  500, y: 1400, count: 1 },
-    { x:  900, y: 1000, count: 1 },
-    { x: 1300, y: 1400, count: 1 },
-    { x: 1700, y: 1000, count: 1 },
-    { x: 2100, y: 1400, count: 1 },
-    { x: 2500, y: 1000, count: 1 },
-    { x: 2900, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
-  items: [],
+  items: [
+    { x:  500, y: 420,  type: 'letter-bug', keyLevel: 5 },
+    { x:  900, y: 800,  type: 'letter-bug', keyLevel: 5 },
+    { x: 1400, y: 420,  type: 'letter-bug', keyLevel: 5 },
+    { x: 1800, y: 800,  type: 'letter-bug', keyLevel: 5 },
+    { x: 2500, y: 420,  type: 'letter-bug', keyLevel: 5 },
+  ],
+  letterBugPool: [
+    { x:  500, y: 420 }, { x:  900, y: 800 }, { x: 1400, y: 420 },
+    { x: 1800, y: 800 }, { x: 2500, y: 420 }, { x:  700, y: 600 },
+    { x: 1100, y: 420 }, { x: 1600, y: 800 }, { x: 2100, y: 420 },
+    { x: 2800, y: 800 },
+  ],
 }
 
 const LEVEL6_WORLD_ROOM: RoomConfig = {
@@ -626,18 +628,20 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
-  spikeBalls: [
-    { x:  450, y: 1400, count: 1 },
-    { x:  850, y:  900, count: 1 },
-    { x: 1250, y: 1400, count: 1 },
-    { x: 1650, y:  900, count: 1 },
-    { x: 2050, y: 1400, count: 1 },
-    { x: 2450, y:  900, count: 1 },
-    { x: 2850, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
   items: [
-    { x: 1906, y: 284, type: 'invulnerability' },
+    { x:  500, y: 1600, type: 'letter-bug', keyLevel: 6 },
+    { x:  900, y:  800, type: 'letter-bug', keyLevel: 6 },
+    { x: 1400, y: 1600, type: 'letter-bug', keyLevel: 6 },
+    { x: 1800, y:  800, type: 'letter-bug', keyLevel: 6 },
+    { x: 2500, y: 1600, type: 'letter-bug', keyLevel: 6 },
+  ],
+  letterBugPool: [
+    { x:  500, y: 1600 }, { x:  900, y:  800 }, { x: 1400, y: 1600 },
+    { x: 1800, y:  800 }, { x: 2500, y: 1600 }, { x:  700, y:  900 },
+    { x: 1100, y: 1600 }, { x: 1600, y:  800 }, { x: 2100, y: 1600 },
+    { x: 2800, y:  800 },
   ],
 }
 
@@ -652,7 +656,7 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   defaultSpawn: { x: 204, y: 1724 },
   exits: ['left'],
   exitPositions: { left: 1724 },
-  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 1700, y: 640 } },
+  entrySpawns: { left: { x: 204, y: 1724 }, right: { x: 1700, y: 590 } },
   bossPortal: { x: 1630, y: 604 },
   platforms: [],
   enemies: [
@@ -676,17 +680,21 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
-  spikeBalls: [
-    { x:  400, y: 1400, count: 1 },
-    { x:  800, y:  950, count: 1 },
-    { x: 1200, y: 1400, count: 1 },
-    { x: 1900, y:  950, count: 1 },
-    { x: 2300, y: 1400, count: 1 },
-    { x: 2700, y:  950, count: 1 },
-    { x: 3050, y: 1400, count: 1 },
-  ],
+  spikeBalls: [],
   crates: [],
-  items: [],
+  items: [
+    { x:  400, y: 1500, type: 'letter-bug', keyLevel: 7 },
+    { x:  700, y:  800, type: 'letter-bug', keyLevel: 7 },
+    { x: 1000, y: 1500, type: 'letter-bug', keyLevel: 7 },
+    { x: 1200, y:  800, type: 'letter-bug', keyLevel: 7 },
+    { x: 1500, y: 1500, type: 'letter-bug', keyLevel: 7 },
+  ],
+  letterBugPool: [
+    { x:  400, y: 1500 }, { x:  700, y:  800 }, { x: 1000, y: 1500 },
+    { x: 1200, y:  800 }, { x: 1500, y: 1500 }, { x:  550, y:  900 },
+    { x:  850, y: 1500 }, { x: 1100, y:  900 }, { x: 1350, y: 1500 },
+    { x:  600, y: 1400 },
+  ],
 }
 
 // ─── Final Boss Room ──────────────────────────────────────────────────────────
@@ -703,9 +711,9 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   bossLeftBarrierX: 50,
   exits: ['left', 'right'],
   exitPositions: { left: 1200, right: 1200 },
-  entrySpawns: { left: { x: 200, y: 1400 } },
-  backPortal: { x: 200, y: 1400 },
-  hiddenPortal: { x: 218, y: 704 },
+  entrySpawns: { left: { x: 200, y: 1380 } },
+  backPortal: { x: 200, y: 1500 },
+  hiddenPortal: { x: 218, y: 604 },
   isBossRoom: true,
   bossDefeatedKey: 'dragonDefeated',
   bossHp: 30,

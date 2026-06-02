@@ -107,6 +107,9 @@ export class GameScene extends Phaser.Scene {
 
   private duckNpcSprite:  Phaser.GameObjects.Image | null = null
   private duckBubble:     Phaser.GameObjects.Container | null = null
+  private arithDucks: { sprite: Phaser.GameObjects.Sprite; bubble: Phaser.GameObjects.Container | null; problemIdx: number; solved: boolean }[] = []
+  private exitBarrier: Phaser.GameObjects.Rectangle | null = null
+  private _rightExitPopupLastTime = 0
 
   private playerKeysets = new Map<number, Record<string, Phaser.Input.Keyboard.Key>>()
   private touchControls: TouchControls | null = null
@@ -159,6 +162,9 @@ export class GameScene extends Phaser.Scene {
     this.momCageBubble = null
     this.duckNpcSprite = null
     this.duckBubble    = null
+    this.arithDucks    = []
+    this.exitBarrier   = null
+    this._rightExitPopupLastTime = 0
   }
 
   create() {
@@ -769,7 +775,7 @@ export class GameScene extends Phaser.Scene {
       })
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
+    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 5: 0, 6: 0, 7: 0 }
     for (const item of this.cfg.items) {
       // Letter-bugs bypass this check — their position is resolved below with pool/fallback logic
       if (item.type !== 'letter-bug' && isInsideWall(item.x, item.y)) continue
@@ -788,9 +794,22 @@ export class GameScene extends Phaser.Scene {
         letterBugIdx[kl] = idx + 1
         const storedPositions: Array<{x: number, y: number}> | null = this.registry.get(`level${kl}BugPositions`)
         const poolPos = storedPositions?.[idx]
-        // Fall back to config position if the pool position is inside a wall
-        const bugX = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.x : item.x
-        const bugY = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.y : item.y
+        // Prefer pool position; fall back to config position if pool spot is inside a wall
+        let bugX = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.x : item.x
+        let bugY = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.y : item.y
+        // If the resolved position is still inside a wall, scan nearby offsets to escape
+        if (isInsideWall(bugX, bugY)) {
+          const escapeOffsets: [number, number][] = [
+            [0, -32], [0, -64], [0, -96], [0, -128],
+            [-32, -32], [32, -32], [-32, 0], [32, 0],
+            [-64, 0], [64, 0], [0, 32], [0, 64],
+          ]
+          for (const [ox, oy] of escapeOffsets) {
+            if (!isInsideWall(bugX + ox, bugY + oy)) {
+              bugX += ox; bugY += oy; break
+            }
+          }
+        }
         item.x = bugX; item.y = bugY
         const bugLetters: string[] = this.registry.get(`level${kl}BugLetters`) ?? []
         item.letter = bugLetters[idx] ?? '?'
@@ -860,10 +879,10 @@ export class GameScene extends Phaser.Scene {
       const collected: string[] = [...(this.registry.get('collectedLetters') ?? [])]
       collected.push(letter)
       this.registry.set('collectedLetters', collected)
-      if (kl === 3) {
-        const l3: string[] = [...(this.registry.get('level3CollectedLetters') ?? [])]
-        l3.push(letter)
-        this.registry.set('level3CollectedLetters', l3)
+      if (kl >= 3) {
+        const lN: string[] = [...(this.registry.get(`level${kl}CollectedLetters`) ?? [])]
+        lN.push(letter)
+        this.registry.set(`level${kl}CollectedLetters`, lN)
       }
       this.ui.updateLetters(collected)
       this.showPopup(item.x, item.y, `LETTER  ${letter}!`, '#aaffcc')
@@ -1020,6 +1039,10 @@ export class GameScene extends Phaser.Scene {
     if (runIndex === 0 && !this.cfg.isBossRoom) this.buildWorldOneNPCs()
     else if (runIndex === 2 && !this.cfg.isBossRoom) this.buildLevel2IntroDuck()
     else if (runIndex === 4 && !this.cfg.isBossRoom) this.buildLevel3Duck()
+    else if (runIndex === 6 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
+    else if (runIndex === 7 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
+    else if (runIndex === 8 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
+    else if (runIndex === 9 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
     else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
     else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
     else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
@@ -1148,6 +1171,222 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateLevel4Ducks() {
+    for (const duck of this.arithDucks) {
+      if (!duck.sprite.active || duck.solved) continue
+      for (const p of this.players) {
+        if (!p.isAlive) continue
+        if (Phaser.Math.Distance.Between(p.x, p.y, duck.sprite.x, duck.sprite.y) > 90) continue
+        const keys = this.playerKeysets.get(p.playerId)
+        const pad  = this.input.gamepad?.getPad(this.nm ? 0 : p.playerId)
+        const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
+                        || (pad?.connected && !!(pad.buttons[2]?.pressed))
+        if (!interacted) continue
+        const prob = this.registry.get(`level4Problem${duck.problemIdx}`) as { q: string; answer: number } | null
+        if (!prob) continue
+        const rewards: Array<'speed' | 'attack-boost' | 'invulnerability'> = ['speed', 'attack-boost', 'invulnerability']
+        const reward = rewards[duck.problemIdx - 1]
+        this.showArithmeticMenu(duck.sprite.x, duck.sprite.y, prob.q, prob.answer, reward, () => {
+          duck.solved = true
+          this.registry.set(`level4Problem${duck.problemIdx}Solved`, true)
+          for (const pl of this.players) {
+            if (!pl.isAlive) continue
+            if (reward === 'speed')             pl.applySpeedBoost(true)
+            else if (reward === 'attack-boost') pl.applyStrengthBoost(true)
+            else                                pl.applyInvulnerability(true)
+            // Persist per-player backup key
+            const prev = this.registry.get(`level4DuckBoost_${pl.playerId}`) as { speed: boolean; strength: boolean; invuln: boolean } | null
+            this.registry.set(`level4DuckBoost_${pl.playerId}`, {
+              speed:    (prev?.speed    ?? false) || reward === 'speed',
+              strength: (prev?.strength ?? false) || reward === 'attack-boost',
+              invuln:   (prev?.invuln   ?? false) || reward === 'invulnerability',
+            })
+          }
+          // Immediately sync persistedBoosts so exitRoom captures current state
+          this.registry.set('persistedBoosts', this.players.map(p => ({
+            speedBoostActive:      p.speedBoostActive,
+            strengthBoostActive:   p.strengthBoostActive,
+            invulnerabilityActive: p.charKey === 'carter' ? false : p.invulnerabilityActive,
+            isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm,
+          })))
+          duck.bubble?.destroy(); duck.bubble = null
+          this.tweens.add({
+            targets: duck.sprite, y: duck.sprite.y - 30, alpha: 0, duration: 600,
+            onComplete: () => { duck.sprite.destroy() },
+          })
+        })
+        break
+      }
+    }
+  }
+
+  private updateLevel5Duck() {
+    if (!this.duckNpcSprite?.active) return
+    const duck = this.duckNpcSprite
+    const word: string     = this.registry.get('level5Word') ?? ''
+    const collected: string[] = this.registry.get('level5CollectedLetters') ?? []
+    const ready = !!(word && this.canSpellWord(word, collected))
+
+    if (this.duckBubble?.active) {
+      const wasReady: boolean = this.duckBubble.getData('ready') ?? false
+      if (ready !== wasReady) {
+        this.duckBubble.destroy()
+        this.duckBubble = this.showNpcBubble(duck.x, duck.y - 90,
+          ready ? ['You have all', 'the letters!', 'Tell me the word!'] : ['Find all the', 'letter bugs first!'],
+          null,
+        )
+        this.duckBubble.setData('ready', ready)
+      }
+    }
+
+    for (const p of this.players) {
+      if (!p.isAlive) continue
+      if (Phaser.Math.Distance.Between(p.x, p.y, duck.x, duck.y) > 90) continue
+      const keys = this.playerKeysets.get(p.playerId)
+      const pad  = this.input.gamepad?.getPad(this.nm ? 0 : p.playerId)
+      const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
+                      || (pad?.connected && !!(pad.buttons[2]?.pressed))
+      if (!interacted) continue
+      if (!ready) {
+        const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
+        if (!existing?.active) {
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          duck.setData('alertBubble', b)
+        }
+        return
+      }
+      this.showWordMenu(duck.x, duck.y, 5, () => {
+        this.registry.set('level5WordSolved', true)
+        this.registry.set('level5CollectedLetters', [])
+        this.registry.set('collectedLetters', [])
+        this.ui.updateLetters([])
+        SoundManager.collectAbility()
+        if (this.exitBarrier) {
+          ;(this.exitBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
+          this.exitBarrier.destroy(); this.exitBarrier = null
+        }
+        if (duck.active) {
+          this.tweens.add({
+            targets: duck, y: duck.y - 30, alpha: 0, duration: 600,
+            onComplete: () => { duck.destroy(); this.duckNpcSprite = null },
+          })
+        }
+        this.duckBubble?.destroy(); this.duckBubble = null
+      })
+      return
+    }
+  }
+
+  private updateLevel6Duck() {
+    if (!this.duckNpcSprite?.active) return
+    const duck = this.duckNpcSprite
+    const word: string     = this.registry.get('level6Word') ?? ''
+    const collected: string[] = this.registry.get('level6CollectedLetters') ?? []
+    const ready = !!(word && this.canSpellWord(word, collected))
+
+    if (this.duckBubble?.active) {
+      const wasReady: boolean = this.duckBubble.getData('ready') ?? false
+      if (ready !== wasReady) {
+        this.duckBubble.destroy()
+        this.duckBubble = this.showNpcBubble(duck.x, duck.y - 90,
+          ready ? ['You have all', 'the letters!', 'Tell me the word!'] : ['Find all the', 'letter bugs first!'],
+          null,
+        )
+        this.duckBubble.setData('ready', ready)
+      }
+    }
+
+    for (const p of this.players) {
+      if (!p.isAlive) continue
+      if (Phaser.Math.Distance.Between(p.x, p.y, duck.x, duck.y) > 90) continue
+      const keys = this.playerKeysets.get(p.playerId)
+      const pad  = this.input.gamepad?.getPad(this.nm ? 0 : p.playerId)
+      const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
+                      || (pad?.connected && !!(pad.buttons[2]?.pressed))
+      if (!interacted) continue
+      if (!ready) {
+        const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
+        if (!existing?.active) {
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          duck.setData('alertBubble', b)
+        }
+        return
+      }
+      this.showWordMenu(duck.x, duck.y, 6, () => {
+        this.registry.set('level6WordSolved', true)
+        this.registry.set('level6CollectedLetters', [])
+        this.registry.set('collectedLetters', [])
+        this.ui.updateLetters([])
+        SoundManager.collectAbility()
+        if (this.exitBarrier) {
+          ;(this.exitBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
+          this.exitBarrier.destroy(); this.exitBarrier = null
+        }
+        if (duck.active) {
+          this.tweens.add({
+            targets: duck, y: duck.y - 30, alpha: 0, duration: 600,
+            onComplete: () => { duck.destroy(); this.duckNpcSprite = null },
+          })
+        }
+        this.duckBubble?.destroy(); this.duckBubble = null
+      })
+      return
+    }
+  }
+
+  private updateLevel7Duck() {
+    if (!this.duckNpcSprite?.active) return
+    const duck = this.duckNpcSprite
+    const word: string     = this.registry.get('level7Word') ?? ''
+    const collected: string[] = this.registry.get('level7CollectedLetters') ?? []
+    const ready = !!(word && this.canSpellWord(word, collected))
+
+    if (this.duckBubble?.active) {
+      const wasReady: boolean = this.duckBubble.getData('ready') ?? false
+      if (ready !== wasReady) {
+        this.duckBubble.destroy()
+        this.duckBubble = this.showNpcBubble(duck.x, duck.y - 90,
+          ready ? ['You have all', 'the letters!', 'Tell me the word!'] : ['Find all the', 'letter bugs first!'],
+          null,
+        )
+        this.duckBubble.setData('ready', ready)
+      }
+    }
+
+    for (const p of this.players) {
+      if (!p.isAlive) continue
+      if (Phaser.Math.Distance.Between(p.x, p.y, duck.x, duck.y) > 90) continue
+      const keys = this.playerKeysets.get(p.playerId)
+      const pad  = this.input.gamepad?.getPad(this.nm ? 0 : p.playerId)
+      const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
+                      || (pad?.connected && !!(pad.buttons[2]?.pressed))
+      if (!interacted) continue
+      if (!ready) {
+        const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
+        if (!existing?.active) {
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          duck.setData('alertBubble', b)
+        }
+        return
+      }
+      this.showWordMenu(duck.x, duck.y, 7, () => {
+        this.registry.set('level7WordSolved', true)
+        this.registry.set('level7CollectedLetters', [])
+        this.registry.set('collectedLetters', [])
+        this.ui.updateLetters([])
+        SoundManager.collectAbility()
+        if (duck.active) {
+          this.tweens.add({
+            targets: duck, y: duck.y - 30, alpha: 0, duration: 600,
+            onComplete: () => { duck.destroy(); this.duckNpcSprite = null },
+          })
+        }
+        this.duckBubble?.destroy(); this.duckBubble = null
+      })
+      return
+    }
+  }
+
   private buildCeleryManNPCs() {
     const dadSaved = !!(this.registry.get('dadSaved'))
     const momSaved = !!(this.registry.get('momSaved'))
@@ -1181,6 +1420,105 @@ export class GameScene extends Phaser.Scene {
         'saving Mom & Dad first!',
       ], null)
     }
+  }
+
+  private buildLevel4NPCs() {
+    // Instructional duck at spawn point
+    const sx = 356, sy = 1628
+    this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(sx, sy - 90, [
+      'Welcome to Level 4!',
+      'Find 3 ducks and',
+      'solve their math',
+      'problems for boosts!',
+    ], null)
+
+    // Arithmetic ducks — one per problem, spread across the level
+    const positions = [
+      { x: 1500, y: 1628 },
+      { x: 5848, y: 1212 },
+      { x: 8668, y:  860 },
+    ]
+    const rewardLabels = ['Speed Boost', 'Power Boost', 'Invincible!']
+    for (let i = 0; i < 3; i++) {
+      if (this.registry.get(`level4Problem${i + 1}Solved`)) continue
+      const { x, y } = positions[i]
+      const duck = this.add.sprite(x, y, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5).setFlipX(true)
+      const bubble = this.showNpcBubble(x, y - 90, [`Reward: ${rewardLabels[i]}`, 'Solve my math', 'problem!'], null)
+      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, solved: false })
+    }
+  }
+
+  private buildLevel5NPCs() {
+    // Instructional duck at spawn
+    const sx = 467, sy = 348
+    this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(sx, sy - 90, [
+      'Welcome to Level 5!',
+      '5-letter words here.',
+      'Find letter bugs,',
+      'then talk to my',
+      'friend by the exit!',
+    ], null)
+
+    // Puzzle duck near right exit (x≈3115)
+    if (this.registry.get('level5WordSolved')) return
+    const dx = 3065, dy = 1724
+    this.duckNpcSprite = this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.6).setFlipX(true) as unknown as Phaser.GameObjects.Image
+    this.duckBubble = this.showNpcBubble(dx, dy - 90, ['Solve my word', 'puzzle to pass!'], null)
+
+    // Invisible barrier between duck and exit — removed when puzzle is solved
+    const H = this.cfg.worldHeight ?? 1856
+    const barrier = this.add.rectangle(3095, H / 2, 32, H, 0x000000, 0)
+    this.physics.add.existing(barrier, true)
+    this.platforms.add(barrier as unknown as Phaser.Physics.Arcade.Image)
+    this.exitBarrier = barrier
+  }
+
+  private buildLevel6NPCs() {
+    // Instructional duck at spawn (bottom-left x=204, y=1724)
+    const sx = 304, sy = 1724
+    this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(sx, sy - 90, [
+      'Welcome to Level 6!',
+      '5-letter words here.',
+      'Find letter bugs,',
+      'then talk to my',
+      'friend by the exit!',
+    ], null)
+
+    // Puzzle duck near right exit (x≈3106)
+    if (this.registry.get('level6WordSolved')) return
+    const dx = 3056, dy = 1724
+    this.duckNpcSprite = this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.6).setFlipX(true) as unknown as Phaser.GameObjects.Image
+    this.duckBubble = this.showNpcBubble(dx, dy - 90, ['Solve my word', 'puzzle to pass!'], null)
+
+    // Invisible barrier between duck and exit — removed when puzzle is solved
+    const H = this.cfg.worldHeight ?? 1856
+    const barrier = this.add.rectangle(3082, H / 2, 32, H, 0x000000, 0)
+    this.physics.add.existing(barrier, true)
+    this.platforms.add(barrier as unknown as Phaser.Physics.Arcade.Image)
+    this.exitBarrier = barrier
+  }
+
+  private buildLevel7NPCs() {
+    // Instructional duck at spawn (bottom-left x=204, y=1724)
+    const sx = 304, sy = 1724
+    this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(sx, sy - 90, [
+      'Welcome to Level 7!',
+      '5-letter words here.',
+      'Find letter bugs,',
+      'then talk to my',
+      'friend by the boss',
+      'door to enter!',
+    ], null)
+
+    // Puzzle duck near boss portal (bossPortal at x=1630, y=604)
+    if (this.registry.get('level7WordSolved')) return
+    const dx = 1530, dy = 610
+    this.duckNpcSprite = this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.6).setFlipX(true) as unknown as Phaser.GameObjects.Image
+    this.duckBubble = this.showNpcBubble(dx, dy - 90, ['Solve my word', 'puzzle to enter', 'the Dragon Lair!'], null)
   }
 
   // ── parent freed logic ───────────────────────────────────────────────────────
@@ -1283,6 +1621,41 @@ export class GameScene extends Phaser.Scene {
       if (this.cfg.letterBugPool) {
         const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
         this.registry.set('level3BugPositions', positions)
+      }
+    }
+    if (runIndex === 6 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
+      const genAdd  = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
+      const genSub  = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
+      const genMul  = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
+      this.registry.set('level4Problem1', genAdd())
+      this.registry.set('level4Problem2', genSub())
+      this.registry.set('level4Problem3', genMul())
+    }
+    if (runIndex === 7 && !this.cfg.isBossRoom && !this.registry.get('level5Word')) {
+      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
+      this.registry.set('level5Word', word)
+      this.registry.set('level5BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      if (this.cfg.letterBugPool) {
+        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+        this.registry.set('level5BugPositions', positions)
+      }
+    }
+    if (runIndex === 8 && !this.cfg.isBossRoom && !this.registry.get('level6Word')) {
+      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
+      this.registry.set('level6Word', word)
+      this.registry.set('level6BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      if (this.cfg.letterBugPool) {
+        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+        this.registry.set('level6BugPositions', positions)
+      }
+    }
+    if (runIndex === 9 && !this.cfg.isBossRoom && !this.registry.get('level7Word')) {
+      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
+      this.registry.set('level7Word', word)
+      this.registry.set('level7BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      if (this.cfg.letterBugPool) {
+        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+        this.registry.set('level7BugPositions', positions)
       }
     }
   }
@@ -1612,6 +1985,12 @@ export class GameScene extends Phaser.Scene {
       if (this.cfg.backPortal) {
         const gateKey = this.cfg.backPortalKey ?? this.cfg.bossDefeatedKey
         if (!!(gateKey && this.registry.get(gateKey))) this.buildBackPortal()
+      }
+
+      // Hidden portal — re-exposed on re-entry if the boss was already defeated
+      if (this.cfg.hiddenPortal) {
+        const gateKey = this.cfg.bossDefeatedKey
+        if (!!(gateKey && this.registry.get(gateKey))) this.buildHiddenPortal()
       }
 
       // Star-burst orb — boss room instant-kill collectible
@@ -2299,8 +2678,8 @@ export class GameScene extends Phaser.Scene {
 
     const { width, height } = this.scale
     const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? 'BUG'
-    // Level 3 uses its own isolated letter pool so earlier-level letters don't pollute the tiles
-    const collectedKey = keyLevel === 3 ? 'level3CollectedLetters' : 'collectedLetters'
+    // Levels 3+ use isolated per-level letter pools so cross-level letters don't pollute tiles
+    const collectedKey = keyLevel >= 3 ? `level${keyLevel}CollectedLetters` : 'collectedLetters'
     const collected: string[] = this.registry.get(collectedKey) ?? []
     const D    = 150
     const TILE = 52
@@ -2436,7 +2815,7 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(300, () => {
             closeMenu()
             onCorrect()
-            this.showPopup(jarX, jarY, 'MAGIC WORD!', '#ffe066')
+            this.showPopup(jarX, jarY, 'GREAT JOB!', '#ffe066')
             SoundManager.collectAbility()
           })
         } else {
@@ -2481,7 +2860,167 @@ export class GameScene extends Phaser.Scene {
     this.wordMenuNav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
   }
 
-    private spawnKeyDrop(x: number, y: number, keyLevel: number) {
+  private makeDistractors(correct: number, count: number): number[] {
+    const used = new Set<number>([correct])
+    const dists: number[] = []
+    let offset = 1
+    while (dists.length < count && offset < 30) {
+      if (correct - offset > 0 && !used.has(correct - offset)) {
+        dists.push(correct - offset); used.add(correct - offset)
+      }
+      if (dists.length < count && !used.has(correct + offset)) {
+        dists.push(correct + offset); used.add(correct + offset)
+      }
+      offset++
+    }
+    return dists
+  }
+
+  private showArithmeticMenu(
+    duckX: number, duckY: number,
+    question: string, correct: number,
+    reward: 'speed' | 'attack-boost' | 'invulnerability',
+    onCorrect: () => void,
+  ) {
+    if (this.wordMenuObjects.length > 0) return
+
+    const { width, height } = this.scale
+    const D    = 150
+    const TILE = 64
+    const GAP  = 16
+
+    const distractors = this.makeDistractors(correct, 3)
+    const choices = Phaser.Utils.Array.Shuffle([correct, ...distractors]) as number[]
+    const correctIdx = choices.indexOf(correct)
+
+    this.gm.pause()
+    this.physics.world.isPaused = true
+
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.78)
+      .setScrollFactor(0).setDepth(D).setInteractive()
+
+    const title = this.add.text(width / 2, height * 0.20, 'MATH CHALLENGE!', {
+      fontSize: '24px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const qText = this.add.text(width / 2, height * 0.37, `${question} = ?`, {
+      fontSize: '36px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const rewardLabel = reward === 'speed' ? 'SPEED BOOST' : reward === 'attack-boost' ? 'POWER BOOST' : 'INVINCIBLE'
+    const rewardTxt = this.add.text(width / 2, height * 0.50, `Reward: ${rewardLabel}!`, {
+      fontSize: '10px', fontFamily: FONT, color: '#aaffcc',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    const N = 4
+    const tileRowW   = N * TILE + (N - 1) * GAP
+    const tileStartX = width / 2 - tileRowW / 2 + TILE / 2
+    const tileY = height * 0.65
+
+    const tileBoxes: Phaser.GameObjects.Rectangle[] = []
+    const tileTxts:  Phaser.GameObjects.Text[]      = []
+    for (let i = 0; i < N; i++) {
+      const tx  = tileStartX + i * (TILE + GAP)
+      const box = this.add.rectangle(tx, tileY, TILE, TILE, 0x223344)
+        .setStrokeStyle(2, 0x556677).setScrollFactor(0).setDepth(D).setInteractive({ useHandCursor: true })
+      const txt = this.add.text(tx, tileY, `${choices[i]}`, {
+        fontSize: '20px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1)
+      tileBoxes.push(box); tileTxts.push(txt)
+    }
+
+    const hint = this.add.text(width / 2, height * 0.78, '← → to move   ENTER / tap to select', {
+      fontSize: '9px', fontFamily: FONT, color: '#556677',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
+
+    this.wordMenuObjects = [overlay, title, qText, rewardTxt, hint, ...tileBoxes, ...tileTxts]
+
+    let focusIdx = 0
+    let shaking  = false
+    const keyListeners: { key: string; fn: () => void }[] = []
+
+    const applyStyle = (i: number) => {
+      if (i === focusIdx) {
+        tileBoxes[i].setFillStyle(0x2a3d55).setStrokeStyle(3, 0xffe066)
+        tileTxts[i].setColor('#ffe066')
+      } else {
+        tileBoxes[i].setFillStyle(0x223344).setStrokeStyle(2, 0x556677)
+        tileTxts[i].setColor('#ffffff')
+      }
+    }
+
+    const moveFocus = (idx: number) => {
+      if (shaking) return
+      const prev = focusIdx; focusIdx = idx
+      applyStyle(prev); applyStyle(idx)
+    }
+
+    const closeMenu = () => {
+      this.wordMenuObjects.forEach(o => { if (o.active) (o as Phaser.GameObjects.Image).destroy() })
+      this.wordMenuObjects = []
+      this.wordMenuNav = null
+      keyListeners.forEach(({ key, fn }) => this.input.keyboard?.off(key, fn))
+      this.gm.resume()
+      this.physics.world.isPaused = false
+    }
+
+    const shake = () => {
+      if (shaking) return
+      shaking = true
+      this.tweens.add({
+        targets: [...tileBoxes, ...tileTxts],
+        x: '+=7', duration: 35, yoyo: true, repeat: 4, ease: 'Linear',
+        onComplete: () => { shaking = false; applyStyle(focusIdx) },
+      })
+    }
+
+    const pick = (i: number) => {
+      if (shaking) return
+      if (i === correctIdx) {
+        tileBoxes[i].setFillStyle(0x1a3a1a).setStrokeStyle(2, 0x44cc44)
+        tileTxts[i].setColor('#44cc44')
+        this.time.delayedCall(400, () => {
+          closeMenu()
+          onCorrect()
+          this.showPopup(duckX, duckY, 'CORRECT!', '#ffe066')
+          SoundManager.collectAbility()
+        })
+      } else {
+        tileBoxes[i].setFillStyle(0x440000).setStrokeStyle(2, 0xff4444)
+        tileTxts[i].setColor('#ff4444')
+        shake()
+        this.time.delayedCall(350, () => { if (!shaking) applyStyle(i) })
+      }
+    }
+
+    tileBoxes.forEach((box, i) => {
+      box.on('pointerover', () => { if (!shaking) moveFocus(i) })
+      box.on('pointerdown', () => pick(i))
+    })
+
+    moveFocus(0)
+
+    const onLeft  = () => { if (!shaking) moveFocus((focusIdx - 1 + N) % N) }
+    const onRight = () => { if (!shaking) moveFocus((focusIdx + 1) % N) }
+    const onEnter = () => pick(focusIdx)
+
+    keyListeners.push(
+      { key: 'keydown-LEFT',  fn: onLeft  },
+      { key: 'keydown-RIGHT', fn: onRight },
+      { key: 'keydown-UP',    fn: onLeft  },
+      { key: 'keydown-DOWN',  fn: onRight },
+      { key: 'keydown-A',     fn: onLeft  },
+      { key: 'keydown-D',     fn: onRight },
+      { key: 'keydown-W',     fn: onLeft  },
+      { key: 'keydown-S',     fn: onRight },
+      { key: 'keydown-ENTER', fn: onEnter },
+      { key: 'keydown-SPACE', fn: onEnter },
+    )
+    keyListeners.forEach(({ key, fn }) => this.input.keyboard?.on(key, fn))
+    this.wordMenuNav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
+  }
+
+  private spawnKeyDrop(x: number, y: number, keyLevel: number) {
     const dropY = y - 16
     const glow = this.add.circle(x, dropY, 22, 0xffffff, 0.55).setDepth(7)
     this.tweens.add({ targets: glow, alpha: 0.2, scaleX: 1.5, scaleY: 1.5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
@@ -2702,13 +3241,25 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
-    // Mom & dad's granted powers expire at the outdoor level — strip boosts but keep transforms
-    if (this.cfg.isOutdoor) {
+    // Boosts from level 3 do not carry into level 4; boosts earned in level 4+ always carry forward
+    const currentRunIdx: number = this.registry.get('runIndex') ?? 0
+    if (currentRunIdx === 6) {
       type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
       const prev = this.registry.get('persistedBoosts') as PB[] | null
       this.registry.set('persistedBoosts', prev
         ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false }))
         : null)
+    }
+
+    // Re-apply arithmetic duck rewards earned in level 4 — a separate registry backup
+    // ensures they survive even if persistedBoosts was stale when exitRoom fired.
+    if (currentRunIdx >= 7) {
+      this.players.forEach(p => {
+        const saved = this.registry.get(`level4DuckBoost_${p.playerId}`) as { speed: boolean; strength: boolean; invuln: boolean } | null
+        if (saved?.speed)    p.applySpeedBoost(true)
+        if (saved?.strength) p.applyStrengthBoost(true)
+        if (saved?.invuln && p.charKey !== 'carter') p.applyInvulnerability(true)
+      })
     }
 
     type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
@@ -3763,6 +4314,25 @@ export class GameScene extends Phaser.Scene {
     gfx.lineBetween(eyeX, eyeY, tx, ty)
     this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
 
+    // Red explosion at impact point
+    const flash = this.add.circle(tx, ty, 12, 0xff2200, 1).setDepth(16)
+    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.8, scaleY: 2.8, duration: 200, ease: 'Power2', onComplete: () => flash.destroy() })
+    const sparkColors = [0xff0000, 0xff4400, 0xff8800, 0xffcc44]
+    for (let i = 0; i < 7; i++) {
+      const angle = (i / 7) * Math.PI * 2
+      const speed = 55 + Math.random() * 75
+      const spark = this.add.rectangle(tx, ty, 5, 5, sparkColors[i % sparkColors.length], 1).setDepth(16)
+      this.tweens.add({
+        targets: spark,
+        x: tx + Math.cos(angle) * speed,
+        y: ty + Math.sin(angle) * speed,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: 230 + Math.random() * 130,
+        ease: 'Quad.Out',
+        onComplete: () => spark.destroy(),
+      })
+    }
+
     if (target === this.boss) {
       if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
           (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
@@ -4156,8 +4726,9 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(90).setAlpha(0)
     this.tweens.add({ targets: bg, alpha: 1, duration: 250 })
 
+    let vImg: Phaser.GameObjects.Image | null = null
     if (this.textures.exists('cutscene-victory')) {
-      const vImg = this.add.image(cx, cy, 'cutscene-victory')
+      vImg = this.add.image(cx, cy, 'cutscene-victory')
         .setScrollFactor(0).setDepth(91).setAlpha(0)
       const scale = Math.min(width / vImg.width, height / vImg.height)
       vImg.setScale(scale)
@@ -4190,6 +4761,7 @@ export class GameScene extends Phaser.Scene {
     const btnContinue = makeBtn(cx - 130, 'CONTINUE\nEXPLORING', () => {
       cleanup()
       ;[bg, title, sub, btnContinue, btnMenu, cursor].forEach(e => e.destroy())
+      vImg?.destroy()
     })
 
     const btnMenu = makeBtn(cx + 130, 'MAIN MENU', () => {
@@ -4681,8 +5253,18 @@ export class GameScene extends Phaser.Scene {
         const ep2 = this.cfg.exitPositions ?? {}
         if (p.x < 0   && exits.includes('left')   && Math.abs(p.y - (ep2.left   ?? 640))   < DOOR_H / 2) { this.exitRoom('left');   return }
         const rightTrigX = this.cfg.rightExitX ?? W
+        const runIdx0 = this.registry.get('runIndex') ?? 0
+        const rightPuzzleBlocked = (runIdx0 === 7 && !this.registry.get('level5WordSolved'))
+                                || (runIdx0 === 8 && !this.registry.get('level6WordSolved'))
         if (p.x > rightTrigX && exits.includes('right') &&
             (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)) {
+          if (rightPuzzleBlocked) {
+            if (this.time.now - this._rightExitPopupLastTime > 2000) {
+              this._rightExitPopupLastTime = this.time.now
+              this.showPopup(p.x, p.y - 40, 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+            }
+            return
+          }
           this.exitRoom('right'); return
         }
         if (p.y < 0   && exits.includes('top')    && Math.abs(p.x - (ep2.top    ?? W / 2)) < DOOR_W / 2) { this.exitRoom('top');    return }
@@ -4705,7 +5287,8 @@ export class GameScene extends Phaser.Scene {
         this.portalLabel?.setVisible(nearPortal)
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         const runIdx: number = this.registry.get('runIndex') ?? 0
-        const portalBlocked = runIdx === 4 && !this.registry.get('level3WordSolved')
+        const portalBlocked = (runIdx === 4 && !this.registry.get('level3WordSolved'))
+                           || (runIdx === 9 && !this.registry.get('level7WordSolved'))
         if (nearPortal && portalBlocked) {
           if (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))
             this.showPopup(p.x, p.y - 40, 'SOLVE THE DUCK PUZZLE!', '#ff8888')
@@ -4791,6 +5374,10 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     this.updateConradTrucks()
     this.updateCarterForceField()
     this.updateLevel3Duck()
+    this.updateLevel4Ducks()
+    this.updateLevel5Duck()
+    this.updateLevel6Duck()
+    this.updateLevel7Duck()
     this.updateCocoShadow()
     this.updateCallumNumbers()
     this.checkCeleryBoost()
