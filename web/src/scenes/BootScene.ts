@@ -125,7 +125,6 @@ const ANIM_FRAMES = {
 // New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
 const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number; walkFrames?: number[] }[] = [
   { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
-  { key: 'sheet-enemy-duck',     file: 'enemies/duck.png',          fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
   { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
   { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
@@ -173,11 +172,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image('item-key-jar',   'assets/items/key_jar.png')
     this.load.image('item-key',       'assets/items/key.png')
     this.load.spritesheet('letter-bugs', 'assets/items/letter_bugs.png', { frameWidth: 64, frameHeight: 64 })
-    this.load.spritesheet('npc-mom', 'assets/npcs/mom.png', { frameWidth: 64, frameHeight: 64 })
-    this.load.spritesheet('npc-dad', 'assets/npcs/dad.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('npc-mom',  'assets/npcs/mom.png',  { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('npc-dad',  'assets/npcs/dad.png',  { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('npc-duck', 'assets/npcs/duck.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-eric-transformer', 'assets/players/eric_transformer.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-army-truck',       'assets/players/army_truck.png',       { frameWidth: 64, frameHeight: 64 })
-    this.load.spritesheet('sheet-shadow',           'assets/players/shadow.png',           { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-scarlett-transformer',   'assets/players/scarlett_transform.png',     { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-coco-transform',         'assets/players/coco_transform.png',         { frameWidth: 64, frameHeight: 64 })
@@ -242,7 +241,7 @@ export class BootScene extends Phaser.Scene {
     this.setupEnemyAnimations()
     this.setupEricTransformerAnimations()
     this.setupConradTruckAnimations()
-    this.setupCocoShadowAnimations()
+    this.setupNpcAnimations()
     this.setupCocoShadowFormAnimations()
     this.setupScarlettTRexAnimations()
     this.setupScarlettTransformAnimations()
@@ -281,34 +280,10 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  private setupCocoShadowAnimations() {
-    const key = 'sheet-shadow'
-    if (!this.textures.exists(key)) return
-    this.anims.create({
-      key: 'shadow-walk',
-      frames: this.anims.generateFrameNumbers(key, { frames: [14, 15, 0, 1, 2] }),
-      frameRate: 8, repeat: -1,
-    })
-    this.anims.create({
-      key: 'shadow-idle',
-      frames: this.anims.generateFrameNumbers(key, { frames: [5] }),
-      frameRate: 1, repeat: -1,
-    })
-    this.anims.create({
-      key: 'shadow-spin-up',
-      frames: this.anims.generateFrameNumbers(key, { start: 6, end: 8 }),
-      frameRate: 12, repeat: 0,
-    })
-    this.anims.create({
-      key: 'shadow-charge',
-      frames: this.anims.generateFrameNumbers(key, { start: 8, end: 11 }),
-      frameRate: 12, repeat: -1,
-    })
-    this.anims.create({
-      key: 'shadow-spin-down',
-      frames: this.anims.generateFrameNumbers(key, { start: 12, end: 15 }),
-      frameRate: 10, repeat: 0,
-    })
+  private setupNpcAnimations() {
+    if (!this.textures.exists('npc-duck')) return
+    this.anims.create({ key: 'npc-duck-idle', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 6, repeat: -1 })
+    this.anims.create({ key: 'npc-duck-walk', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 8, repeat: -1 })
   }
 
   private setupCocoShadowFormAnimations() {

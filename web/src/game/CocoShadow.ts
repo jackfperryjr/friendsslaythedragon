@@ -12,7 +12,7 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
   private chargeTimer: Phaser.Time.TimerEvent | null = null
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'sheet-shadow', 6)
+    super(scene, x, y, 'sheet-coco-spindash', 9)
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
@@ -25,8 +25,8 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
     body.checkCollision.right = true
 
     // Summon: play spin-up animation, then settle into idle follow mode
-    this.play('shadow-spin-up')
-    this.once('animationcomplete-shadow-spin-up', () => {
+    this.play('coco-spindash-windup')
+    this.once('animationcomplete-coco-spindash-windup', () => {
       if (this.active && this.shadowState === 'summoning') this.enterIdle()
     })
   }
@@ -46,11 +46,11 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
   beginSpinUp(target: Phaser.GameObjects.Sprite) {
     if (this.shadowState !== 'idle') return
     this.shadowState = 'spinning-up'
-    this.play('shadow-spin-up')
-    this.once('animationcomplete-shadow-spin-up', () => {
+    this.play('coco-spindash-windup')
+    this.once('animationcomplete-coco-spindash-windup', () => {
       if (!this.active || this.shadowState !== 'spinning-up') return
       this.shadowState = 'charging'
-      this.play('shadow-charge', true)
+      this.play('coco-spindash-dash', true)
       this.emit('startCharge', this, target)
 
       // Safety timeout — spin down if we never hit
@@ -71,8 +71,8 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
     this.chargeTimer = null
     this.shadowState = 'releasing'
     ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
-    this.play('shadow-spin-up')
-    this.once('animationcomplete-shadow-spin-up', () => {
+    this.play('coco-spindash-windup')
+    this.once('animationcomplete-coco-spindash-windup', () => {
       if (!this.active) return
       this.emit('shadowReleased', this)
       this.scene.tweens.add({
@@ -87,8 +87,8 @@ export class CocoShadow extends Phaser.Physics.Arcade.Sprite {
     this.chargeTimer = null
     this.shadowState = 'spinning-down'
     ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
-    this.play('shadow-spin-down')
-    this.once('animationcomplete-shadow-spin-down', () => {
+    this.play('coco-spindash-exit')
+    this.once('animationcomplete-coco-spindash-exit', () => {
       if (this.active && this.shadowState === 'spinning-down') this.enterIdle()
     })
   }

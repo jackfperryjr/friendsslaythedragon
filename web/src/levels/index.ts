@@ -330,8 +330,8 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   destructibles: [],
   furnitureSpawns: [
     // Bottom floor
-    { type: 'table',    x:  488, y: 3369 },
-    { type: 'bookcase', x:  544, y: 3356 },
+    { type: 'table',    x:  481, y: 3580 },
+    { type: 'bookcase', x:  537, y: 3567 },
     { type: 'bookcase', x: 1229, y: 3324 },
     { type: 'table',    x: 3003, y: 3337 },
     { type: 'table',    x: 3345, y: 3017 },
@@ -361,7 +361,7 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   ],
   crates: [],
   items: [
-    { x:  281, y: 2748, type: 'key-jar', keyLevel: 2 },
+    { x: 1878, y:  732, type: 'key-jar', keyLevel: 2 },
     { x: 2056, y: 3500, type: 'letter-bug', keyLevel: 2 },
     { x: 5404, y: 2012, type: 'letter-bug', keyLevel: 2 },
     { x: 3666, y: 1116, type: 'letter-bug', keyLevel: 2 },
@@ -447,7 +447,20 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
     { x: 2784, y: 2928, count: 5 },
   ],
   crates: [],
-  items: [],
+  items: [
+    // Anchored near known-accessible spots: chest at (680,686), right-entry platform at (5300,608)
+    { x:  680, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 1600, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 2784, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 4000, y: 640, type: 'letter-bug', keyLevel: 3 },
+    { x: 5200, y: 608, type: 'letter-bug', keyLevel: 3 },
+  ],
+  letterBugPool: [
+    { x:  680, y: 640 }, { x: 1600, y: 640 }, { x: 2784, y: 640 },
+    { x: 4000, y: 640 }, { x: 5200, y: 608 }, { x: 5300, y: 608 },
+    { x:  800, y: 640 }, { x: 2000, y: 640 }, { x: 3500, y: 640 },
+    { x: 4500, y: 640 },
+  ],
 }
 
 // ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
@@ -752,9 +765,10 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
 export const RUN_LENGTH = 6
 export const TOTAL_LETTER_BUGS = 5
 
-// Phonics word lists — 3-letter for level 1, 4-letter for level 2
+// Phonics word lists — 3-letter L1, 4-letter L2, 5-letter L3
 export const WORD_LIST_L1 = ['BUG', 'CAT', 'DOG', 'HAT', 'MAP', 'SUN', 'FLY', 'ANT', 'BEE', 'RUN', 'JAM', 'BAT', 'HOP', 'PIG', 'WEB']
 export const WORD_LIST_L2 = ['FROG', 'FISH', 'LEAF', 'TREE', 'DUCK', 'JUMP', 'SLUG', 'WING', 'STAR', 'WORM', 'FLEA', 'TOAD', 'MOTH', 'GNAT', 'WASP']
+export const WORD_LIST_L3 = ['SNAKE', 'MOUSE', 'HORSE', 'CRANE', 'TIGER', 'GOOSE', 'WHALE', 'EAGLE', 'SHARK', 'ZEBRA', 'SHEEP', 'OTTER', 'RAVEN', 'SQUID', 'BISON']
 
 export function generateRun(): RoomConfig[] {
   return [
