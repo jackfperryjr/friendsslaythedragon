@@ -12,8 +12,6 @@ import { CharacterSelectScene } from './scenes/CharacterSelectScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 1280,
-  height: 720,
   backgroundColor: '#080818',
   parent: 'game-container',
   physics: {
@@ -21,7 +19,7 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: { gravity: { x: 0, y: 800 }, debug: false },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   input: {

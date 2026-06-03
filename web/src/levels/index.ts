@@ -28,6 +28,7 @@ export interface FurnitureSpawn {
   ability?: AbilityType
   scanFromY?: number  // world Y to start scanning downward; only used when y is absent
   pizzaDrop?: boolean // chest drops a pizza when destroyed
+  itemDrop?: ItemType // chest drops a specific item when destroyed
 }
 
 export interface SpikeFloorSpawn {
@@ -92,6 +93,8 @@ export interface RoomConfig {
   exitGlowLeft?: boolean         // purple glow at left entrance
   isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
   isDark?: boolean               // apply a dark purple overlay (levels 5-7+)
+  isRed?: boolean                // apply a red overlay
+  isOrange?: boolean             // apply an orange overlay
   worldMapLayers?: {
     background?: string   // decorative bg layer (depth -2, no collision)
     solid?: string[]      // collision layers (depth 1)
@@ -120,12 +123,14 @@ const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',       
 const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',        tilesetName: 'spritefusion' } as const
 const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
 const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_ONE  = { key: 'world-map-level-one', tileKey: 'tileset-level-one', tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_TWO  = { key: 'world-map-level-two', tileKey: 'tileset-level-two', tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
 const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
-// Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
+// Map: maps/intro_one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
 
 const WORLD_ROOM: RoomConfig = {
   name: 'The Castle',
@@ -249,11 +254,11 @@ const WORLD_ROOM: RoomConfig = {
 }
 
 // ─── Boss Room (tilemap-based, accessed via portal in main world) ──────────────
-// Map: tileset/boss/map.json — 50×50 tiles at 32px = 1600×1600 world pixels
+// Map: maps/boss/map.json — 50×50 tiles at 32px = 1600×1600 world pixels
 // Floor surface at y=1312 (row 41), mid-platform at y=832
 
 const BOSS_TILEMAP_ROOM: RoomConfig = {
-  name: 'The Dark Sanctum',
+  name: 'Skeleton King\'s Lair',
   ...SANCTUM,
   worldWidth:  50 * 32,   // 1600
   worldHeight: 50 * 32,   // 1600
@@ -264,7 +269,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   bossDefeatedKey: 'skeletonKingDefeated',
   backPortal: { x: 562, y: 1280 },
   bossHp: 15,
-  bossName: 'KING SKELETON',
+  bossName: 'SKELETON KING',
   bossKey: 'sheet-king-skeleton',
   bossFlying: false,
   bossSpawnX: 1331,
@@ -289,7 +294,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
 }
 
 // ─── Level 2: Main World ──────────────────────────────────────────────────────
-// Map: tileset/two/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
+// Map: maps/intro_two/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
 // Player enters from the bottom-left (coming through dragon boss room right exit).
 // Boss portal is in the top-left area — leads to Zombie King's Lair.
 
@@ -377,7 +382,7 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
 }
 
 // ─── Level 2: Boss Room (Zombie King's Lair) ──────────────────────────────────
-// Map: tileset/boss_two/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
+// Map: maps/boss_intro_two/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const LEVEL2_BOSS_ROOM: RoomConfig = {
   name: "Zombie King's Lair",
@@ -393,7 +398,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   leftExitForward: true,
   entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 400, y: 1948 } },
   bossHp: 20,
-  bossName: 'KING ZOMBIE',
+  bossName: 'ZOMBIE KING',
   bossKey: 'sheet-king-zombie',
   bossFlying: false,
   bossSpawnX: 1187,
@@ -408,7 +413,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
 }
 
 // ─── Level 3: Main World ──────────────────────────────────────────────────────
-// Map: tileset/three/map.json — 174×183 tiles at 32px = 5568×5856 world pixels
+// Map: maps/intro_three/map.json — 174×183 tiles at 32px = 5568×5856 world pixels
 
 const LEVEL3_WORLD_ROOM: RoomConfig = {
   name: 'The Abyss',
@@ -464,7 +469,7 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
 }
 
 // ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
-// Map: tileset/boss_three/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
+// Map: maps/boss_intro_three/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const BOSS_THREE_ROOM: RoomConfig = {
   name: "Celery Man's Lair",
@@ -489,7 +494,6 @@ const BOSS_THREE_ROOM: RoomConfig = {
   bossSpawnY: 1800,
   bossScale: 5,
   starOrb: { x: 1219, y: 512 },
-  comingSoonGlowRight: true,
   platforms: [
     { x: 16, y: 640, w: 32, h: 130 },   // seal left exit
   ],
@@ -500,8 +504,87 @@ const BOSS_THREE_ROOM: RoomConfig = {
   items: [],
 }
 
+// ─── Level One: The Red Halls ─────────────────────────────────────────────────
+// Map: maps/level_one/map.json — 407×156 tiles at 32px = 13024×4992 world pixels
+
+const LEVEL_ONE_ROOM: RoomConfig = {
+  name: 'The Red Halls',
+  ...HALL,
+  worldWidth:  407 * 32,  // 13024
+  worldHeight: 156 * 32,  // 4992
+  worldMap: MAP_LEVEL_ONE,
+  worldMapLayers: {
+    background: 'Background walls',
+    solid:      ['Walls', 'Platforms large', 'Platform small'],
+    overlay:    ['Banner', 'Windows'],
+  },
+  isRed: true,
+  exits: ['left', 'right'],
+  defaultSpawn:  { x: 174, y: 348 },
+  entrySpawns:   { right: { x: 5200, y: 3036 } },
+  bossPortal:    { x: 12541, y: 572 },
+  rightExitX:    5313,
+  platforms:     [],
+  enemies:       [],
+  destructibles: [],
+  furnitureSpawns: [
+    { type: 'chest',    x:  349,  y: 956, itemDrop: 'invulnerability' },
+    { type: 'bookcase', x:  900,  scanFromY: 200 },
+    { type: 'table',    x: 2100,  scanFromY: 200 },
+    { type: 'chest',    x: 3600,  scanFromY: 200 },
+    { type: 'bookcase', x: 4900,  scanFromY: 200 },
+    { type: 'table',    x: 6300,  scanFromY: 200 },
+    { type: 'chest',    x: 7900,  scanFromY: 200, pizzaDrop: true },
+    { type: 'bookcase', x: 9100,  scanFromY: 200 },
+    { type: 'table',    x: 10600, scanFromY: 200 },
+    { type: 'chest',    x: 11900, scanFromY: 200 },
+  ],
+  crates:        [],
+  items: [
+    { x:  1200, y:  380, type: 'letter-bug', keyLevel: 4 },
+    { x:  2900, y:  560, type: 'letter-bug', keyLevel: 4 },
+    { x:  5300, y:  380, type: 'letter-bug', keyLevel: 4 },
+    { x:  7700, y:  560, type: 'letter-bug', keyLevel: 4 },
+    { x: 10600, y:  380, type: 'letter-bug', keyLevel: 4 },
+    { x:  5589, y: 2492, type: 'key-jar',    keyLevel: 4 },
+  ],
+  letterBugPool: [
+    { x:  1200, y:  380 }, { x:  2900, y:  560 }, { x:  5300, y:  380 },
+    { x:  7700, y:  560 }, { x: 10600, y:  380 },
+    { x:  1800, y:  540 }, { x:  3600, y:  380 }, { x:  6400, y:  540 },
+    { x:  9000, y:  380 }, { x: 11800, y:  540 },
+  ],
+}
+
+// ─── Level Two ────────────────────────────────────────────────────────────────
+// Map: maps/level_two/map.json — 169×263 tiles at 32px = 5408×8416 world pixels
+
+const LEVEL_TWO_ROOM: RoomConfig = {
+  name: 'The Orange Halls',
+  ...HALL,
+  worldWidth:  169 * 32,  // 5408
+  worldHeight: 263 * 32,  // 8416
+  worldMap: MAP_LEVEL_TWO,
+  worldMapLayers: {
+    background: 'Background walls',
+    solid:      ['Walls', 'Platforms large', 'Platform small'],
+    overlay:    ['Banner', 'Windows'],
+  },
+  isOrange: true,
+  exits: ['left', 'right'],
+  defaultSpawn:    { x: 200, y: 400 },
+  entrySpawns:     { left: { x: 200, y: 400 } },
+  platforms:       [],
+  enemies:         [],
+  destructibles:   [],
+  furnitureSpawns: [],
+  crates:          [],
+  items:           [],
+  letterBugPool:   [],
+}
+
 // ─── Level 4: Outside World ───────────────────────────────────────────────────
-// Map: tileset/four/map.json — 284×55 tiles at 32px = 9088×1760 world pixels
+// Map: maps/final_one/map.json — 284×55 tiles at 32px = 9088×1760 world pixels
 // Layers: 'Sky' = decorative background, 'Walls' = player collision surfaces.
 
 const LEVEL4_WORLD_ROOM: RoomConfig = {
@@ -698,7 +781,7 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
 }
 
 // ─── Final Boss Room ──────────────────────────────────────────────────────────
-// Map: tileset/boss_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+// Map: maps/boss_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
 
 const BOSS_FINAL_ROOM: RoomConfig = {
   name: "The Dragon's Lair",
@@ -734,7 +817,7 @@ const BOSS_FINAL_ROOM: RoomConfig = {
 }
 
 // ─── Final Final Boss Room ────────────────────────────────────────────────────
-// Map: tileset/boss_final_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
+// Map: maps/boss_final_final/map.json — 40×50 tiles at 32px = 1280×1600 world pixels
 // Secret room accessible only via the hidden portal in the Dragon's Lair.
 
 const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
@@ -780,18 +863,20 @@ export const WORD_LIST_L3 = ['SNAKE', 'MOUSE', 'HORSE', 'CRANE', 'TIGER', 'GOOSE
 
 export function generateRun(): RoomConfig[] {
   return [
-    WORLD_ROOM,           // 0 — Level 1
-    BOSS_TILEMAP_ROOM,    // 1 — Boss 1: Skeleton King
-    LEVEL2_WORLD_ROOM,    // 2 — Level 2
-    LEVEL2_BOSS_ROOM,     // 3 — Boss 2: Zombie King
-    LEVEL3_WORLD_ROOM,    // 4 — Level 3
-    BOSS_THREE_ROOM,      // 5 — Boss 3: Celery Man
-    LEVEL4_WORLD_ROOM,    // 6 — Level 4 (outside)
-    LEVEL5_WORLD_ROOM,    // 7 — Level 5
-    LEVEL6_WORLD_ROOM,    // 8 — Level 6
-    LEVEL7_WORLD_ROOM,    // 9 — Level 7 (boss portal TBD)
-    BOSS_FINAL_ROOM,       // 10 — Final Boss: The Dragon
-    BOSS_FINAL_FINAL_ROOM, // 11 — Secret: The True Dragon (hidden portal only)
+    WORLD_ROOM,            //  0 — Level 1
+    BOSS_TILEMAP_ROOM,     //  1 — Boss 1: Skeleton King
+    LEVEL2_WORLD_ROOM,     //  2 — Level 2
+    LEVEL2_BOSS_ROOM,      //  3 — Boss 2: Zombie King
+    LEVEL3_WORLD_ROOM,     //  4 — Level 3
+    BOSS_THREE_ROOM,       //  5 — Boss 3: Celery Man
+    LEVEL_ONE_ROOM,        //  6 — Level One: The Red Halls
+    LEVEL_TWO_ROOM,        //  7 — Level Two: The Orange Halls
+    LEVEL4_WORLD_ROOM,     //  8 — Level 4 (outside)
+    LEVEL5_WORLD_ROOM,     //  9 — Level 5
+    LEVEL6_WORLD_ROOM,     // 10 — Level 6
+    LEVEL7_WORLD_ROOM,     // 11 — Level 7 (boss portal TBD)
+    BOSS_FINAL_ROOM,       // 12 — Final Boss: The Dragon
+    BOSS_FINAL_FINAL_ROOM, // 13 — Secret: The True Dragon (hidden portal only)
   ]
 }
 
