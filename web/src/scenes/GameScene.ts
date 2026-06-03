@@ -2780,28 +2780,18 @@ export class GameScene extends Phaser.Scene {
 
     if (type === 'bookcase') {
       fw = 40; fh = 80
-      v(this.add.rectangle(x, y,      40, 80, 0x3d2208, 0.96).setDepth(3))
-      v(this.add.rectangle(x - 18, y,  4, 80, 0x1e1004, 0.95).setDepth(4))
-      v(this.add.rectangle(x + 18, y,  4, 80, 0x1e1004, 0.95).setDepth(4))
-      v(this.add.rectangle(x, y - 40, 40,  4, 0x221208, 0.95).setDepth(4))
-      v(this.add.rectangle(x, y,      40,  4, 0x2a1608, 0.90).setDepth(4))
-      v(this.add.rectangle(x, y + 40, 40,  4, 0x221208, 0.95).setDepth(4))
-      const bk = [0x8b0000, 0x003388, 0x225522, 0x884400, 0x553388, 0x887700]
-      for (let b = 0; b < 4; b++) v(this.add.rectangle(x - 13 + b * 9, y - 20, 7, 22, bk[b % bk.length],       0.90).setDepth(4))
-      for (let b = 0; b < 4; b++) v(this.add.rectangle(x - 13 + b * 9, y + 20, 7, 22, bk[(b + 2) % bk.length], 0.90).setDepth(4))
+      const bsFrame = Phaser.Math.RND.pick([0, 8, 14])
+      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(40, 80))
 
     } else if (type === 'table') {
       fw = 96; fh = 36
-      v(this.add.rectangle(x,       y - 13, 96,  9, 0x5c3317, 0.98).setDepth(3))
-      v(this.add.rectangle(x,       y - 10, 90,  4, 0x6e3e1e, 0.45).setDepth(4))
-      v(this.add.rectangle(x,       y - 6,  86,  7, 0x3d1f0a, 0.88).setDepth(3))
-      v(this.add.rectangle(x - 42,  y + 8,   6, 30, 0x3d1f0a, 0.95).setDepth(3))
-      v(this.add.rectangle(x + 42,  y + 8,   6, 30, 0x3d1f0a, 0.95).setDepth(3))
-      v(this.add.rectangle(x,       y + 18, 78,  4, 0x2a1208, 0.65).setDepth(3))
-      const cx = x + Phaser.Math.Between(-25, 25)
-      v(this.add.rectangle(cx, y - 24,  5, 12, 0xf0e8d8, 0.92).setDepth(4))
-      const fl = v(this.add.rectangle(cx, y - 32, 5, 8, 0xffdd88, 0.88).setDepth(5))
+      const tableFrame = Phaser.Math.RND.pick([0, 1, 14])
+      const cx = tableFrame === 0 ? x + 30 : x
+      const cy = y - 22
+      v(this.add.rectangle(cx, cy + 4,  5, 12, 0xf0e8d8, 0.92).setDepth(2))
+      const fl = v(this.add.rectangle(cx, cy - 4, 5, 8, 0xffdd88, 0.88).setDepth(2))
       this.tweens.add({ targets: fl, scaleX: 0.55, scaleY: 0.72, duration: 85 + Phaser.Math.Between(0, 50), yoyo: true, repeat: -1 })
+      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(96, 36))
 
     } else { // chest
       fw = 48; fh = 40

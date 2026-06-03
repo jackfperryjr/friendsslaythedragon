@@ -173,6 +173,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('item-key',       'assets/items/key.png')
     this.load.spritesheet('letter-bugs', 'assets/items/letter_bugs.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('chests',      'assets/items/chests.png',      { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('bookshelf',   'assets/items/bookshelf.png',   { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('table',       'assets/items/table.png',       { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('mimic',       'assets/enemies/mimic.png',     { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-mom',  'assets/npcs/mom.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-dad',  'assets/npcs/dad.png',  { frameWidth: 64, frameHeight: 64 })

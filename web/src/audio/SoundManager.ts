@@ -539,6 +539,7 @@ export const SoundManager = {
   },
 
   stopSpeech() {
+    _currentUtterance = null
     window.speechSynthesis?.cancel()
   },
 
