@@ -866,6 +866,25 @@ export class GameScene extends Phaser.Scene {
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 }
+    const placedBugPositions: Array<{ x: number; y: number }> = []
+    const BUG_MIN_DIST = 80
+    const CLEAR = 22
+    const clearOf = (x: number, y: number) =>
+      !isInsideWall(x - CLEAR, y) && !isInsideWall(x + CLEAR, y) &&
+      !isInsideWall(x, y - CLEAR) && !isInsideWall(x, y + CLEAR)
+    const goodPos = (x: number, y: number) => !isInsideWall(x, y) && clearOf(x, y)
+    // Scan downward from approxY to place bug just above the first solid floor tile.
+    // Returns null in non-tilemap rooms (goodPos fallback handles those).
+    const snapBugToFloor = (wx: number, approxY: number): { x: number; y: number } | null => {
+      if (this.tilemapLayers.length === 0) return null
+      let sy = approxY
+      for (let i = 0; i < 60 && this.isInsideWall(wx, sy); i++) sy -= 8  // escape upward if in wall
+      if (this.isInsideWall(wx, sy)) return null
+      for (let y = sy; y < sy + 800; y += 4) {
+        if (this.isInsideWall(wx, y)) return { x: wx, y: y - 24 }
+      }
+      return null
+    }
     for (const item of this.cfg.items) {
       // Letter-bugs bypass this check — their position is resolved below with pool/fallback logic
       if (item.type !== 'letter-bug' && isInsideWall(item.x, item.y)) continue
@@ -891,27 +910,42 @@ export class GameScene extends Phaser.Scene {
         letterBugIdx[kl] = idx + 1
         const storedPositions: Array<{x: number, y: number}> | null = this.registry.get(`level${kl}BugPositions`)
         const poolPos = storedPositions?.[idx]
-        const CLEAR = 22  // minimum px clearance from any wall surface
-        const clearOf = (x: number, y: number) =>
-          !isInsideWall(x - CLEAR, y) && !isInsideWall(x + CLEAR, y) &&
-          !isInsideWall(x, y - CLEAR) && !isInsideWall(x, y + CLEAR)
-        const goodPos = (x: number, y: number) => !isInsideWall(x, y) && clearOf(x, y)
-        // Prefer pool position; fall back to config position if too close to or inside a wall
-        let bugX = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.x : item.x
-        let bugY = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.y : item.y
-        // If the resolved position is inside a wall or too close to one, scan nearby offsets
-        if (!goodPos(bugX, bugY)) {
-          const escapeOffsets: [number, number][] = [
-            [0, -32], [0, -64], [0, -96], [0, -128],
-            [-32, -32], [32, -32], [-32, 0], [32, 0],
-            [-64, 0], [64, 0], [0, 32], [0, 64],
-          ]
-          for (const [ox, oy] of escapeOffsets) {
-            if (goodPos(bugX + ox, bugY + oy)) {
-              bugX += ox; bugY += oy; break
+        // Primary: snap to walkable floor surface (tilemap rooms)
+        const snapped = snapBugToFloor(item.x, item.y)
+        let bugX: number
+        let bugY: number
+        if (snapped) {
+          bugX = snapped.x
+          bugY = snapped.y
+        } else {
+          // Non-tilemap room: prefer pool position, fall back to config, then escape from walls
+          bugX = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.x : item.x
+          bugY = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.y : item.y
+          if (!goodPos(bugX, bugY)) {
+            const escapeOffsets: [number, number][] = [
+              [0, -32], [0, -64], [0, -96], [0, -128],
+              [-32, -32], [32, -32], [-32, 0], [32, 0],
+              [-64, 0], [64, 0], [0, 32], [0, 64],
+            ]
+            for (const [ox, oy] of escapeOffsets) {
+              if (goodPos(bugX + ox, bugY + oy)) { bugX += ox; bugY += oy; break }
             }
           }
         }
+        // Spread bugs that landed too close to an already-placed bug
+        if (placedBugPositions.some(p => Math.hypot(bugX - p.x, bugY - p.y) < BUG_MIN_DIST)) {
+          const spreadOffsets: [number, number][] = [
+            [-96, 0], [96, 0], [0, -96], [0, 96],
+            [-128, 0], [128, 0], [-64, -64], [64, -64], [-64, 64], [64, 64],
+          ]
+          for (const [ox, oy] of spreadOffsets) {
+            const nx = bugX + ox, ny = bugY + oy
+            if (goodPos(nx, ny) && !placedBugPositions.some(p => Math.hypot(nx - p.x, ny - p.y) < BUG_MIN_DIST)) {
+              bugX = nx; bugY = ny; break
+            }
+          }
+        }
+        placedBugPositions.push({ x: bugX, y: bugY })
         item.x = bugX; item.y = bugY
         const bugLetters: string[] = this.registry.get(`level${kl}BugLetters`) ?? []
         item.letter = bugLetters[idx] ?? '?'
@@ -1003,6 +1037,20 @@ export class GameScene extends Phaser.Scene {
       SoundManager.collectAbility()
     }
     this.addScore(500)
+  }
+
+  private clearLetterBugs() {
+    const remaining: Phaser.GameObjects.GameObject[] = []
+    for (const s of this.collectibleSprites) {
+      if ((s as Phaser.GameObjects.Container).getData?.('item')?.type === 'letter-bug') {
+        s.destroy()
+      } else {
+        remaining.push(s)
+      }
+    }
+    this.collectibleSprites = remaining as (Phaser.GameObjects.Image | Phaser.GameObjects.Container)[]
+    this.registry.set('collectedLetters', [])
+    this.ui?.updateLetters([])
   }
 
   private triggerMysteryEffect(player: Player) {
@@ -2781,7 +2829,7 @@ export class GameScene extends Phaser.Scene {
     if (type === 'bookcase') {
       fw = 40; fh = 80
       const bsFrame = Phaser.Math.RND.pick([0, 8, 14])
-      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(40, 80))
+      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(50, 100))
 
     } else if (type === 'table') {
       fw = 96; fh = 36
@@ -2791,7 +2839,7 @@ export class GameScene extends Phaser.Scene {
       v(this.add.rectangle(cx, cy + 4,  5, 12, 0xf0e8d8, 0.92).setDepth(2))
       const fl = v(this.add.rectangle(cx, cy - 4, 5, 8, 0xffdd88, 0.88).setDepth(2))
       this.tweens.add({ targets: fl, scaleX: 0.55, scaleY: 0.72, duration: 85 + Phaser.Math.Between(0, 50), yoyo: true, repeat: -1 })
-      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(96, 36))
+      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(120, 48))
 
     } else { // chest
       fw = 48; fh = 40
@@ -3042,6 +3090,7 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(300, () => {
             closeMenu()
             onCorrect()
+            this.clearLetterBugs()
             this.showPopup(jarX, jarY, 'GREAT JOB!', '#ffe066')
             SoundManager.collectAbility()
           })
@@ -3313,20 +3362,32 @@ export class GameScene extends Phaser.Scene {
     const W = this.cfg.worldWidth
     const FLOOR_Y = 672
     const pool = [AbilityType.None, AbilityType.None, AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
+    const FURN_MIN_DIST = 110
+    const placedX: number[] = []
+    const pickX = (anchor: number, jitter: number): number => {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const x = Math.round(anchor + Phaser.Math.Between(-jitter, jitter))
+        if (placedX.every(px => Math.abs(x - px) >= FURN_MIN_DIST)) return x
+      }
+      return Math.round(anchor)
+    }
 
     const numBookcases = Math.max(1, Math.floor(W / 600))
     for (let i = 0; i < numBookcases; i++) {
-      const bx = Math.round(200 + i * ((W - 300) / numBookcases) + Phaser.Math.Between(-30, 30))
+      const bx = pickX(200 + i * ((W - 300) / numBookcases), 30)
+      placedX.push(bx)
       this.spawnFurniturePiece('bookcase', bx, FLOOR_Y - 40, AbilityType.None, 2)
     }
     const numTables = Math.max(1, Math.floor(W / 500))
     for (let i = 0; i < numTables; i++) {
-      const tx = Math.round(280 + i * ((W - 400) / numTables) + Phaser.Math.Between(-20, 20))
+      const tx = pickX(280 + i * ((W - 400) / numTables), 20)
+      placedX.push(tx)
       this.spawnFurniturePiece('table', tx, FLOOR_Y - 18, AbilityType.None, 1)
     }
     const numChests = Math.max(1, Math.floor(W / 700))
     for (let i = 0; i < numChests; i++) {
-      const cx = Math.round(350 + i * ((W - 500) / numChests) + Phaser.Math.Between(-40, 40))
+      const cx = pickX(350 + i * ((W - 500) / numChests), 40)
+      placedX.push(cx)
       this.spawnFurniturePiece('chest', cx, FLOOR_Y - 20, Phaser.Math.RND.pick(pool) as AbilityType, 3)
     }
   }
