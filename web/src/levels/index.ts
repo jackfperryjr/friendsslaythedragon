@@ -92,6 +92,7 @@ export interface RoomConfig {
   comingSoonGlowRight?: boolean  // purple glow at right exit
   exitGlowLeft?: boolean         // purple glow at left entrance
   isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
+  isSunset?: boolean             // warm sunset sky instead of the default nighttime outdoor sky
   isDark?: boolean               // apply a dark purple overlay (levels 5-7+)
   isRed?: boolean                // apply a red overlay
   isOrange?: boolean             // apply an orange overlay
@@ -110,6 +111,7 @@ export interface RoomConfig {
   crates: CrateSpawn[]
   items: ItemSpawn[]
   letterBugPool?: Array<{x: number, y: number}>
+  mimicSpawns?:   Array<{x: number, y: number}>
 }
 
 const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
@@ -124,7 +126,8 @@ const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',       
 const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
 const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
 const MAP_LEVEL_ONE  = { key: 'world-map-level-one', tileKey: 'tileset-level-one', tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_TWO  = { key: 'world-map-level-two', tileKey: 'tileset-level-two', tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_TWO   = { key: 'world-map-level-two',   tileKey: 'tileset-level-two',   tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_THREE = { key: 'world-map-level-three', tileKey: 'tileset-level-three', tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
 const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
@@ -251,6 +254,9 @@ const WORLD_ROOM: RoomConfig = {
     { x: 3300, y:  640 }, { x: 2807, y: 1664 }, { x: 3685, y: 1152 },
     { x: 5065, y: 2209 },
   ],
+  mimicSpawns: [
+    { x: 1700, y: 2450 }, { x: 3400, y: 2530 }, { x: 4600, y: 3100 },
+  ],
 }
 
 // ─── Boss Room (tilemap-based, accessed via portal in main world) ──────────────
@@ -290,6 +296,9 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   items: [
     { x: 400,  y: 1260, type: 'pizza' },
     { x: 1300, y: 1260, type: 'pizza' },
+  ],
+  mimicSpawns: [
+    { x: 900, y: 1285 },
   ],
 }
 
@@ -379,6 +388,9 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { x: 3676, y:  508 }, { x: 4988, y:  860 }, { x: 3503, y: 3500 },
     { x: 1521, y: 3324 },
   ],
+  mimicSpawns: [
+    { x: 1800, y: 3500 }, { x: 4200, y: 3500 },
+  ],
 }
 
 // ─── Level 2: Boss Room (Zombie King's Lair) ──────────────────────────────────
@@ -410,6 +422,9 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
+  mimicSpawns: [
+    { x: 1100, y: 1925 }, { x: 2100, y: 1925 },
+  ],
 }
 
 // ─── Level 3: Main World ──────────────────────────────────────────────────────
@@ -466,6 +481,9 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
     { x:  800, y: 640 }, { x: 2000, y: 640 }, { x: 3500, y: 640 },
     { x: 4500, y: 640 },
   ],
+  mimicSpawns: [
+    { x: 1400, y: 686 }, { x: 3200, y: 672 },
+  ],
 }
 
 // ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
@@ -502,6 +520,9 @@ const BOSS_THREE_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
+  mimicSpawns: [
+    { x: 1000, y: 1925 }, { x: 2200, y: 1925 },
+  ],
 }
 
 // ─── Level One: The Red Halls ─────────────────────────────────────────────────
@@ -554,6 +575,9 @@ const LEVEL_ONE_ROOM: RoomConfig = {
     { x:  1800, y:  540 }, { x:  3600, y:  380 }, { x:  6400, y:  540 },
     { x:  9000, y:  380 }, { x: 11800, y:  540 },
   ],
+  mimicSpawns: [
+    { x: 2000, y: 340 }, { x: 5800, y: 340 }, { x: 10000, y: 340 },
+  ],
 }
 
 // ─── Level Two ────────────────────────────────────────────────────────────────
@@ -572,15 +596,67 @@ const LEVEL_TWO_ROOM: RoomConfig = {
   },
   isOrange: true,
   exits: ['left', 'right'],
-  defaultSpawn:    { x: 200, y: 400 },
-  entrySpawns:     { left: { x: 200, y: 400 } },
+  defaultSpawn:    { x: 128, y: 3004 },
+  entrySpawns:     { left: { x: 128, y: 3004 } },
+  bossPortal:      { x: 1079, y: 5372 },
   platforms:       [],
   enemies:         [],
   destructibles:   [],
   furnitureSpawns: [],
   crates:          [],
+  items: [
+    { x:  500, y: 3200, type: 'letter-bug', keyLevel: 8 },
+    { x: 1400, y: 4300, type: 'letter-bug', keyLevel: 8 },
+    { x: 2800, y: 5100, type: 'letter-bug', keyLevel: 8 },
+    { x: 3900, y: 4600, type: 'letter-bug', keyLevel: 8 },
+    { x: 4700, y: 3800, type: 'letter-bug', keyLevel: 8 },
+    { x: 2304, y: 6460, type: 'key-jar',    keyLevel: 8 },
+  ],
+  letterBugPool: [
+    { x:  500, y: 3200 }, { x:  850, y: 3600 }, { x: 1400, y: 4300 },
+    { x: 1900, y: 4800 }, { x: 2800, y: 5100 }, { x: 3200, y: 5500 },
+    { x: 3900, y: 4600 }, { x: 4300, y: 4100 }, { x: 4700, y: 3800 },
+    { x: 2100, y: 3500 }, { x: 3000, y: 6000 }, { x: 4100, y: 5700 },
+  ],
+  mimicSpawns: [
+    { x:  800, y: 3100 }, { x: 2600, y: 4500 }, { x: 4200, y: 5100 },
+  ],
+}
+
+// ─── Level Three: The Sunset Fields ──────────────────────────────────────────
+// Map: maps/level_three/map.json — 409×69 tiles at 32px = 13088×2208 world pixels
+
+const LEVEL_THREE_ROOM: RoomConfig = {
+  name: 'The Sunset Fields',
+  tileset: 'tile-castle',
+  bgFar:   'bg-stars',
+  bgMid:   'bg-stars',
+  worldWidth:  409 * 32,  // 13088
+  worldHeight:  69 * 32,  // 2208
+  worldMap: MAP_LEVEL_THREE,
+  worldMapLayers: {
+    background: 'Background walls',
+    solid:      ['Walls', 'Platforms large', 'Platform small'],
+    overlay:    ['Banner', 'Windows'],
+  },
+  isOutdoor: true,
+  isSunset:  true,
+  musicKey: 'music-level4',
+  defaultSpawn: { x: 192, y: 2012 },
+  entrySpawns:  { left: { x: 192, y: 2012 } },
+  exits: [],
+  bossPortal: { x: 10641, y: 2012 },
+  platforms: [
+    { x: 13076, y: 1104, w: 24, h: 2208 },  // invisible right barrier
+  ],
+  enemies:         [],
+  destructibles:   [],
+  furnitureSpawns: [],
+  crates:          [],
   items:           [],
-  letterBugPool:   [],
+  mimicSpawns: [
+    { x: 2000, y: 2012 }, { x: 6000, y: 2012 }, { x: 9200, y: 2012 },
+  ],
 }
 
 // ─── Level 4: Outside World ───────────────────────────────────────────────────
@@ -614,6 +690,9 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
     { x: 1600, y: 1640, type: 'pizza' },
     { x: 4800, y: 1050, type: 'pizza' },
     { x: 7400, y: 1380, type: 'pizza' },
+  ],
+  mimicSpawns: [
+    { x: 2800, y: 1628 }, { x: 5500, y: 1044 }, { x: 7800, y: 1374 },
   ],
 }
 
@@ -674,6 +753,9 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
     { x: 1100, y: 420 }, { x: 1600, y: 800 }, { x: 2100, y: 420 },
     { x: 2800, y: 800 },
   ],
+  mimicSpawns: [
+    { x: 800, y: 420 }, { x: 1800, y: 800 },
+  ],
 }
 
 const LEVEL6_WORLD_ROOM: RoomConfig = {
@@ -725,6 +807,9 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
     { x: 1800, y:  800 }, { x: 2500, y: 1600 }, { x:  700, y:  900 },
     { x: 1100, y: 1600 }, { x: 1600, y:  800 }, { x: 2100, y: 1600 },
     { x: 2800, y:  800 },
+  ],
+  mimicSpawns: [
+    { x: 800, y: 1600 }, { x: 1800, y: 800 },
   ],
 }
 
@@ -778,6 +863,9 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
     { x:  850, y: 1500 }, { x: 1100, y:  900 }, { x: 1350, y: 1500 },
     { x:  600, y: 1400 },
   ],
+  mimicSpawns: [
+    { x: 800, y: 1500 }, { x: 1800, y: 800 },
+  ],
 }
 
 // ─── Final Boss Room ──────────────────────────────────────────────────────────
@@ -814,6 +902,9 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
+  mimicSpawns: [
+    { x: 550, y: 1355 }, { x: 950, y: 1355 },
+  ],
 }
 
 // ─── Final Final Boss Room ────────────────────────────────────────────────────
@@ -851,6 +942,9 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
+  mimicSpawns: [
+    { x: 450, y: 1375 },
+  ],
 }
 
 export const RUN_LENGTH = 6
@@ -869,14 +963,12 @@ export function generateRun(): RoomConfig[] {
     LEVEL2_BOSS_ROOM,      //  3 — Boss 2: Zombie King
     LEVEL3_WORLD_ROOM,     //  4 — Level 3
     BOSS_THREE_ROOM,       //  5 — Boss 3: Celery Man
-    LEVEL_ONE_ROOM,        //  6 — Level One: The Red Halls
-    LEVEL_TWO_ROOM,        //  7 — Level Two: The Orange Halls
-    LEVEL4_WORLD_ROOM,     //  8 — Level 4 (outside)
-    LEVEL5_WORLD_ROOM,     //  9 — Level 5
-    LEVEL6_WORLD_ROOM,     // 10 — Level 6
-    LEVEL7_WORLD_ROOM,     // 11 — Level 7 (boss portal TBD)
-    BOSS_FINAL_ROOM,       // 12 — Final Boss: The Dragon
-    BOSS_FINAL_FINAL_ROOM, // 13 — Secret: The True Dragon (hidden portal only)
+    LEVEL4_WORLD_ROOM,     //  6 — Outside (nighttime)
+    LEVEL5_WORLD_ROOM,     //  7 — Level 5
+    LEVEL6_WORLD_ROOM,     //  8 — Level 6
+    LEVEL7_WORLD_ROOM,     //  9 — Level 7 (boss portal TBD)
+    BOSS_FINAL_ROOM,       // 10 — Final Boss: The Dragon
+    BOSS_FINAL_FINAL_ROOM, // 11 — Secret: The True Dragon (hidden portal only)
   ]
 }
 
@@ -884,6 +976,8 @@ export function generateRun(): RoomConfig[] {
 export const BOSS_ROOM: RoomConfig = BOSS_TILEMAP_ROOM
 export const TUTORIAL_ROOM: RoomConfig = { ...WORLD_ROOM, isTutorial: true }
 export const THRONE_ROOM:  RoomConfig  = { ...WORLD_ROOM, isThrone: true  }
+// New levels — not yet in the main run; exported for future connection
+export { LEVEL_ONE_ROOM, LEVEL_TWO_ROOM, LEVEL_THREE_ROOM }
 export const WORLD_NAMES = ['THE CASTLE', 'THE DARK SANCTUM']
 export const ROOMS_PER_RUN = 2
 export const LEVEL_POOLS: RoomConfig[][] = [[WORLD_ROOM]]
