@@ -219,10 +219,12 @@ const VOICE_PRIORITY = [
 ]
 
 let _cachedVoice: SpeechSynthesisVoice | null | undefined = undefined  // undefined = not yet resolved
+let _currentUtterance: SpeechSynthesisUtterance | null = null  // prevents GC on iOS Safari
 
 function _pickVoice(): SpeechSynthesisVoice | null {
   if (_cachedVoice !== undefined) return _cachedVoice
   const voices = window.speechSynthesis?.getVoices() ?? []
+  if (voices.length === 0) return null  // voices not loaded yet — don't cache
   for (const name of VOICE_PRIORITY) {
     const v = voices.find(v => v.name === name)
     if (v) { _cachedVoice = v; return v }
@@ -519,14 +521,21 @@ export const SoundManager = {
 
   speakWord(word: string) {
     if (!window.speechSynthesis) return
-    window.speechSynthesis.cancel()
     const w   = word.toLowerCase()
     const msg = new SpeechSynthesisUtterance(`The word is ${w}. Can you spell ${w}?`)
     msg.rate   = 0.88
     msg.pitch  = 1.15
     msg.volume = 1
     msg.voice  = _pickVoice()
-    window.speechSynthesis.speak(msg)
+    _currentUtterance = msg  // prevent GC on iOS Safari
+    // iOS Safari: cancel() + immediate speak() fails silently; a tick between them is required.
+    // resume() unsticks synthesis if iOS paused it in the background.
+    window.speechSynthesis.cancel()
+    setTimeout(() => {
+      if (!window.speechSynthesis) return
+      window.speechSynthesis.resume()
+      window.speechSynthesis.speak(msg)
+    }, 50)
   },
 
   stopSpeech() {

@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
 
-type Screen = 'main' | 'controls'
+type Screen = 'main' | 'controls' | 'devMenu'
 
 const _wsUrl: string = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WS_URL ?? 'ws://localhost:3001'
 const SERVER_URL = _wsUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://')
@@ -18,6 +18,7 @@ interface MenuItem { text: Phaser.GameObjects.Text; action: () => void }
 export class MenuScene extends Phaser.Scene {
   private mainGroup!: Phaser.GameObjects.Container
   private controlsGroup!: Phaser.GameObjects.Container
+  private devMenuGroup!: Phaser.GameObjects.Container
 
   private gpCursor!: Phaser.GameObjects.Text
   private padStatus!: Phaser.GameObjects.Text
@@ -44,6 +45,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.buildMain()
     this.buildControls()
+    this.buildDevMenu()
     this.showScreen('main')
     this.setupGamepad()
     this.setupControllerStatus()
@@ -138,15 +140,30 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '9px', fontFamily: FONT, color: CLR_DIM,
     }).setOrigin(0.5)
 
-    items.push(btn1P, btn24P, btnCt, tip)
-    this.mainGroup = this.add.container(0, 0, items)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    const gpItems: MenuItem[] = [
+      { text: btn1P,  action: startGame  },
+      { text: btn24P, action: goLobby    },
+      { text: btnCt,  action: goControls },
+    ]
 
-    // Store for gamepad navigation (captured as closures above)
-    this.mainGroup.setData('gpItems', [
-      { text: btn1P,  action: startGame   },
-      { text: btn24P, action: goLobby     },
-      { text: btnCt,  action: goControls  },
-    ])
+    items.push(btn1P, btn24P, btnCt, tip)
+
+    if (isLocalhost) {
+      const goDevMenu = () => this.showScreen('devMenu')
+      const btnDev = this.add.text(width / 2, height * 0.95, 'DEV', {
+        fontSize: '10px', fontFamily: FONT, color: '#ff4444',
+        stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+      btnDev.on('pointerover', () => btnDev.setColor('#ffaaaa'))
+      btnDev.on('pointerout',  () => btnDev.setColor('#ff4444'))
+      btnDev.on('pointerdown', goDevMenu)
+      items.push(btnDev)
+      gpItems.push({ text: btnDev, action: goDevMenu })
+    }
+
+    this.mainGroup = this.add.container(0, 0, items)
+    this.mainGroup.setData('gpItems', gpItems)
   }
 
   private buildControls() {
@@ -218,7 +235,8 @@ export class MenuScene extends Phaser.Scene {
   private showScreen(s: Screen) {
     this.mainGroup.setVisible(s === 'main')
     this.controlsGroup.setVisible(s === 'controls')
-    const group = s === 'main' ? this.mainGroup : this.controlsGroup
+    this.devMenuGroup.setVisible(s === 'devMenu')
+    const group = s === 'main' ? this.mainGroup : s === 'controls' ? this.controlsGroup : this.devMenuGroup
     this.setActiveItems(group.getData('gpItems') as MenuItem[])
   }
 
@@ -237,8 +255,60 @@ export class MenuScene extends Phaser.Scene {
     SoundManager.unlock()
     const rooms = generateRun()
     this.registry.set('runRooms',    rooms)
-    this.registry.set('runIndex',    6)       // LEVEL4_WORLD_ROOM is index 6
+    this.registry.set('runIndex',    8)       // LEVEL4_WORLD_ROOM is index 8
     this.registry.set('entryDir',    null)    // null → no left exit added, spawns at safe center
+    this.registry.set('playerCount', 1)
+    this.registry.set('lives',       3)
+    this.registry.set('score',       0)
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
+  }
+
+  private buildDevMenu() {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    const panel = this.add.rectangle(cx, cy, 600, 490, 0x000000, 0.92)
+      .setStrokeStyle(1, 0xaa0000, 0.9)
+
+    const header = this.add.text(cx, cy - 222, 'DEV: SELECT LEVEL', {
+      fontSize: '14px', fontFamily: FONT, color: '#ff4444',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5)
+
+    const goBack = () => this.showScreen('main')
+    const back = this.menuButton(cx, cy + 218, '< BACK')
+    back.on('pointerdown', goBack)
+
+    const rooms = generateRun()
+    const gpItems: MenuItem[] = []
+    const rowItems: Phaser.GameObjects.GameObject[] = []
+    let y = cy - 192
+
+    rooms.forEach((room, i) => {
+      const prefix = String(i).padStart(2, '0')
+      const label  = `[${prefix}]  ${room.name}`
+      const btn = this.add.text(cx, y, label, {
+        fontSize: '10px', fontFamily: FONT, color: CLR_SELECT,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+      btn.on('pointerover', () => btn.setColor(CLR_TITLE))
+      btn.on('pointerout',  () => btn.setColor(CLR_SELECT))
+      btn.on('pointerdown', () => this.startAtLevel(i))
+      gpItems.push({ text: btn, action: () => this.startAtLevel(i) })
+      rowItems.push(btn)
+      y += 26
+    })
+
+    this.devMenuGroup = this.add.container(0, 0, [panel, header, ...rowItems, back])
+    this.devMenuGroup.setData('gpItems', [...gpItems, { text: back, action: goBack }])
+  }
+
+  private startAtLevel(index: number) {
+    SoundManager.unlock()
+    const rooms = generateRun()
+    this.registry.set('runRooms',    rooms)
+    this.registry.set('runIndex',    index)
+    this.registry.set('entryDir',    null)
     this.registry.set('playerCount', 1)
     this.registry.set('lives',       3)
     this.registry.set('score',       0)

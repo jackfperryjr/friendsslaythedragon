@@ -4,13 +4,14 @@ import { Enemy } from '../game/Enemy'
 import { Boss } from '../game/Boss'
 import { Destructible } from '../game/Destructible'
 import { CarterDuplicate } from '../game/CarterDuplicate'
+import { Mimic } from '../game/Mimic'
 import { ConradArmyTruck } from '../game/ConradArmyTruck'
 import { GameManager } from '../game/GameManager'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
 import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3 } from '../levels'
 import { AbilityType, DamageType } from '../types'
-import { ItemSpawn } from '../levels'
+import { ItemSpawn, ItemType } from '../levels'
 import { NetworkManager, RemoteInput } from '../network/NetworkManager'
 import { SoundManager } from '../audio/SoundManager'
 
@@ -56,6 +57,7 @@ export class GameScene extends Phaser.Scene {
 
   private players: Player[] = []
   private enemies: Enemy[] = []
+  private mimics:  Mimic[]  = []
   private boss: Boss | null = null
   private enemyGroup!: Phaser.Physics.Arcade.Group
   private destructibles: Destructible[] = []
@@ -131,7 +133,7 @@ export class GameScene extends Phaser.Scene {
   constructor() { super({ key: 'GameScene' }) }
 
   init() {
-    this.players = []; this.enemies = []; this.destructibles = []
+    this.players = []; this.enemies = []; this.mimics = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
     this.dadHintBubble = null; this.momHintBubble = null
@@ -287,53 +289,88 @@ export class GameScene extends Phaser.Scene {
 
     if (this.cfg.worldMap && !this.cfg.isOutdoor) return  // tilemap layers serve as background
 
-    // Outdoor rooms: twilight/after-sunset atmospheric gradient + stars + clouds
+    // Outdoor rooms: atmospheric sky, clouds, and optional stars
     if (this.cfg.isOutdoor) {
       // depth -1: sits above the tilemap 'Sky' background layer (-2) but below solid tiles (1)
       const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
-      g.fillGradientStyle(
-        0x06020f, 0x06020f,   // top: near-black deep night
-        0x1a0838, 0x1a0838,   // bottom: deep purple dusk horizon
-        1.0, 1.0,
-        1.0, 1.0
-      )
-      g.fillRect(0, 0, width, height)
 
-      // Stars — two layers that twinkle at different rates (depth -1, drawn after gradient)
-      const makeStarLayer = (seed: number, count: number) => {
-        const sg = this.add.graphics().setScrollFactor(0).setDepth(-1)
-        let n = seed
-        const rng = () => { n = (n * 1664525 + 1013904223) & 0x7fffffff; return n / 0x7fffffff }
-        for (let i = 0; i < count; i++) {
-          const sx  = rng() * width
-          const sy  = rng() * height * 0.70
-          const big = rng() > 0.88
-          const r   = rng()
-          const col = r > 0.65 ? 0xdde0ff : r > 0.35 ? 0xffffc8 : 0xffffff
-          sg.fillStyle(col, big ? 0.95 : 0.80)
-          if (big) sg.fillRect(sx - 0.5, sy - 0.5, 2, 2)
-          else     sg.fillRect(sx, sy, 1, 1)
+      if (this.cfg.isSunset) {
+        // ── Sunset sky: deep blue at top fading to warm orange at the horizon ──
+        g.fillGradientStyle(0x1a3a6e, 0x1a3a6e, 0x6b8cc0, 0x6b8cc0, 1, 1, 1, 1)
+        g.fillRect(0, 0, width, height * 0.55)
+        g.fillGradientStyle(0x6b8cc0, 0x6b8cc0, 0xff9040, 0xff9040, 1, 1, 1, 1)
+        g.fillRect(0, height * 0.55, width, height * 0.45)
+
+        // Sun — soft layered glow near the right horizon
+        const sunX = width * 0.82, sunY = height * 0.80
+        const sunG = this.add.graphics().setScrollFactor(0).setDepth(-1)
+        sunG.fillStyle(0xffe080, 0.10); sunG.fillCircle(sunX, sunY, 100)
+        sunG.fillStyle(0xffcc40, 0.18); sunG.fillCircle(sunX, sunY, 72)
+        sunG.fillStyle(0xffb020, 0.32); sunG.fillCircle(sunX, sunY, 50)
+        sunG.fillStyle(0xff9000, 0.55); sunG.fillCircle(sunX, sunY, 30)
+        sunG.fillStyle(0xffb840, 0.92); sunG.fillCircle(sunX, sunY, 16)
+        this.tweens.add({ targets: sunG, alpha: 0.82, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+
+        // Horizon glow beneath the sun
+        const hG = this.add.graphics().setScrollFactor(0).setDepth(-1)
+        hG.fillStyle(0xff6820, 0.22); hG.fillEllipse(sunX, sunY, 680, 130)
+        hG.fillStyle(0xffaa30, 0.12); hG.fillEllipse(sunX, sunY, 460, 80)
+
+        // Warm sunset clouds
+        const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
+        const drawSunCloud = (clx: number, cly: number, wr: number, hr: number, col: number, a: number) => {
+          cloudG.fillStyle(col, a)
+          cloudG.fillEllipse(clx, cly, wr, hr)
+          cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+          cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
         }
-        return sg
-      }
-      const stars1 = makeStarLayer(42,  75)
-      const stars2 = makeStarLayer(137, 55)
-      this.tweens.add({ targets: stars1, alpha: 0.20, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
-      this.tweens.add({ targets: stars2, alpha: 0.15, duration: 1100, yoyo: true, repeat: -1, delay: 700, ease: 'Sine.InOut' })
+        drawSunCloud(width * 0.10, height * 0.40, 220, 70, 0xff9060, 0.50)
+        drawSunCloud(width * 0.35, height * 0.24, 180, 58, 0xffb880, 0.45)
+        drawSunCloud(width * 0.60, height * 0.44, 240, 76, 0xff8040, 0.50)
+        drawSunCloud(width * 0.83, height * 0.30, 160, 52, 0xffcc80, 0.42)
+        this.tweens.add({ targets: cloudG, alpha: 0.72, duration: 5000, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
 
-      // Clouds — barely-visible lavender, just slightly lighter than the sky
-      const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
-      const drawCloud = (clx: number, cly: number, wr: number, hr: number) => {
-        cloudG.fillStyle(0x4a3272, 0.38)
-        cloudG.fillEllipse(clx, cly, wr, hr)
-        cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
-        cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+      } else {
+        // ── Night sky: near-black top, deep purple horizon ────────────────────
+        g.fillGradientStyle(0x06020f, 0x06020f, 0x1a0838, 0x1a0838, 1, 1, 1, 1)
+        g.fillRect(0, 0, width, height)
+
+        // Stars — two layers that twinkle at different rates
+        const makeStarLayer = (seed: number, count: number) => {
+          const sg = this.add.graphics().setScrollFactor(0).setDepth(-1)
+          let n = seed
+          const rng = () => { n = (n * 1664525 + 1013904223) & 0x7fffffff; return n / 0x7fffffff }
+          for (let i = 0; i < count; i++) {
+            const sx  = rng() * width
+            const sy  = rng() * height * 0.70
+            const big = rng() > 0.88
+            const r   = rng()
+            const col = r > 0.65 ? 0xdde0ff : r > 0.35 ? 0xffffc8 : 0xffffff
+            sg.fillStyle(col, big ? 0.95 : 0.80)
+            if (big) sg.fillRect(sx - 0.5, sy - 0.5, 2, 2)
+            else     sg.fillRect(sx, sy, 1, 1)
+          }
+          return sg
+        }
+        const stars1 = makeStarLayer(42,  75)
+        const stars2 = makeStarLayer(137, 55)
+        this.tweens.add({ targets: stars1, alpha: 0.20, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+        this.tweens.add({ targets: stars2, alpha: 0.15, duration: 1100, yoyo: true, repeat: -1, delay: 700, ease: 'Sine.InOut' })
+
+        // Clouds — barely-visible lavender
+        const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
+        const drawCloud = (clx: number, cly: number, wr: number, hr: number) => {
+          cloudG.fillStyle(0x4a3272, 0.38)
+          cloudG.fillEllipse(clx, cly, wr, hr)
+          cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+          cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
+        }
+        drawCloud(width * 0.10, height * 0.42, 210, 72)
+        drawCloud(width * 0.38, height * 0.28, 170, 58)
+        drawCloud(width * 0.63, height * 0.48, 230, 78)
+        drawCloud(width * 0.85, height * 0.35, 150, 52)
+        this.tweens.add({ targets: cloudG, alpha: 0.30, duration: 4500, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
       }
-      drawCloud(width * 0.10, height * 0.42, 210, 72)
-      drawCloud(width * 0.38, height * 0.28, 170, 58)
-      drawCloud(width * 0.63, height * 0.48, 230, 78)
-      drawCloud(width * 0.85, height * 0.35, 150, 52)
-      this.tweens.add({ targets: cloudG, alpha: 0.30, duration: 4500, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
 
       return
     }
@@ -341,6 +378,16 @@ export class GameScene extends Phaser.Scene {
     // Dark rooms (levels 5-7+): purple overlay on top of tilemap background
     if (this.cfg.isDark && !this.cfg.isBossRoom) {
       this.add.rectangle(cx, cy, width, height, 0x08001a, 0.42).setScrollFactor(0).setDepth(1)
+    }
+
+    // Red rooms: red overlay
+    if (this.cfg.isRed && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x1a0000, 0.10).setScrollFactor(0).setDepth(1)
+    }
+
+    // Orange rooms: orange overlay
+    if (this.cfg.isOrange && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x200800, 0.15).setScrollFactor(0).setDepth(1)
     }
 
     if (this.cfg.roomImage) {
@@ -654,10 +701,40 @@ export class GameScene extends Phaser.Scene {
 
   // ── Dark-level torches ────────────────────────────────────────────────────────
   private buildTorches() {
-    if (!this.cfg.isDark || this.cfg.isBossRoom) return
+    if ((!this.cfg.isDark && !this.cfg.isRed && !this.cfg.isOrange) || this.cfg.isBossRoom) return
     const W = this.cfg.worldWidth
-    const H = this.cfg.worldHeight ?? 1856
 
+    if (this.cfg.isRed || this.cfg.isOrange) {
+      if (this.cfg.isOrange && this.cfg.worldMap) {
+        // Vertical world-map level: spread torches down the play area
+        const startY = (this.cfg.defaultSpawn?.y ?? 3004) - 50
+        const endY   = (this.cfg.worldHeight ?? 8416) - 600
+        let idx = 0
+        for (let y = startY; y < endY; y += 900) {
+          for (let x = 400; x < W - 300; x += 1200) {
+            // Scan horizontally for a clear spot (±96px in 32px steps)
+            let tx = x
+            const offsets = [0, 32, -32, 64, -64, 96, -96]
+            const clear = offsets.find(ox => !this.isInsideWall(x + ox, y))
+            if (clear === undefined) continue
+            tx = x + clear
+            this.spawnTorch(tx, y, idx * 200)
+            idx++
+          }
+        }
+        return
+      }
+      // Fixed bands near the active play area; wider spacing for the large map
+      const bands = [420, 620]
+      let idx = 0
+      for (let x = 300; x < W - 200; x += 1200) {
+        this.spawnTorch(x, bands[idx % bands.length], idx * 220)
+        idx++
+      }
+      return
+    }
+
+    const H = this.cfg.worldHeight ?? 1856
     // Three height bands; first band nudged up 35px
     const bands = [H * 0.14 - 35, H * 0.44, H * 0.74]
     let idx = 0
@@ -777,15 +854,18 @@ export class GameScene extends Phaser.Scene {
 
   // ── collectibles ──────────────────────────────────────────────────────────────
 
+  private isInsideWall(x: number, y: number): boolean {
+    return this.tilemapLayers.some(layer => {
+      const tile = layer.getTileAtWorldXY(x, y)
+      return tile !== null && tile.index >= 0
+    })
+  }
+
   private setupCollectibles() {
-    const isInsideWall = (x: number, y: number): boolean =>
-      this.tilemapLayers.some(layer => {
-        const tile = layer.getTileAtWorldXY(x, y)
-        return tile !== null && tile.index >= 0
-      })
+    const isInsideWall = (x: number, y: number) => this.isInsideWall(x, y)
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 5: 0, 6: 0, 7: 0 }
+    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 }
     for (const item of this.cfg.items) {
       // Letter-bugs bypass this check — their position is resolved below with pool/fallback logic
       if (item.type !== 'letter-bug' && isInsideWall(item.x, item.y)) continue
@@ -803,24 +883,31 @@ export class GameScene extends Phaser.Scene {
         // Don't re-spawn once this level's duck puzzle is solved
         const levelSolved = kl === 1 ? !!this.registry.get('hasLevel1Key')
                           : kl === 2 ? !!this.registry.get('hasLevel2Key')
+                          : kl === 4 ? !!this.registry.get('hasLevel4Key')
+                          : kl === 8 ? !!this.registry.get('hasLevel8Key')
                           : !!this.registry.get(`level${kl}WordSolved`)
         if (levelSolved) continue
         const idx = letterBugIdx[kl] ?? 0
         letterBugIdx[kl] = idx + 1
         const storedPositions: Array<{x: number, y: number}> | null = this.registry.get(`level${kl}BugPositions`)
         const poolPos = storedPositions?.[idx]
-        // Prefer pool position; fall back to config position if pool spot is inside a wall
-        let bugX = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.x : item.x
-        let bugY = (poolPos && !isInsideWall(poolPos.x, poolPos.y)) ? poolPos.y : item.y
-        // If the resolved position is still inside a wall, scan nearby offsets to escape
-        if (isInsideWall(bugX, bugY)) {
+        const CLEAR = 22  // minimum px clearance from any wall surface
+        const clearOf = (x: number, y: number) =>
+          !isInsideWall(x - CLEAR, y) && !isInsideWall(x + CLEAR, y) &&
+          !isInsideWall(x, y - CLEAR) && !isInsideWall(x, y + CLEAR)
+        const goodPos = (x: number, y: number) => !isInsideWall(x, y) && clearOf(x, y)
+        // Prefer pool position; fall back to config position if too close to or inside a wall
+        let bugX = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.x : item.x
+        let bugY = (poolPos && goodPos(poolPos.x, poolPos.y)) ? poolPos.y : item.y
+        // If the resolved position is inside a wall or too close to one, scan nearby offsets
+        if (!goodPos(bugX, bugY)) {
           const escapeOffsets: [number, number][] = [
             [0, -32], [0, -64], [0, -96], [0, -128],
             [-32, -32], [32, -32], [-32, 0], [32, 0],
             [-64, 0], [64, 0], [0, 32], [0, 64],
           ]
           for (const [ox, oy] of escapeOffsets) {
-            if (!isInsideWall(bugX + ox, bugY + oy)) {
+            if (goodPos(bugX + ox, bugY + oy)) {
               bugX += ox; bugY += oy; break
             }
           }
@@ -1437,6 +1524,39 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  buildLevelTwoNPCs() {
+    this.add.image(661, 3004, 'npc-dad', 8).setDepth(2).setScale(1.5)
+    this.showNpcBubble(661, 2914, [
+      'Find 5 letter bugs',
+      'hidden in the halls!',
+      'Spell the word at',
+      'the magic jar, then',
+      'enter the boss door!',
+    ], null)
+  }
+
+  buildLevel3WorldNPCs() {
+    // Sunset Fields — no puzzle, just a welcoming duck at the entry
+    const dx = 420, dy = 2048
+    this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
+      'The Sunset Fields!',
+      'Enjoy the view and',
+      'keep moving right!',
+    ], null)
+  }
+
+  buildLevelOneNPCs() {
+    this.add.image(768, 604, 'npc-mom', 10).setDepth(2).setScale(1.5).setFlipX(true)
+    this.showNpcBubble(768, 520, [
+      'Welcome to the Red Halls!',
+      'Find 5 letter bugs',
+      'hidden in the level.',
+      'Solve the magic jar',
+      'to unlock the door!',
+    ], null)
+  }
+
   private buildLevel4NPCs() {
     // Instructional duck at spawn point
     const sx = 356, sy = 1628
@@ -1766,11 +1886,28 @@ export class GameScene extends Phaser.Scene {
         overlayLayers.forEach(l => tint(l, 0x686898))  // slightly lighter purple overlay
       }
 
+      // Red rooms: tint tile layers with red hues
+      if (this.cfg.isRed) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0xc07878)
+        solidLayers.forEach(l  => tint(l,  0xd08888))
+        overlayLayers.forEach(l => tint(l, 0xe09898))
+      }
+
+      // Orange rooms: tint tile layers with orange hues
+      if (this.cfg.isOrange) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0xc08040)
+        solidLayers.forEach(l  => tint(l,  0xd09050))
+        overlayLayers.forEach(l => tint(l, 0xe0a060))
+      }
+
       this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
 
       // Build explicit static bodies from tile data — guarantees collision even
       // when Phaser's built-in tilemap physics is unreliable at certain scales.
       this.tilemapLayers.forEach(l => this.addTileLayerBodies(l, SCALE, ox, oy))
+      this.buildTileDepthShadows(this.tilemapLayers, Math.round(map.tileWidth * SCALE), Math.round(map.tileHeight * SCALE), ox, oy)
 
       // Scan downward from fromY to find a horizontal floor surface.
       // Requires: the tile is solid AND the tiles above it (up to clearanceTiles)
@@ -1802,7 +1939,8 @@ export class GameScene extends Phaser.Scene {
           furnY = floorY - fh / 2
         }
         const hp = fs.type === 'chest' ? 3 : fs.type === 'bookcase' ? 2 : 1
-        this.spawnFurniturePiece(fs.type, fs.x, furnY, fs.ability ?? AbilityType.None, hp, {}, fs.pizzaDrop)
+        const chestYOffset = fs.type === 'chest' && (this.cfg.isRed || this.cfg.isOrange) ? 10 : 0
+        this.spawnFurniturePiece(fs.type, fs.x, furnY + chestYOffset, fs.ability ?? AbilityType.None, hp, {}, fs.pizzaDrop, fs.itemDrop)
       }
 
       // Floor spike tiles
@@ -1917,28 +2055,80 @@ export class GameScene extends Phaser.Scene {
         // Gradient glow radiating from arch (top/sides only, clipped at arch base)
         const archBottom = cy + 140
         const archGlow = this.add.graphics().setDepth(-1)
-        for (let gi = 11; gi >= 0; gi--) {
-          const t   = gi / 11                      // 1=outermost(dark), 0=at arch(bright)
-          const exp = t * 90
-          archGlow.fillStyle(0xff1100, (1 - t) * 0.35 + 0.02)
-          archGlow.fillRoundedRect(
-            x - 84 - exp, cy - 138 - exp,
-            168 + 2 * exp, (archBottom - (cy - 138)) + exp,
-            { tl: 72 + exp, tr: 72 + exp, bl: 0, br: 0 },
-          )
+        if (this.cfg.isSunset) {
+          // Cave entrance: cool grey-slate shadow instead of fiery red
+          for (let gi = 11; gi >= 0; gi--) {
+            const t = gi / 11
+            const exp = t * 90
+            archGlow.fillStyle(0x1e2028, (1 - t) * 0.52 + 0.04)
+            archGlow.fillRoundedRect(
+              x - 84 - exp, cy - 138 - exp,
+              168 + 2 * exp, (archBottom - (cy - 138)) + exp,
+              { tl: 72 + exp, tr: 72 + exp, bl: 0, br: 0 },
+            )
+          }
+          // Static — cave mouths don't flicker
+
+          // Rocky cliff face flanking the entrance
+          const rk = this.add.graphics().setDepth(1)
+          // Left rock mass — three receding layers
+          rk.fillStyle(0x4a4a48, 1); rk.fillRect(x - 112, cy - 30, 32, 170)
+          rk.fillStyle(0x363634, 1); rk.fillRect(x - 120, cy + 10, 20, 120)
+          rk.fillStyle(0x282826, 1); rk.fillRect(x - 126, cy + 40, 14, 90)
+          // Left rock top caps (jagged silhouette via overlapping rects)
+          rk.fillStyle(0x4a4a48, 1)
+          rk.fillRect(x - 116, cy - 50, 18, 24); rk.fillRect(x - 104, cy - 62, 16, 36)
+          rk.fillRect(x - 124, cy - 38, 12, 14)
+          // Right rock mass
+          rk.fillStyle(0x4a4a48, 1); rk.fillRect(x + 80,  cy - 30, 32, 170)
+          rk.fillStyle(0x363634, 1); rk.fillRect(x + 100, cy + 10, 20, 120)
+          rk.fillStyle(0x282826, 1); rk.fillRect(x + 112, cy + 40, 14, 90)
+          // Right rock top caps
+          rk.fillStyle(0x4a4a48, 1)
+          rk.fillRect(x + 98,  cy - 50, 18, 24); rk.fillRect(x + 88, cy - 62, 16, 36)
+          rk.fillRect(x + 112, cy - 38, 12, 14)
+          // Lintel slab across the top of the opening
+          rk.fillStyle(0x404040, 1); rk.fillRect(x - 84, cy - 152, 168, 18)
+          rk.fillStyle(0x303030, 1); rk.fillRect(x - 78, cy - 162, 156, 12)
+          // Crack details
+          rk.fillStyle(0x202020, 0.60)
+          rk.fillRect(x - 98, cy - 10, 2, 60); rk.fillRect(x - 92, cy + 20, 2, 40)
+          rk.fillRect(x + 90, cy - 10, 2, 60); rk.fillRect(x + 96, cy + 20, 2, 40)
+
+          // Arch: cool grey stone
+          const arch = this.add.graphics().setDepth(2)
+          arch.fillStyle(0x3c3c3e, 1)
+          arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
+          arch.fillStyle(0x1a1a1c, 1)
+          arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
+
+          // Keystone at arch crown — grey
+          this.add.rectangle(x, cy - 132, 22, 20, 0x505054).setDepth(2)
+          this.add.rectangle(x, cy - 132, 12, 12, 0x6a6a70, 0.75).setDepth(2)
+        } else {
+          for (let gi = 11; gi >= 0; gi--) {
+            const t   = gi / 11
+            const exp = t * 90
+            archGlow.fillStyle(0xff1100, (1 - t) * 0.35 + 0.02)
+            archGlow.fillRoundedRect(
+              x - 84 - exp, cy - 138 - exp,
+              168 + 2 * exp, (archBottom - (cy - 138)) + exp,
+              { tl: 72 + exp, tr: 72 + exp, bl: 0, br: 0 },
+            )
+          }
+          this.tweens.add({ targets: archGlow, alpha: { from: 0.55, to: 1.0 }, duration: 1200, yoyo: true, repeat: -1 })
+
+          // Stone arch frame: outer (depth 2), then inner recess overlaid on same graphic
+          const arch = this.add.graphics().setDepth(2)
+          arch.fillStyle(0x2a1a0e, 1)
+          arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
+          arch.fillStyle(0x150903, 1)
+          arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
+
+          // Keystone at arch crown
+          this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
+          this.add.rectangle(x, cy - 132, 12, 12, 0x5a3c1e, 0.75).setDepth(2)
         }
-        this.tweens.add({ targets: archGlow, alpha: { from: 0.55, to: 1.0 }, duration: 1200, yoyo: true, repeat: -1 })
-
-        // Stone arch frame: outer (depth 2), then inner recess overlaid on same graphic
-        const arch = this.add.graphics().setDepth(2)
-        arch.fillStyle(0x2a1a0e, 1)
-        arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
-        arch.fillStyle(0x150903, 1)
-        arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
-
-        // Keystone at arch crown
-        this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
-        this.add.rectangle(x, cy - 132, 12, 12, 0x5a3c1e, 0.75).setDepth(2)
 
         // Wood door panels — fill the rectangular portion of the inner arch opening
         // Inner arch rectangular portion starts at cy - 130 + 62 = cy - 68
@@ -2177,82 +2367,119 @@ export class GameScene extends Phaser.Scene {
             const px3 = ((seed + 200) * 13) % (tw - 6) + 3
             const py3 = ((seed + 25)  *  3) % (th - 16) + 8
 
+            const sunset = this.cfg.isSunset
+
             if (!hasAbove) {
-              // ── Surface tile (twilight palette) ───────────────────────────
-              tileG.fillStyle(0x3a2448); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil (purple-brown)
-              tileG.fillStyle(0x2c1838); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
-              tileG.fillStyle(0x22122c); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
-              tileG.fillStyle(0x180c20); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
+              if (sunset) {
+                // ── Surface tile (sunset / warm palette) ──────────────────
+                tileG.fillStyle(0x7a4a28); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil (warm terracotta)
+                tileG.fillStyle(0x5c3418); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
+                tileG.fillStyle(0x42240e); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
+                tileG.fillStyle(0x2c1608); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
 
-              // World-aligned strata lines
-              tileG.fillStyle(0x281040)
-              const firstS = Math.ceil((wy + 15) / 8) * 8
-              for (let sy = firstS; sy < wy + th - 1; sy += 8) {
-                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+                tileG.fillStyle(0x4a2c10)
+                const firstS = Math.ceil((wy + 15) / 8) * 8
+                for (let sy = firstS; sy < wy + th - 1; sy += 8) {
+                  tileG.fillRect(wx + 2, sy, tw - 4, 1)
+                }
+                tileG.fillStyle(0x9a6038); tileG.fillRect(wx, wy + 15, 1, th - 15)
+                tileG.fillStyle(0x1e0e04); tileG.fillRect(wx, wy + th - 2, tw, 2)
+
+                tileG.fillStyle(0x6a3820)
+                tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
+                tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
+                tileG.fillStyle(0xc07840)
+                tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
+
+                // ── Grass cap (warm golden-green) ──────────────────────────
+                tileG.fillStyle(0x7aaa20); tileG.fillRect(wx + 2, wy,     tw - 4, 1)
+                tileG.fillStyle(0x7aaa20); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)
+                tileG.fillStyle(0x7aaa20); tileG.fillRect(wx,     wy + 2, tw, 2)
+                tileG.fillStyle(0x5e8418); tileG.fillRect(wx,     wy + 4, tw, 2)
+                tileG.fillStyle(0x425c10); tileG.fillRect(wx,     wy + 6, tw, 3)
+
+                const numG = Math.ceil(tw / 4)
+                for (let gi = 0; gi < numG; gi++) {
+                  const gx    = wx + gi * 4
+                  const gw    = Math.min(4, tw - gi * 4)
+                  const gseed = (c * 37 + r * 13 + gi * 7) & 0x7
+                  const yVar  = (gseed % 5) - 2
+                  tileG.fillStyle(0x2e3e08); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
+                  tileG.fillStyle(0x4a6010); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
+                }
+                tileG.fillStyle(0xa0cc30); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
+
+              } else {
+                // ── Surface tile (twilight palette) ───────────────────────
+                tileG.fillStyle(0x3a2448); tileG.fillRect(wx, wy +  9, tw, 9)
+                tileG.fillStyle(0x2c1838); tileG.fillRect(wx, wy + 18, tw, 7)
+                tileG.fillStyle(0x22122c); tileG.fillRect(wx, wy + 25, tw, 4)
+                tileG.fillStyle(0x180c20); tileG.fillRect(wx, wy + 29, tw, th - 29)
+
+                tileG.fillStyle(0x281040)
+                const firstS = Math.ceil((wy + 15) / 8) * 8
+                for (let sy = firstS; sy < wy + th - 1; sy += 8) {
+                  tileG.fillRect(wx + 2, sy, tw - 4, 1)
+                }
+                tileG.fillStyle(0x4a2c68); tileG.fillRect(wx, wy + 15, 1, th - 15)
+                tileG.fillStyle(0x140a1c); tileG.fillRect(wx, wy + th - 2, tw, 2)
+
+                tileG.fillStyle(0x201040)
+                tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
+                tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
+                tileG.fillStyle(0x6040a0)
+                tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
+
+                tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 2, wy,     tw - 4, 1)
+                tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)
+                tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx,     wy + 2, tw, 2)
+                tileG.fillStyle(0x1e4228); tileG.fillRect(wx,     wy + 4, tw, 2)
+                tileG.fillStyle(0x142e1c); tileG.fillRect(wx,     wy + 6, tw, 3)
+
+                const numG = Math.ceil(tw / 4)
+                for (let gi = 0; gi < numG; gi++) {
+                  const gx    = wx + gi * 4
+                  const gw    = Math.min(4, tw - gi * 4)
+                  const gseed = (c * 37 + r * 13 + gi * 7) & 0x7
+                  const yVar  = (gseed % 5) - 2
+                  tileG.fillStyle(0x0e2018); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
+                  tileG.fillStyle(0x1a2e20); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
+                }
+                tileG.fillStyle(0x3a7050); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
               }
-              // Left-edge highlight and bottom shadow
-              tileG.fillStyle(0x4a2c68); tileG.fillRect(wx, wy + 15, 1, th - 15)
-              tileG.fillStyle(0x140a1c); tileG.fillRect(wx, wy + th - 2, tw, 2)
-
-              // Pebbles
-              tileG.fillStyle(0x201040)
-              tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
-              tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
-              tileG.fillStyle(0x6040a0)
-              tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
-
-              // ── Grass cap (twilight blue-green) ───────────────────────────
-              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 2, wy,     tw - 4, 1)
-              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)
-              tileG.fillStyle(0x2a5c3c); tileG.fillRect(wx,     wy + 2, tw, 2)
-              tileG.fillStyle(0x1e4228); tileG.fillRect(wx,     wy + 4, tw, 2)
-              tileG.fillStyle(0x142e1c); tileG.fillRect(wx,     wy + 6, tw, 3)
-
-              // Ragged grass-dirt boundary
-              const numG = Math.ceil(tw / 4)
-              for (let gi = 0; gi < numG; gi++) {
-                const gx  = wx + gi * 4
-                const gw  = Math.min(4, tw - gi * 4)
-                const gseed = (c * 37 + r * 13 + gi * 7) & 0x7
-                const yVar  = (gseed % 5) - 2
-                tileG.fillStyle(0x0e2018); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
-                tileG.fillStyle(0x1a2e20); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
-              }
-              // Highlight sliver
-              tileG.fillStyle(0x3a7050); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
 
             } else if (fullyInner) {
-              // ── Fully surrounded — deep dark purple-earth ─────────────────
-              tileG.fillStyle(0x1a0a28); tileG.fillRect(wx, wy, tw, th)
+              // ── Fully surrounded ──────────────────────────────────────────
+              tileG.fillStyle(sunset ? 0x2c1608 : 0x1a0a28); tileG.fillRect(wx, wy, tw, th)
 
-              tileG.fillStyle(0x120818)
+              tileG.fillStyle(sunset ? 0x1e0e04 : 0x120818)
               const firstS2 = Math.ceil(wy / 8) * 8
               for (let sy = firstS2; sy < wy + th - 1; sy += 8) {
                 tileG.fillRect(wx + 2, sy, tw - 4, 1)
               }
 
-              tileG.fillStyle(0x281848)
+              tileG.fillStyle(sunset ? 0x4a2810 : 0x281848)
               tileG.fillRect(wx + px1, wy + py1, 2, 2)
               tileG.fillRect(wx + px2, wy + py2, 2, 2)
-              tileG.fillStyle(0x140a24)
+              tileG.fillStyle(sunset ? 0x200e04 : 0x140a24)
               tileG.fillRect(wx + px3, wy + py3, 1, 1)
 
             } else {
-              // ── Partially exposed edge tile ───────────────────────────────
-              tileG.fillStyle(0x2a1838); tileG.fillRect(wx, wy, tw, th)
+              // ── Partially exposed edge tile ────────────────────────────────
+              tileG.fillStyle(sunset ? 0x4a2c14 : 0x2a1838); tileG.fillRect(wx, wy, tw, th)
 
-              tileG.fillStyle(0x201040)
+              tileG.fillStyle(sunset ? 0x361e08 : 0x201040)
               const firstS3 = Math.ceil(wy / 8) * 8
               for (let sy = firstS3; sy < wy + th - 1; sy += 8) {
                 tileG.fillRect(wx + 2, sy, tw - 4, 1)
               }
 
-              tileG.fillStyle(0x160c20)
+              tileG.fillStyle(sunset ? 0x2c1608 : 0x160c20)
               tileG.fillRect(wx + px1, wy + py1, 2, 2)
               tileG.fillRect(wx + px2, wy + py2, 2, 2)
-              tileG.fillStyle(0x4a3068)
+              tileG.fillStyle(sunset ? 0x8a5030 : 0x4a3068)
               tileG.fillRect(wx + px3, wy + py3, 1, 1)
-              tileG.fillStyle(0x3a2460); tileG.fillRect(wx, wy, 1, th)
+              tileG.fillStyle(sunset ? 0x7a4828 : 0x3a2460); tileG.fillRect(wx, wy, 1, th)
             }
           }
         }
@@ -2401,6 +2628,14 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
+    // Mimic enemies — dormant until player proximity, then patrol like normal enemies
+    for (const ms of (this.cfg.mimicSpawns ?? [])) {
+      const mimic = new Mimic(this, ms.x, ms.y)
+      this.mimics.push(mimic)
+      this.physics.add.collider(mimic, this.platforms)
+      this.tilemapLayers.forEach(l => this.physics.add.collider(mimic, l))
+    }
+
     // Throne room door — rendered behind player (depth 1-2)
     if (this.cfg.isThrone) {
 
@@ -2537,6 +2772,7 @@ export class GameScene extends Phaser.Scene {
     health = 2,
     resistances: Partial<Record<DamageType, number>> = {},
     pizzaDrop = false,
+    itemDrop: ItemType | undefined = undefined,
   ) {
     const visuals: Phaser.GameObjects.GameObject[] = []
     const v = <T extends Phaser.GameObjects.GameObject>(obj: T): T => { visuals.push(obj); return obj }
@@ -2569,26 +2805,11 @@ export class GameScene extends Phaser.Scene {
 
     } else { // chest
       fw = 48; fh = 40
-      const cl = pizzaDrop                         ? 0x55cc22
-               : ability === AbilityType.Fire     ? 0xff6600
-               : ability === AbilityType.Lightning ? 0xffdd00
-               : ability === AbilityType.Ice      ? 0x66ccff : 0xcb9b00
-      v(this.add.rectangle(x,       y + 8,  48, 28, 0x5c3317, 0.98).setDepth(3))
-      v(this.add.rectangle(x,       y + 6,  42,  2, 0x3d1f0a, 0.35).setDepth(4))
-      v(this.add.rectangle(x,       y + 14, 42,  2, 0x3d1f0a, 0.35).setDepth(4))
-      v(this.add.rectangle(x,       y - 10, 48, 16, 0x6b3d1e, 0.98).setDepth(3))
-      v(this.add.rectangle(x,       y - 12, 44,  4, 0x7e4c28, 0.55).setDepth(4))
-      v(this.add.rectangle(x - 21,  y,       4, 40, 0x444444, 0.75).setDepth(4))
-      v(this.add.rectangle(x + 21,  y,       4, 40, 0x444444, 0.75).setDepth(4))
-      v(this.add.rectangle(x,       y - 2,  48,  4, 0x444444, 0.65).setDepth(4))
-      v(this.add.rectangle(x - 15,  y - 2,   6,  8, 0x777777, 0.90).setDepth(5))
-      v(this.add.rectangle(x + 15,  y - 2,   6,  8, 0x777777, 0.90).setDepth(5))
-      v(this.add.rectangle(x,       y - 2,  12, 10, cl,       0.90).setDepth(5))
-      v(this.add.rectangle(x,       y - 2,   6,  5, 0x1a0a04, 0.65).setDepth(5))
-      ;[-20, 20].forEach(rx => {
-        v(this.add.circle(x + rx, y + 4,  2, 0x666666, 0.8).setDepth(4))
-        v(this.add.circle(x + rx, y + 16, 2, 0x666666, 0.8).setDepth(4))
-      })
+      const frame = (itemDrop === 'invulnerability' || itemDrop === 'attack-boost' || itemDrop === 'speed')
+                  ? 2
+                  : pizzaDrop ? 1
+                  : 0
+      v(this.add.image(x, y, 'chests', frame).setDepth(3).setDisplaySize(80, 80))
     }
 
     const dest = new Destructible(this, x, y, health, ability, resistances)
@@ -2609,8 +2830,9 @@ export class GameScene extends Phaser.Scene {
       this.addScore(SCORE_DESTRUCT)
       visuals.forEach(go => { if (go.active) go.destroy() })
       if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
-      if (pizzaDrop) this.spawnPizzaDrop(obj.x, obj.y)
-      if (Math.random() < 0.25) this.spawnFurnitureDrop(obj.x, obj.y)
+      if (itemDrop) this.spawnDroppedItem(obj.x, obj.y, itemDrop)
+      else if (pizzaDrop) this.spawnPizzaDrop(obj.x, obj.y)
+      else if (Math.random() < 0.25) this.spawnFurnitureDrop(obj.x, obj.y)
     })
   }
 
@@ -3075,6 +3297,24 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private spawnDroppedItem(x: number, y: number, type: ItemType) {
+    const tex = type === 'invulnerability' ? 'invulnerability_icon'
+              : type === 'mystery'         ? 'item-mystery'
+              : type === 'heart'           ? 'item-heart'
+              : type === 'life'            ? 'item-life'
+              : 'item-orb'
+    const dropY = y - 16
+    const img = this.add.image(x, dropY, tex).setDepth(8).setScale(1.2)
+    img.setData('item', { type, x, y: dropY } as ItemSpawn)
+    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    this.collectibleSprites.push(img)
+    this.time.delayedCall(15000, () => {
+      if (!img.active) return
+      this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
+      this.tweens.add({ targets: img, alpha: 0, duration: 800, onComplete: () => img.destroy() })
+    })
+  }
+
   private spawnFurnitureDrop(x: number, y: number) {
     this.spawnPizzaDrop(x, y)
   }
@@ -3340,6 +3580,104 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // Draw gradient shadow strips along every exposed tile face to convey depth.
+  // Each face is rendered as multiple thin slices with alpha falling off away from
+  // the wall, producing a smooth fade rather than a hard edge.
+  // Adjacent tiles in the same row/column are merged into one rect per slice.
+  private buildTileDepthShadows(
+    layers: Phaser.Tilemaps.TilemapLayer[],
+    tw: number, th: number,
+    ox: number, oy: number,
+  ) {
+    if (layers.length === 0) return
+
+    const cols = layers[0].layer.width
+    const rows = layers[0].layer.height
+
+    const solid = (c: number, r: number): boolean => {
+      if (c < 0 || r < 0 || c >= cols || r >= rows) return false
+      return layers.some(l => { const t = l.getTileAt(c, r); return t !== null && t.index >= 0 })
+    }
+
+    const gfx = this.add.graphics().setDepth(1.5)
+    const SH = Math.max(5, Math.round(th * 0.28))  // total bottom/top shadow extent in px
+    const SW = Math.max(4, Math.round(tw * 0.22))  // total left/right shadow extent in px
+
+    // Alpha steps from wall face outward — darkest at the surface, fading to transparent
+    const ALPHAS = [0.38, 0.26, 0.16, 0.08, 0.03]
+    const N = ALPHAS.length
+    const stepH = Math.max(1, Math.ceil(SH / N))
+    const stepW = Math.max(1, Math.ceil(SW / N))
+
+    // Bottom shadows: fades downward into the empty space below the face
+    for (let r = 0; r < rows; r++) {
+      let run = -1
+      for (let c = 0; c <= cols; c++) {
+        const edge = c < cols && solid(c, r) && !solid(c, r + 1)
+        if (edge && run === -1) { run = c }
+        else if (!edge && run !== -1) {
+          const rx = ox + run * tw, rw = (c - run) * tw, ry = oy + (r + 1) * th
+          for (let i = 0; i < N; i++) {
+            gfx.fillStyle(0x000000, ALPHAS[i])
+            gfx.fillRect(rx, ry + i * stepH, rw, stepH)
+          }
+          run = -1
+        }
+      }
+    }
+
+    // Right shadows: fades rightward into the empty space beside the face
+    for (let c = 0; c < cols; c++) {
+      let run = -1
+      for (let r = 0; r <= rows; r++) {
+        const edge = r < rows && solid(c, r) && !solid(c + 1, r)
+        if (edge && run === -1) { run = r }
+        else if (!edge && run !== -1) {
+          const ry = oy + run * th, rh = (r - run) * th, rx = ox + (c + 1) * tw
+          for (let i = 0; i < N; i++) {
+            gfx.fillStyle(0x000000, ALPHAS[i])
+            gfx.fillRect(rx + i * stepW, ry, stepW, rh)
+          }
+          run = -1
+        }
+      }
+    }
+
+    // Left shadows: fades leftward into the empty space beside the face
+    for (let c = 0; c < cols; c++) {
+      let run = -1
+      for (let r = 0; r <= rows; r++) {
+        const edge = r < rows && solid(c, r) && !solid(c - 1, r)
+        if (edge && run === -1) { run = r }
+        else if (!edge && run !== -1) {
+          const ry = oy + run * th, rh = (r - run) * th, rx = ox + c * tw
+          for (let i = 0; i < N; i++) {
+            gfx.fillStyle(0x000000, ALPHAS[i])
+            gfx.fillRect(rx - (i + 1) * stepW, ry, stepW, rh)
+          }
+          run = -1
+        }
+      }
+    }
+
+    // Top shadows: fades upward into the empty space above the face
+    for (let r = 0; r < rows; r++) {
+      let run = -1
+      for (let c = 0; c <= cols; c++) {
+        const edge = c < cols && solid(c, r) && !solid(c, r - 1)
+        if (edge && run === -1) { run = c }
+        else if (!edge && run !== -1) {
+          const rx = ox + run * tw, rw = (c - run) * tw, ry = oy + r * th
+          for (let i = 0; i < N; i++) {
+            gfx.fillStyle(0x000000, ALPHAS[i])
+            gfx.fillRect(rx, ry - (i + 1) * stepH, rw, stepH)
+          }
+          run = -1
+        }
+      }
+    }
+  }
+
   // ── collision ───────────────────────────────────────────────────────────────
 
   private setupCollision() {
@@ -3383,6 +3721,20 @@ export class GameScene extends Phaser.Scene {
         } else {
           player.hitByEnemy()
         }
+      })
+    })
+
+    // Mimic contact — dormant mimics block but don't damage; awake mimics behave like enemies
+    this.players.forEach(p => {
+      this.mimics.forEach(m => {
+        this.physics.add.collider(p, m, () => {
+          if (!m.isAwake || !m.active) return
+          if (p.isTruck || p.isTrex || p.isSpindashing || p.getData('abbySpinHold') || this.cocoIsOnAttackFrame(p)) {
+            m.die(); this.addScore(SCORE_ENEMY); this.trackEnemyKill()
+          } else {
+            p.hitByEnemy()
+          }
+        })
       })
     })
 
@@ -5052,8 +5404,10 @@ export class GameScene extends Phaser.Scene {
         if (button.index === 12 && this.bossPortalPos) {
           const nearPortal = Phaser.Math.Distance.Between(player.x, player.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
           const ri2: number = this.registry.get('runIndex') ?? 0
-          const portalBlocked2 = (ri2 === 4 && !this.registry.get('level3WordSolved'))
-                              || (ri2 === 9 && !this.registry.get('level7WordSolved'))
+          const portalBlocked2 = (ri2 === 4  && !this.registry.get('level3WordSolved'))
+                              || (ri2 === 6  && !this.registry.get('hasLevel4Key'))
+                              || (ri2 === 7  && !this.registry.get('hasLevel8Key'))
+                              || (ri2 === 10 && !this.registry.get('level7WordSolved'))
           if (nearPortal && !portalBlocked2) this.winGame()
         }
         if (button.index === 12 && this.backPortalPos) {
@@ -5276,13 +5630,13 @@ export class GameScene extends Phaser.Scene {
           const pulse    = Math.sin(progress * Math.PI)           // 0 → 1 → 0
           const R        = 42 + 33 * pulse
 
-          shieldGfx.fillStyle(0xccffee, 0.12 * pulse)
+          shieldGfx.fillStyle(0xccffee, 0.03 * pulse)
           shieldGfx.fillCircle(p.x, p.y, R)
 
-          shieldGfx.lineStyle(3, 0xbbffee, 0.90 * pulse)
+          shieldGfx.lineStyle(2, 0xbbffee, 0.20 * pulse)
           shieldGfx.strokeCircle(p.x, p.y, R)
 
-          shieldGfx.lineStyle(1, 0xeeffff, 0.55 * pulse)
+          shieldGfx.lineStyle(1, 0xeeffff, 0.12 * pulse)
           shieldGfx.strokeCircle(p.x, p.y, R - 9)
 
           // Electric arcs — two-segment lightning bolts radiating outward
@@ -5295,7 +5649,7 @@ export class GameScene extends Phaser.Scene {
             const my   = p.y + Math.sin(zag)  * midR
             const ex   = p.x + Math.cos(base) * R
             const ey   = p.y + Math.sin(base) * R
-            shieldGfx.lineStyle(1.5, 0xeeffff, pulse * (0.5 + 0.5 * Math.random()))
+            shieldGfx.lineStyle(1, 0xeeffff, pulse * (0.10 + 0.10 * Math.random()))
             shieldGfx.beginPath()
             shieldGfx.moveTo(p.x, p.y)
             shieldGfx.lineTo(mx, my)
@@ -5386,11 +5740,13 @@ export class GameScene extends Phaser.Scene {
         this.portalLabel?.setVisible(nearPortal)
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         const runIdx: number = this.registry.get('runIndex') ?? 0
-        const portalBlocked = (runIdx === 4 && !this.registry.get('level3WordSolved'))
-                           || (runIdx === 9 && !this.registry.get('level7WordSolved'))
+        const portalBlocked = (runIdx === 4  && !this.registry.get('level3WordSolved'))
+                           || (runIdx === 6  && !this.registry.get('hasLevel4Key'))
+                           || (runIdx === 7  && !this.registry.get('hasLevel8Key'))
+                           || (runIdx === 10 && !this.registry.get('level7WordSolved'))
         if (nearPortal && portalBlocked) {
           if (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))
-            this.showPopup(p.x, p.y - 40, 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+            this.showPopup(p.x, p.y - 40, (runIdx === 6 || runIdx === 7) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
         } else if (nearPortal && (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))) {
           this.winGame()
         }
@@ -5463,6 +5819,21 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
       e.update()
       if (e.tryAttack(_dt)) this.spawnEnemyProjectile(e)
     })
+
+    // Mimics — wake on proximity, then patrol via enemies array
+    this.mimics = this.mimics.filter(m => m.active)
+    for (const m of this.mimics) {
+      if (!m.isAwake) {
+        for (const p of this.players) {
+          if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, m.x, m.y) < 80) {
+            m.wake()
+            this.enemies.push(m as unknown as Enemy)
+            this.enemyGroup.add(m)
+            break
+          }
+        }
+      }
+    }
 
     // Boss
     if (this.boss?.active) {
