@@ -44,7 +44,7 @@ const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?
    },
   coco:    { file: 'coco.png',              fw: 64, fh: 64, selectable: true, name: 'COCO',    previewFrame: 15,
     anim: {
-        idle:   { start: 8, end: 8 },
+        idle:   { start: 6, end: 6 },
         walk:   { start: 0, end: 6 },
         jump:   { start: 10, end: 10 },
         float:  { start: 12, end: 12 },
@@ -179,6 +179,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('npc-mom',  'assets/npcs/mom.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-dad',  'assets/npcs/dad.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-duck', 'assets/npcs/duck.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-carter-transform',  'assets/players/carter_transform.png',  { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-carter-dino-jump',  'assets/players/carter_dino_jump.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-eric-transformer', 'assets/players/eric_transformer.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-army-truck',       'assets/players/army_truck.png',       { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
@@ -252,6 +254,7 @@ export class BootScene extends Phaser.Scene {
     this.setupEricTransformerAnimations()
     this.setupConradTruckAnimations()
     this.setupNpcAnimations()
+    this.setupCarterDinoAnimations()
     this.setupCocoShadowFormAnimations()
     this.setupScarlettTRexAnimations()
     this.setupScarlettTransformAnimations()
@@ -294,6 +297,23 @@ export class BootScene extends Phaser.Scene {
     if (!this.textures.exists('npc-duck')) return
     this.anims.create({ key: 'npc-duck-idle', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 6, repeat: -1 })
     this.anims.create({ key: 'npc-duck-walk', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 8, repeat: -1 })
+  }
+
+  private setupCarterDinoAnimations() {
+    const ct  = 'sheet-carter-transform'
+    const cdj = 'sheet-carter-dino-jump'
+    if (!this.textures.exists(ct) || !this.textures.exists(cdj)) return
+
+    // carter_transform sheet: transform in (0-7), dino idle (7), dino walk (8-15)
+    this.anims.create({ key: 'carter-transform-in',  frames: this.anims.generateFrameNumbers(ct, { start: 0, end: 7 }),             frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'carter-transform-out', frames: this.anims.generateFrameNumbers(ct, { frames: [7,6,5,4,3,2,1,0] }),    frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'carter-dino-idle',     frames: this.anims.generateFrameNumbers(ct, { frames: [7] }),                  frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'carter-dino-walk',     frames: this.anims.generateFrameNumbers(ct, { start: 8, end: 15 }),            frameRate: 10, repeat: -1 })
+
+    // carter_dino_jump sheet: jump (1,3,5-9), float (8), fall (10-12)
+    this.anims.create({ key: 'carter-dino-jump',     frames: this.anims.generateFrameNumbers(cdj, { frames: [1, 3, 5, 6, 7, 8, 9] }), frameRate: 10, repeat: 0  })
+    this.anims.create({ key: 'carter-dino-float',    frames: this.anims.generateFrameNumbers(cdj, { frames: [8] }),                   frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'carter-dino-fall',     frames: this.anims.generateFrameNumbers(cdj, { frames: [9] }),          frameRate: 8,  repeat: -1 })
   }
 
   private setupCocoShadowFormAnimations() {

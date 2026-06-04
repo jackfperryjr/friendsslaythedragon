@@ -24,7 +24,7 @@ export class Mimic extends Phaser.Physics.Arcade.Sprite {
       })
     }
 
-    this.setDisplaySize(56, 56).setDepth(2)
+    this.setDisplaySize(72, 72).setDepth(2)
 
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)

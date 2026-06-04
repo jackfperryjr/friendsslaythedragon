@@ -99,6 +99,8 @@ export class GameScene extends Phaser.Scene {
   private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
+  private carterDinoSpinTween:   Phaser.Tweens.Tween | null = null
+  private carterDinoLaserTimer:  Phaser.Time.TimerEvent | null = null
   private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
 
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
@@ -136,6 +138,7 @@ export class GameScene extends Phaser.Scene {
     this.players = []; this.enemies = []; this.mimics = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
+    this.carterDinoSpinTween = null; this.carterDinoLaserTimer = null
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
@@ -1357,7 +1360,7 @@ export class GameScene extends Phaser.Scene {
             speedBoostActive:      p.speedBoostActive,
             strengthBoostActive:   p.strengthBoostActive,
             invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive,
-            isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm,
+            isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm, carterAbility: p.carterAbility,
           })))
           duck.bubble?.destroy(); duck.bubble = null
           this.tweens.add({
@@ -1976,6 +1979,8 @@ export class GameScene extends Phaser.Scene {
         return null
       }
 
+      const CLUSTER_DIST = 72
+      const placedFurnPos: Array<{x: number, y: number}> = []
       for (const fs of (this.cfg.furnitureSpawns ?? [])) {
         const fh = fs.type === 'bookcase' ? 80 : fs.type === 'table' ? 36 : 40
         let furnY: number
@@ -1986,6 +1991,8 @@ export class GameScene extends Phaser.Scene {
           if (floorY === null) continue
           furnY = floorY - fh / 2
         }
+        if (placedFurnPos.some(p => Math.hypot(fs.x - p.x, furnY - p.y) < CLUSTER_DIST)) continue
+        placedFurnPos.push({x: fs.x, y: furnY})
         const hp = fs.type === 'chest' ? 3 : fs.type === 'bookcase' ? 2 : 1
         const chestYOffset = fs.type === 'chest' && (this.cfg.isRed || this.cfg.isOrange) ? 10 : 0
         this.spawnFurniturePiece(fs.type, fs.x, furnY + chestYOffset, fs.ability ?? AbilityType.None, hp, {}, fs.pizzaDrop, fs.itemDrop)
@@ -2008,7 +2015,10 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      const placedEnemyPos: Array<{x: number, y: number}> = []
       for (const e of this.cfg.enemies) {
+        if (placedEnemyPos.some(p => Math.hypot(e.x - p.x, e.y - p.y) < CLUSTER_DIST)) continue
+        placedEnemyPos.push({x: e.x, y: e.y})
         const enemy = new Enemy(this, e.x, e.y, e.ability)
         this.enemies.push(enemy); this.enemyGroup.add(enemy)
       }
@@ -2533,6 +2543,21 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      // Mimic enemies — skip in boss rooms, dormant until player proximity
+      if (!this.cfg.isBossRoom) {
+        for (const ms of (this.cfg.mimicSpawns ?? [])) {
+          if (this.enemies.some(e => Math.hypot(ms.x - e.x, ms.y - e.y) < CLUSTER_DIST)) continue
+          const mimicY = ms.y + 5
+          if (this.isInsideWall(ms.x, mimicY) ||
+              this.isInsideWall(ms.x - 22, mimicY) ||
+              this.isInsideWall(ms.x + 22, mimicY)) continue
+          const mimic = new Mimic(this, ms.x, mimicY)
+          this.mimics.push(mimic)
+          this.physics.add.collider(mimic, this.platforms)
+          this.tilemapLayers.forEach(l => this.physics.add.collider(mimic, l))
+        }
+      }
+
       this.spawnSpikeBalls()
       return
     }
@@ -2827,9 +2852,10 @@ export class GameScene extends Phaser.Scene {
     let fw: number, fh: number
 
     if (type === 'bookcase') {
+      y -= 15
       fw = 40; fh = 80
       const bsFrame = Phaser.Math.RND.pick([0, 8, 14])
-      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(50, 100))
+      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(80, 130))
 
     } else if (type === 'table') {
       fw = 96; fh = 36
@@ -2839,9 +2865,10 @@ export class GameScene extends Phaser.Scene {
       v(this.add.rectangle(cx, cy + 4,  5, 12, 0xf0e8d8, 0.92).setDepth(2))
       const fl = v(this.add.rectangle(cx, cy - 4, 5, 8, 0xffdd88, 0.88).setDepth(2))
       this.tweens.add({ targets: fl, scaleX: 0.55, scaleY: 0.72, duration: 85 + Phaser.Math.Between(0, 50), yoyo: true, repeat: -1 })
-      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(120, 48))
+      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(160, 88))
 
     } else { // chest
+      y += 5
       fw = 48; fh = 40
       const frame = (itemDrop === 'invulnerability' || itemDrop === 'attack-boost' || itemDrop === 'speed')
                   ? 2
@@ -3362,7 +3389,7 @@ export class GameScene extends Phaser.Scene {
     const W = this.cfg.worldWidth
     const FLOOR_Y = 672
     const pool = [AbilityType.None, AbilityType.None, AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
-    const FURN_MIN_DIST = 110
+    const FURN_MIN_DIST = 150
     const placedX: number[] = []
     const pickX = (anchor: number, jitter: number): number => {
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -3443,7 +3470,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3517,7 +3544,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3537,10 +3564,10 @@ export class GameScene extends Phaser.Scene {
     // Boosts from level 3 do not carry into level 4; boosts earned in level 4+ always carry forward
     const currentRunIdx: number = this.registry.get('runIndex') ?? 0
     if (currentRunIdx === 6) {
-      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
       const prev = this.registry.get('persistedBoosts') as PB[] | null
       this.registry.set('persistedBoosts', prev
-        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false }))
+        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false, isDinoForm: pb?.isDinoForm ?? false, carterAbility: pb?.carterAbility ?? 'duplicate' }))
         : null)
     }
 
@@ -3555,7 +3582,7 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
-    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
     const persistedBoosts: PersistedBoost[] | null = this.registry.get('persistedBoosts')
     if (persistedBoosts) {
       this.players.forEach((p, i) => {
@@ -3576,6 +3603,16 @@ export class GameScene extends Phaser.Scene {
         if (pb?.hasShadow && p.charKey === 'coco') {
           p.isShadowForm = true
           p.play('coco-shadow-idle', true)
+        }
+        if (p.charKey === 'carter') {
+          if (pb?.carterAbility) p.carterAbility = pb.carterAbility
+          if (pb?.isDinoForm) {
+            p.isDinoForm      = true
+            p.speedMultiplier = 2.0
+            p.setTexture('sheet-carter-transform', 7)
+            p.play('carter-dino-idle', true)
+            this.setupCarterDinoLaserTimer(p)
+          }
         }
       })
     }
@@ -3765,7 +3802,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold') || this.cocoIsOnAttackFrame(player)) {
+        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold') || this.cocoIsOnAttackFrame(player) || this.carterDinoIsOnAttackFrame(player)) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
           this.trackEnemyKill()
@@ -3780,7 +3817,7 @@ export class GameScene extends Phaser.Scene {
       this.mimics.forEach(m => {
         this.physics.add.collider(p, m, () => {
           if (!m.isAwake || !m.active) return
-          if (p.isTruck || p.isTrex || p.isSpindashing || p.getData('abbySpinHold') || this.cocoIsOnAttackFrame(p)) {
+          if (p.isTruck || p.isTrex || p.isSpindashing || p.getData('abbySpinHold') || this.cocoIsOnAttackFrame(p) || this.carterDinoIsOnAttackFrame(p)) {
             m.die(); this.addScore(SCORE_ENEMY); this.trackEnemyKill()
           } else {
             p.hitByEnemy()
@@ -3798,7 +3835,7 @@ export class GameScene extends Phaser.Scene {
           const player = _p as Player
           const boss   = _b as unknown as Boss
           if (Math.abs(player.y - boss.y) > 350) return
-          if (player.isTruck || player.isTrex || player.isSpindashing || this.cocoIsOnAttackFrame(player)) this.hitBoss(player)
+          if (player.isTruck || player.isTrex || player.isSpindashing || this.cocoIsOnAttackFrame(player) || this.carterDinoIsOnAttackFrame(player)) this.hitBoss(player)
           else player.hitByEnemy()
         })
       })
@@ -4577,6 +4614,169 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // ── Carter dinosaur transformation ───────────────────────────────────────────
+
+  private transformCarterToDino(carter: Player) {
+    if (carter.isDinoForm || carter.isTransforming) return
+    carter.isTransforming = true
+    carter.setTexture('sheet-carter-transform', 0)
+    carter.play('carter-transform-in', true)
+    carter.once('animationcomplete-carter-transform-in', () => {
+      if (!carter.active) return
+      carter.isDinoForm     = true
+      carter.isTransforming = false
+      carter.speedMultiplier = 2.0
+      carter.play('carter-dino-idle', true)
+      this.setupCarterDinoLaserTimer(carter)
+    })
+  }
+
+  private untransformCarterFromDino(carter: Player) {
+    if (!carter.isDinoForm || carter.isTransforming) return
+    carter.isDinoForm = false
+    this.stopCarterDinoSpin(carter)
+    this.carterDinoLaserTimer?.remove()
+    this.carterDinoLaserTimer = null
+    carter.speedMultiplier = 1.0
+    carter.isTransforming  = true
+    carter.setTexture('sheet-carter-transform', 7)
+    carter.play('carter-transform-out', true)
+    carter.once('animationcomplete-carter-transform-out', () => {
+      if (!carter.active) return
+      carter.isTransforming = false
+      carter.setTexture(`sheet-${carter.charKey}`, 0)
+      carter.play(`char-${carter.charKey}-idle`, true)
+    })
+  }
+
+  private setupCarterDinoLaserTimer(carter: Player) {
+    this.carterDinoLaserTimer?.remove()
+    this.carterDinoLaserTimer = this.time.addEvent({
+      delay: 533,
+      loop: true,
+      callback: () => { if (carter.active && carter.isDinoForm) this.fireCarterDinoLaser(carter) },
+    })
+  }
+
+  private updateCarterDino() {
+    const carter = this.players.find(p => p.charKey === 'carter' && p.isAlive)
+    if (!carter?.isDinoForm) return
+    if (carter.isTransforming) return
+
+    const body    = carter.body as Phaser.Physics.Arcade.Body
+    const airborne = !body.blocked.down
+
+    if (airborne) {
+      if (body.velocity.y < -60) {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-jump') carter.play('carter-dino-jump', true)
+      } else if (body.velocity.y > 80) {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-fall') {
+          carter.setTexture('sheet-carter-dino-jump')
+          carter.play('carter-dino-fall', true)
+        }
+      } else {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-float') {
+          carter.setTexture('sheet-carter-dino-jump')
+          carter.play('carter-dino-float', true)
+        }
+      }
+
+      // Spin while on frames 5-9 of the dino-jump sheet
+      const frame = carter.anims.currentFrame?.textureFrame as number ?? -1
+      if (frame >= 5 && frame <= 9) {
+        if (!this.carterDinoSpinTween) this.startCarterDinoSpin(carter)
+      } else {
+        if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
+      }
+    } else {
+      // Landed — restore transform sheet for idle/walk
+      if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
+      if (carter.texture.key !== 'sheet-carter-transform') carter.setTexture('sheet-carter-transform')
+      const moving = Math.abs(body.velocity.x) > 10
+      const key    = moving ? 'carter-dino-walk' : 'carter-dino-idle'
+      if (carter.anims.currentAnim?.key !== key) carter.play(key, true)
+    }
+  }
+
+  private startCarterDinoSpin(carter: Player) {
+    this.carterDinoSpinTween?.stop()
+    this.carterDinoSpinTween = this.tweens.add({
+      targets: carter, angle: carter.flipX ? -360 : 360,
+      duration: 280, repeat: -1,
+    })
+  }
+
+  private stopCarterDinoSpin(carter: Player) {
+    this.carterDinoSpinTween?.stop()
+    this.carterDinoSpinTween = null
+    carter.setAngle(0)
+  }
+
+  private carterDinoIsOnAttackFrame(player: Player): boolean {
+    if (player.charKey !== 'carter' || !player.isDinoForm) return false
+    const frame = player.anims.currentFrame?.textureFrame
+    return typeof frame === 'number' && frame >= 5 && frame <= 9
+  }
+
+  private fireCarterDinoLaser(carter: Player) {
+    if (!carter.active || !carter.isDinoForm) return
+
+    const RANGE = 400
+    let target: Phaser.GameObjects.Sprite | null = null
+    let best = RANGE
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (!target) return
+
+    const tx   = target.x
+    const ty   = target.y - 20
+    const eyeX = carter.x + (carter.flipX ? -14 : 14)
+    const eyeY = carter.y - 20
+
+    const gfx = this.add.graphics().setDepth(15)
+    gfx.lineStyle(6, 0xff2200, 0.85)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    gfx.lineStyle(12, 0xff6600, 0.30)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
+
+    const flash = this.add.circle(tx, ty, 12, 0xff2200, 1).setDepth(16)
+    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.8, scaleY: 2.8, duration: 200, ease: 'Power2', onComplete: () => flash.destroy() })
+    const sparkColors = [0xff0000, 0xff4400, 0xff8800, 0xffcc44]
+    for (let i = 0; i < 7; i++) {
+      const angle = (i / 7) * Math.PI * 2
+      const speed = 55 + Math.random() * 75
+      const spark = this.add.rectangle(tx, ty, 5, 5, sparkColors[i % sparkColors.length], 1).setDepth(16)
+      this.tweens.add({
+        targets: spark,
+        x: tx + Math.cos(angle) * speed,
+        y: ty + Math.sin(angle) * speed,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: 230 + Math.random() * 130,
+        ease: 'Quad.Out',
+        onComplete: () => spark.destroy(),
+      })
+    }
+
+    if (target === this.boss) {
+      if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+          (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+      SoundManager.bossHit()
+      this.boss!.hit()
+    } else {
+      this.hitEnemy(target as Enemy, carter)
+      this.hitEnemy(target as Enemy, carter)
+    }
+  }
+
   // ── Carter force field ────────────────────────────────────────────────────────
 
   private startCarterForceField(p: Player) {
@@ -4617,7 +4817,14 @@ export class GameScene extends Phaser.Scene {
   // ── Carter duplicate ability ─────────────────────────────────────────────────
 
   private handleCharacterAbility(src: Player) {
-    if (src.charKey === 'carter') this.spawnCarterDuplicate(src)
+    if (src.charKey === 'carter') {
+      if (src.carterAbility === 'dino') {
+        if (src.isDinoForm) this.untransformCarterFromDino(src)
+        else this.transformCarterToDino(src)
+      } else {
+        this.spawnCarterDuplicate(src)
+      }
+    }
     else if (src.charKey === 'eric') {
       if (src.isTruck) this.untransformEric(src)
       else this.transformEricToTruck(src)
@@ -4669,7 +4876,7 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private spawnCarterDuplicate(src: Player) {
+  spawnCarterDuplicate(src: Player) {
     const sheet = `sheet-${src.charKey}`
     if (!this.textures.exists(sheet)) return
     const dup = new CarterDuplicate(this, src.x, src.y, sheet)
@@ -5876,7 +6083,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     for (const m of this.mimics) {
       if (!m.isAwake) {
         for (const p of this.players) {
-          if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, m.x, m.y) < 80) {
+          if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, m.x, m.y) < 200) {
             m.wake()
             this.enemies.push(m as unknown as Enemy)
             this.enemyGroup.add(m)
@@ -5894,6 +6101,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
 
     this.updateConradTrucks()
     this.updateCarterForceField()
+    this.updateCarterDino()
     this.updateLevel3Duck()
     this.updateLevel4Ducks()
     this.updateLevel5Duck()
