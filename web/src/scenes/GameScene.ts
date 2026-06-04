@@ -100,7 +100,7 @@ export class GameScene extends Phaser.Scene {
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
   private carterDinoSpinTween:   Phaser.Tweens.Tween | null = null
-  private carterDinoLaserTimer:  Phaser.Time.TimerEvent | null = null
+  private minimapDots: Phaser.GameObjects.Graphics | null = null
   private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
 
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
@@ -138,7 +138,7 @@ export class GameScene extends Phaser.Scene {
     this.players = []; this.enemies = []; this.mimics = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
-    this.carterDinoSpinTween = null; this.carterDinoLaserTimer = null
+    this.carterDinoSpinTween = null
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
@@ -249,6 +249,7 @@ export class GameScene extends Phaser.Scene {
     this.buildNPCs()
     this.buildTorches()
     this.buildPauseMenu()
+    this.buildMapOverlay()
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
 
@@ -298,28 +299,30 @@ export class GameScene extends Phaser.Scene {
       const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
 
       if (this.cfg.isSunset) {
-        // ── Sunset sky: deep blue at top fading to warm orange at the horizon ──
+        // ── Sunset sky: blue at top fading through yellow to warm horizon ──
         g.fillGradientStyle(0x1a3a6e, 0x1a3a6e, 0x6b8cc0, 0x6b8cc0, 1, 1, 1, 1)
-        g.fillRect(0, 0, width, height * 0.55)
-        g.fillGradientStyle(0x6b8cc0, 0x6b8cc0, 0xff9040, 0xff9040, 1, 1, 1, 1)
-        g.fillRect(0, height * 0.55, width, height * 0.45)
+        g.fillRect(0, 0, width, height * 0.42)
+        g.fillGradientStyle(0x6b8cc0, 0x6b8cc0, 0xffe060, 0xffe060, 1, 1, 1, 1)
+        g.fillRect(0, height * 0.42, width, height * 0.33)
+        g.fillGradientStyle(0xffe060, 0xffe060, 0xffc030, 0xffc030, 1, 1, 1, 1)
+        g.fillRect(0, height * 0.75, width, height * 0.25)
 
-        // Sun — soft layered glow near the right horizon
-        const sunX = width * 0.82, sunY = height * 0.80
+        // Sun — bright yellow-white glow
+        const sunX = width * 0.82, sunY = height * 0.78
         const sunG = this.add.graphics().setScrollFactor(0).setDepth(-1)
-        sunG.fillStyle(0xffe080, 0.10); sunG.fillCircle(sunX, sunY, 100)
-        sunG.fillStyle(0xffcc40, 0.18); sunG.fillCircle(sunX, sunY, 72)
-        sunG.fillStyle(0xffb020, 0.32); sunG.fillCircle(sunX, sunY, 50)
-        sunG.fillStyle(0xff9000, 0.55); sunG.fillCircle(sunX, sunY, 30)
-        sunG.fillStyle(0xffb840, 0.92); sunG.fillCircle(sunX, sunY, 16)
+        sunG.fillStyle(0xffff80, 0.12); sunG.fillCircle(sunX, sunY, 110)
+        sunG.fillStyle(0xffee40, 0.22); sunG.fillCircle(sunX, sunY, 76)
+        sunG.fillStyle(0xffe000, 0.40); sunG.fillCircle(sunX, sunY, 50)
+        sunG.fillStyle(0xffd000, 0.65); sunG.fillCircle(sunX, sunY, 28)
+        sunG.fillStyle(0xffffa0, 0.95); sunG.fillCircle(sunX, sunY, 14)
         this.tweens.add({ targets: sunG, alpha: 0.82, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
 
-        // Horizon glow beneath the sun
+        // Horizon glow — yellow
         const hG = this.add.graphics().setScrollFactor(0).setDepth(-1)
-        hG.fillStyle(0xff6820, 0.22); hG.fillEllipse(sunX, sunY, 680, 130)
-        hG.fillStyle(0xffaa30, 0.12); hG.fillEllipse(sunX, sunY, 460, 80)
+        hG.fillStyle(0xffe040, 0.28); hG.fillEllipse(sunX, sunY, 720, 140)
+        hG.fillStyle(0xffcc20, 0.16); hG.fillEllipse(sunX, sunY, 480, 90)
 
-        // Warm sunset clouds
+        // Yellow-toned sunset clouds
         const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
         const drawSunCloud = (clx: number, cly: number, wr: number, hr: number, col: number, a: number) => {
           cloudG.fillStyle(col, a)
@@ -327,11 +330,14 @@ export class GameScene extends Phaser.Scene {
           cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
           cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
         }
-        drawSunCloud(width * 0.10, height * 0.40, 220, 70, 0xff9060, 0.50)
-        drawSunCloud(width * 0.35, height * 0.24, 180, 58, 0xffb880, 0.45)
-        drawSunCloud(width * 0.60, height * 0.44, 240, 76, 0xff8040, 0.50)
-        drawSunCloud(width * 0.83, height * 0.30, 160, 52, 0xffcc80, 0.42)
+        drawSunCloud(width * 0.10, height * 0.40, 220, 70, 0xffe090, 0.50)
+        drawSunCloud(width * 0.35, height * 0.24, 180, 58, 0xffd870, 0.45)
+        drawSunCloud(width * 0.60, height * 0.44, 240, 76, 0xffcc50, 0.50)
+        drawSunCloud(width * 0.83, height * 0.30, 160, 52, 0xffe880, 0.42)
         this.tweens.add({ targets: cloudG, alpha: 0.72, duration: 5000, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+
+        // Yellow ambient wash over the scene
+        this.add.rectangle(cx, cy, width, height, 0xffe060, 0.22).setScrollFactor(0).setDepth(-1)
 
       } else {
         // ── Night sky: near-black top, deep purple horizon ────────────────────
@@ -391,6 +397,16 @@ export class GameScene extends Phaser.Scene {
     // Orange rooms: orange overlay
     if (this.cfg.isOrange && !this.cfg.isBossRoom) {
       this.add.rectangle(cx, cy, width, height, 0x200800, 0.15).setScrollFactor(0).setDepth(1)
+    }
+
+    // Green rooms: green overlay
+    if (this.cfg.isGreen && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x001408, 0.15).setScrollFactor(0).setDepth(1)
+    }
+
+    // Blue rooms: blue overlay
+    if (this.cfg.isBlue && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x000820, 0.18).setScrollFactor(0).setDepth(1)
     }
 
     if (this.cfg.roomImage) {
@@ -704,10 +720,10 @@ export class GameScene extends Phaser.Scene {
 
   // ── Dark-level torches ────────────────────────────────────────────────────────
   private buildTorches() {
-    if ((!this.cfg.isDark && !this.cfg.isRed && !this.cfg.isOrange) || this.cfg.isBossRoom) return
+    if ((!this.cfg.isDark && !this.cfg.isRed && !this.cfg.isOrange && !this.cfg.isGreen && !this.cfg.isBlue) || this.cfg.isBossRoom) return
     const W = this.cfg.worldWidth
 
-    if (this.cfg.isRed || this.cfg.isOrange) {
+    if (this.cfg.isRed || this.cfg.isOrange || this.cfg.isGreen || this.cfg.isBlue) {
       if (this.cfg.isOrange && this.cfg.worldMap) {
         // Vertical world-map level: spread torches down the play area
         const startY = (this.cfg.defaultSpawn?.y ?? 3004) - 50
@@ -727,11 +743,16 @@ export class GameScene extends Phaser.Scene {
         }
         return
       }
-      // Fixed bands near the active play area; wider spacing for the large map
-      const bands = [420, 620]
+      // Fixed bands near the active play area — derived from defaultSpawn Y for large maps
+      const spawnY = this.cfg.defaultSpawn?.y ?? 500
+      const band1 = spawnY - 200, band2 = spawnY - 80
+      const bands = [band1, band2]
+      const offsets = [0, 32, -32, 64, -64, 96, -96]
       let idx = 0
       for (let x = 300; x < W - 200; x += 1200) {
-        this.spawnTorch(x, bands[idx % bands.length], idx * 220)
+        const ty = bands[idx % bands.length]
+        const clear = offsets.find(ox => !this.isInsideWall(x + ox, ty))
+        if (clear !== undefined) this.spawnTorch(x + clear, ty, idx * 220)
         idx++
       }
       return
@@ -868,7 +889,7 @@ export class GameScene extends Phaser.Scene {
     const isInsideWall = (x: number, y: number) => this.isInsideWall(x, y)
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 }
+    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 }
     const placedBugPositions: Array<{ x: number; y: number }> = []
     const BUG_MIN_DIST = 80
     const CLEAR = 22
@@ -907,6 +928,8 @@ export class GameScene extends Phaser.Scene {
                           : kl === 2 ? !!this.registry.get('hasLevel2Key')
                           : kl === 4 ? !!this.registry.get('hasLevel4Key')
                           : kl === 8 ? !!this.registry.get('hasLevel8Key')
+                          : kl === 9  ? !!this.registry.get('hasLevel9Key')
+                          : kl === 10 ? !!this.registry.get('hasLevel10Key')
                           : !!this.registry.get(`level${kl}WordSolved`)
         if (levelSolved) continue
         const idx = letterBugIdx[kl] ?? 0
@@ -1199,6 +1222,18 @@ export class GameScene extends Phaser.Scene {
     else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
     else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
     else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
+    if (this.cfg.isBlue && !this.cfg.isBossRoom) this.buildLevelFiveNPCs()
+  }
+
+  private buildLevelFiveNPCs() {
+    const mx = 1362, my = 2684
+    this.add.image(mx, my, 'npc-mom', 12).setDepth(2).setScale(1.5).setFlipX(true)
+    this.showNpcBubble(mx, my - 90, [
+      'Find the letter bugs',
+      'hidden in the halls!',
+      'The magic jar holds',
+      'the secret word.',
+    ], null)
   }
 
   private buildWorldOneNPCs() {
@@ -1844,6 +1879,19 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level7BugPositions', positions)
       }
     }
+    // Disconnected levels: initialize by keyLevel presence rather than runIndex
+    for (const kl of [4, 8, 9, 10] as const) {
+      if (!this.cfg.isBossRoom && !this.registry.get(`level${kl}BugLetters`) &&
+          this.cfg.items.some(i => i.type === 'letter-bug' && i.keyLevel === kl)) {
+        const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
+        this.registry.set(`level${kl}Word`, word)
+        this.registry.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+        if (this.cfg.letterBugPool) {
+          const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
+          this.registry.set(`level${kl}BugPositions`, positions)
+        }
+      }
+    }
   }
 
   private updateParentHints() {
@@ -1929,6 +1977,14 @@ export class GameScene extends Phaser.Scene {
       const solidLayers  = solidNames.map((n: string) => mkLayer(n, 1, true))
       const overlayLayers = overlayNames.map((n: string, i: number) => mkLayer(n, 3 + i * 2))
 
+      // Sunset rooms: lime-biased tint compensates for tiles' red channel so result reads yellow
+      if (this.cfg.isSunset) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x80e000)
+        solidLayers.forEach(l  => tint(l,  0x90f000))
+        overlayLayers.forEach(l => tint(l, 0xa8f820))
+      }
+
       // Dark rooms (levels 5-7+): tint tile layers with grey/purple hues
       if (this.cfg.isDark) {
         const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
@@ -1951,6 +2007,22 @@ export class GameScene extends Phaser.Scene {
         tint(bgLayer, 0xc08040)
         solidLayers.forEach(l  => tint(l,  0xd09050))
         overlayLayers.forEach(l => tint(l, 0xe0a060))
+      }
+
+      // Green rooms: tint tile layers with green hues
+      if (this.cfg.isGreen) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x408050)
+        solidLayers.forEach(l  => tint(l,  0x509060))
+        overlayLayers.forEach(l => tint(l, 0x60a070))
+      }
+
+      // Blue rooms: tint tile layers with blue hues
+      if (this.cfg.isBlue) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x5080c0)
+        solidLayers.forEach(l  => tint(l,  0x6090d0))
+        overlayLayers.forEach(l => tint(l, 0x78a8e0))
       }
 
       this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
@@ -3611,7 +3683,6 @@ export class GameScene extends Phaser.Scene {
             p.speedMultiplier = 2.0
             p.setTexture('sheet-carter-transform', 7)
             p.play('carter-dino-idle', true)
-            this.setupCarterDinoLaserTimer(p)
           }
         }
       })
@@ -3876,6 +3947,7 @@ export class GameScene extends Phaser.Scene {
   // ── abilities ───────────────────────────────────────────────────────────────
 
   private doMeleeSwing(src: Player) {
+    if (src.isDinoForm) { this.fireCarterDinoMeleeLaser(src); return }
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
@@ -4627,7 +4699,6 @@ export class GameScene extends Phaser.Scene {
       carter.isTransforming = false
       carter.speedMultiplier = 2.0
       carter.play('carter-dino-idle', true)
-      this.setupCarterDinoLaserTimer(carter)
     })
   }
 
@@ -4635,8 +4706,6 @@ export class GameScene extends Phaser.Scene {
     if (!carter.isDinoForm || carter.isTransforming) return
     carter.isDinoForm = false
     this.stopCarterDinoSpin(carter)
-    this.carterDinoLaserTimer?.remove()
-    this.carterDinoLaserTimer = null
     carter.speedMultiplier = 1.0
     carter.isTransforming  = true
     carter.setTexture('sheet-carter-transform', 7)
@@ -4646,15 +4715,6 @@ export class GameScene extends Phaser.Scene {
       carter.isTransforming = false
       carter.setTexture(`sheet-${carter.charKey}`, 0)
       carter.play(`char-${carter.charKey}-idle`, true)
-    })
-  }
-
-  private setupCarterDinoLaserTimer(carter: Player) {
-    this.carterDinoLaserTimer?.remove()
-    this.carterDinoLaserTimer = this.time.addEvent({
-      delay: 533,
-      loop: true,
-      callback: () => { if (carter.active && carter.isDinoForm) this.fireCarterDinoLaser(carter) },
     })
   }
 
@@ -4718,17 +4778,20 @@ export class GameScene extends Phaser.Scene {
     return typeof frame === 'number' && frame >= 5 && frame <= 9
   }
 
-  private fireCarterDinoLaser(carter: Player) {
-    if (!carter.active || !carter.isDinoForm) return
-
-    const RANGE = 400
-    let target: Phaser.GameObjects.Sprite | null = null
+  private fireCarterDinoMeleeLaser(carter: Player) {
+    const RANGE = 500
+    let target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null = null
     let best = RANGE
 
     for (const e of this.enemies) {
       if (!e.active) continue
       const d = Phaser.Math.Distance.Between(carter.x, carter.y, e.x, e.y)
       if (d < best) { best = d; target = e }
+    }
+    for (const dest of this.destructibles) {
+      if (!dest.active) continue
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, dest.x, dest.y)
+      if (d < best) { best = d; target = dest }
     }
     if (this.boss?.active) {
       const d = Phaser.Math.Distance.Between(carter.x, carter.y, this.boss.x, this.boss.y)
@@ -4771,10 +4834,106 @@ export class GameScene extends Phaser.Scene {
           (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
       SoundManager.bossHit()
       this.boss!.hit()
+    } else if (target instanceof Destructible) {
+      target.takeDamage(30, DamageType.Physical)
     } else {
       this.hitEnemy(target as Enemy, carter)
       this.hitEnemy(target as Enemy, carter)
     }
+  }
+
+  // ── Map position overlay ──────────────────────────────────────────────────────
+
+  // Minimap layout — set once in buildMapOverlay, read in updateMapOverlay
+  private _mmLeft = 0
+  private _mmTop  = 0
+  private _mmW    = 0
+  private _mmH    = 0
+
+  private buildMapOverlay() {
+    const { width } = this.scale
+    const worldW = this.cfg.worldWidth
+    const worldH = this.cfg.worldHeight ?? 800
+
+    const MAX_W = 200, MAX_H = 90
+    const scaleX = MAX_W / worldW
+    const scaleY = MAX_H / worldH
+    const s = Math.min(scaleX, scaleY)
+    const mw = Math.round(worldW * s)
+    const mh = Math.round(worldH * s)
+    const ml = Math.round(width / 2 - mw / 2)   // left edge
+    const mt = 8                                  // top edge
+
+    this._mmLeft = ml; this._mmTop = mt
+    this._mmW = mw;    this._mmH = mh
+
+    // Static layer: background + tile geometry
+    const gfx = this.add.graphics().setScrollFactor(0).setDepth(22)
+    gfx.fillStyle(0x000011, 0.72)
+    gfx.fillRect(ml, mt, mw, mh)
+
+    // Draw solid tiles from every collision layer
+    if (this.tilemapLayers.length > 0) {
+      gfx.fillStyle(0x8899aa, 0.65)
+      for (const layer of this.tilemapLayers) {
+        const tileW = layer.tilemap.tileWidth  * layer.scaleX
+        const tileH = layer.tilemap.tileHeight * layer.scaleY
+        const ox    = layer.x
+        const oy    = layer.y
+        const rows  = layer.layer.data
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r]
+          for (let c = 0; c < row.length; c++) {
+            const tile = row[c]
+            if (!tile || tile.index === -1) continue
+            const wx = ox + c * tileW
+            const wy = oy + r * tileH
+            const px = Math.round(ml + wx * s)
+            const py = Math.round(mt + wy * s)
+            const pw = Math.max(1, Math.round(tileW * s))
+            const ph = Math.max(1, Math.round(tileH * s))
+            gfx.fillRect(px, py, pw, ph)
+          }
+        }
+      }
+    } else {
+      // Platform-only rooms: draw cfg.platforms as bars
+      gfx.fillStyle(0x8899aa, 0.65)
+      for (const plat of this.cfg.platforms) {
+        const px = Math.round(ml + (plat.x - plat.w / 2) * s)
+        const py = Math.round(mt + (plat.y - plat.h / 2) * s)
+        const pw = Math.max(1, Math.round(plat.w * s))
+        const ph = Math.max(1, Math.round(plat.h * s))
+        gfx.fillRect(px, py, pw, ph)
+      }
+    }
+
+    // Border drawn on top of tiles
+    gfx.lineStyle(1, 0xffffff, 0.30)
+    gfx.strokeRect(ml, mt, mw, mh)
+
+    // Dynamic layer for player dots (cleared + redrawn each frame)
+    this.minimapDots = this.add.graphics().setScrollFactor(0).setDepth(23)
+  }
+
+  private updateMapOverlay() {
+    if (!this.minimapDots) return
+    const ml = this._mmLeft, mt = this._mmTop
+    const mw = this._mmW,   mh = this._mmH
+    const worldH = this.cfg.worldHeight ?? 800
+    const COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
+
+    this.minimapDots.clear()
+    this.players.forEach((p, i) => {
+      if (!p.isAlive) return
+      const px = ml + (p.x / this.cfg.worldWidth) * mw
+      const py = mt + (p.y / worldH) * mh
+      // White halo + colored center
+      this.minimapDots!.fillStyle(0xffffff, 0.70)
+      this.minimapDots!.fillCircle(px, py, 4)
+      this.minimapDots!.fillStyle(COLORS[i % COLORS.length], 1)
+      this.minimapDots!.fillCircle(px, py, 2.5)
+    })
   }
 
   // ── Carter force field ────────────────────────────────────────────────────────
@@ -5217,7 +5376,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
-      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.charKey === 'coco' && p.isShadowForm })))
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm, carterAbility: p.carterAbility })))
 
     const nextIndex = goBack ? runIndex - 1 : runIndex + 1
 
@@ -5967,8 +6126,10 @@ export class GameScene extends Phaser.Scene {
         const runIdx0 = this.registry.get('runIndex') ?? 0
         const rightPuzzleBlocked = (runIdx0 === 7 && !this.registry.get('level5WordSolved'))
                                 || (runIdx0 === 8 && !this.registry.get('level6WordSolved'))
-        if (p.x > rightTrigX && exits.includes('right') &&
-            (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)) {
+        const rightYOk = this.cfg.rightExitYRange
+          ? (p.y >= this.cfg.rightExitYRange.min && p.y <= this.cfg.rightExitYRange.max)
+          : (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)
+        if (p.x > rightTrigX && exits.includes('right') && rightYOk) {
           if (rightPuzzleBlocked) {
             if (this.time.now - this._rightExitPopupLastTime > 2000) {
               this._rightExitPopupLastTime = this.time.now
@@ -6102,6 +6263,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     this.updateConradTrucks()
     this.updateCarterForceField()
     this.updateCarterDino()
+    this.updateMapOverlay()
     this.updateLevel3Duck()
     this.updateLevel4Ducks()
     this.updateLevel5Duck()

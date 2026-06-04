@@ -86,7 +86,8 @@ export interface RoomConfig {
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
-  rightExitX?: number             // trigger right exit at this X instead of worldWidth (no Y check)
+  rightExitX?: number             // trigger right exit at this X instead of worldWidth
+  rightExitYRange?: { min: number; max: number }  // optional Y bounds for rightExitX trigger
   musicKey?: string               // overrides 'music-gameplay' for this room (non-boss state)
   bossMusicKey?: string          // overrides 'music-boss' while boss is alive
   comingSoonGlowRight?: boolean  // purple glow at right exit
@@ -96,6 +97,8 @@ export interface RoomConfig {
   isDark?: boolean               // apply a dark purple overlay (levels 5-7+)
   isRed?: boolean                // apply a red overlay
   isOrange?: boolean             // apply an orange overlay
+  isBlue?: boolean               // apply a blue overlay
+  isGreen?: boolean              // apply a green overlay
   worldMapLayers?: {
     background?: string   // decorative bg layer (depth -2, no collision)
     solid?: string[]      // collision layers (depth 1)
@@ -131,6 +134,8 @@ const MAP_LEVEL_THREE = { key: 'world-map-level-three', tileKey: 'tileset-level-
 const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
 const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_FOUR  = { key: 'world-map-level-four',  tileKey: 'tileset-level-four',  tilesetName: 'spritefusion' } as const
+const MAP_LEVEL_FIVE  = { key: 'world-map-level-five',  tileKey: 'tileset-level-five',  tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: maps/intro_one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
@@ -541,6 +546,7 @@ const LEVEL_ONE_ROOM: RoomConfig = {
   entrySpawns:   { right: { x: 5200, y: 3036 } },
   bossPortal:    { x: 12541, y: 572 },
   rightExitX:    5313,
+  rightExitYRange: { min: 3036, max: 3306 },
   platforms:     [],
   enemies:       [],
   destructibles: [],
@@ -968,12 +974,186 @@ export function generateRun(): RoomConfig[] {
   ]
 }
 
+// ─── Level Four: The Green Halls ─────────────────────────────────────────────
+// Map: maps/level_four/map.json — 254×231 tiles at 32px = 8128×7392 world pixels
+// Right section: traversable from y≈400 down through platforms to bottom floor y≈6274
+// Mid-floor at y=3584 with passage gap at x=7680-7968
+
+const LEVEL_FOUR_ROOM: RoomConfig = {
+  name: 'The Green Halls',
+  ...HALL,
+  worldWidth:  254 * 32,   // 8128
+  worldHeight: 231 * 32,   // 7392
+  worldMap: MAP_LEVEL_FOUR,
+  worldMapLayers: {
+    background: 'Background walls',
+    solid:      ['Walls', 'Platforms large', 'Platform small'],
+    overlay:    ['Banner', 'Windows'],
+  },
+  isGreen: true,
+  exits: ['left', 'right'],
+  defaultSpawn:  { x: 5500, y: 400 },
+  entrySpawns:   { left: { x: 5500, y: 400 } },
+  exitPositions: { left: 400 },
+  bossPortal:    { x: 5000, y: 6240 },
+  platforms: [],
+  enemies: [
+    // Upper right section
+    { x: 4800, y: 500,  ability: AbilityType.Bat },
+    { x: 5800, y: 400,  ability: AbilityType.Bat },
+    { x: 6400, y: 500,  ability: AbilityType.Lightning },
+    { x: 7000, y: 400,  ability: AbilityType.Bat },
+    { x: 7600, y: 300,  ability: AbilityType.Bat },
+    // Platform area (right side only clear at y=1000)
+    { x: 6200, y: 1000, ability: AbilityType.Lightning },
+    { x: 6800, y: 1000, ability: AbilityType.Bat },
+    { x: 7200, y: 1000, ability: AbilityType.Fire },
+    // Below platform band
+    { x: 4600, y: 1500, ability: AbilityType.BlackDragon },
+    { x: 5400, y: 1500, ability: AbilityType.Bat },
+    { x: 6200, y: 1500, ability: AbilityType.Lightning },
+    { x: 7000, y: 1500, ability: AbilityType.BlackDragon },
+    // Mid section
+    { x: 5000, y: 2500, ability: AbilityType.Fire },
+    { x: 6400, y: 2500, ability: AbilityType.BlackDragon },
+    { x: 7200, y: 3500, ability: AbilityType.Bat },
+    { x: 7800, y: 3500, ability: AbilityType.Lightning },
+    // Lower section
+    { x: 5200, y: 4000, ability: AbilityType.BlackDragon },
+    { x: 7400, y: 4000, ability: AbilityType.Fire },
+    { x: 5400, y: 4500, ability: AbilityType.Bat },
+    { x: 7200, y: 4500, ability: AbilityType.BlackDragon },
+    // Bottom floor
+    { x: 5000, y: 6274, ability: AbilityType.Lightning },
+    { x: 6000, y: 6274, ability: AbilityType.Fire },
+    { x: 7000, y: 6274, ability: AbilityType.BlackDragon },
+  ],
+  destructibles: [],
+  furnitureSpawns: [
+    { type: 'chest',    x: 4600, scanFromY: 100,  itemDrop: 'pizza' },
+    { type: 'bookcase', x: 6000, scanFromY: 100 },
+    { type: 'table',    x: 7200, scanFromY: 100 },
+    { type: 'chest',    x: 5200, scanFromY: 1800, pizzaDrop: true },
+    { type: 'bookcase', x: 6600, scanFromY: 2000 },
+    { type: 'table',    x: 5000, scanFromY: 6200 },
+    { type: 'chest',    x: 6500, scanFromY: 6200 },
+    { type: 'bookcase', x: 7500, scanFromY: 6200 },
+  ],
+  crates: [],
+  items: [
+    { x: 5000, y:  400, type: 'letter-bug', keyLevel: 10 },
+    { x: 6600, y: 1000, type: 'letter-bug', keyLevel: 10 },
+    { x: 5400, y: 1500, type: 'letter-bug', keyLevel: 10 },
+    { x: 7600, y: 3500, type: 'letter-bug', keyLevel: 10 },
+    { x: 5200, y: 4000, type: 'letter-bug', keyLevel: 10 },
+    { x: 6000, y: 6274, type: 'key-jar',    keyLevel: 10 },
+  ],
+  letterBugPool: [
+    { x: 5000, y:  400 }, { x: 6200, y:  600 }, { x: 6600, y: 1000 },
+    { x: 5400, y: 1500 }, { x: 7000, y: 2500 }, { x: 7600, y: 3500 },
+    { x: 5200, y: 4000 }, { x: 7400, y: 4000 }, { x: 7200, y: 4500 },
+    { x: 5000, y: 6274 },
+  ],
+  mimicSpawns: [
+    { x: 6800, y:  500 },
+    { x: 7400, y: 3500 },
+    { x: 6500, y: 6274 },
+  ],
+}
+
+// ─── Level Five: The Violet Halls ────────────────────────────────────────────
+// Map: maps/level_five/map.json — 550×92 tiles at 32px = 17600×2944 world pixels
+// Upper traversal corridor at y≈290-900, main floor at y≈2752
+
+const LEVEL_FIVE_ROOM: RoomConfig = {
+  name: 'The Blue Halls',
+  ...HALL,
+  worldWidth:  550 * 32,  // 17600
+  worldHeight:  92 * 32,  // 2944
+  worldMap: MAP_LEVEL_FIVE,
+  worldMapLayers: {
+    background: 'Background walls',
+    solid:      ['Walls', 'Platforms large', 'Platform small'],
+    overlay:    ['Banner', 'Windows'],
+  },
+  isBlue: true,
+  exits: ['left', 'right'],
+  defaultSpawn:  { x: 128,   y: 2684 },
+  entrySpawns:   { left: { x: 128, y: 2684 } },
+  exitPositions: { left: 2684, right: 2716 },
+  bossPortal:    { x: 16744, y: 2716 },
+  rightExitX:    17456,
+  rightExitYRange: { min: 2680, max: 2750 },
+  platforms: [],
+  enemies: [
+    // Left section — verified clear of walls
+    { x:   600, y: 700, ability: AbilityType.Bat },
+    { x:  1200, y: 800, ability: AbilityType.Lightning },
+    { x:  1800, y: 700, ability: AbilityType.Bat },
+    { x:  2400, y: 800, ability: AbilityType.Fire },
+    { x:  3000, y: 700, ability: AbilityType.Bat },
+    // Mid-left (4000 was in a wall → 3800; 5600@800 → @850; 6400/7200 only open at y=400)
+    { x:  3800, y: 800, ability: AbilityType.Lightning },
+    { x:  4800, y: 700, ability: AbilityType.Bat },
+    { x:  5600, y: 850, ability: AbilityType.Fire },
+    { x:  6400, y: 400, ability: AbilityType.Bat },
+    { x:  7200, y: 400, ability: AbilityType.Bat },
+    // Mid-right
+    { x:  9000, y: 800, ability: AbilityType.BlackDragon },
+    { x:  9800, y: 700, ability: AbilityType.Bat },
+    { x: 10600, y: 800, ability: AbilityType.Fire },
+    { x: 11400, y: 700, ability: AbilityType.BlackDragon },
+    { x: 12200, y: 800, ability: AbilityType.Lightning },
+    // Right section
+    { x: 13500, y: 800, ability: AbilityType.BlackDragon },
+    { x: 14500, y: 700, ability: AbilityType.Bat },
+    { x: 15500, y: 800, ability: AbilityType.Fire },
+    { x: 16500, y: 700, ability: AbilityType.BlackDragon },
+  ],
+  destructibles: [],
+  furnitureSpawns: [
+    // scanFromY: 2600 so furniture lands on the main floor, not upper platforms
+    { type: 'chest',    x:   350, scanFromY: 2600, itemDrop: 'pizza' },
+    { type: 'bookcase', x:   900, scanFromY: 2600 },
+    { type: 'table',    x:  2100, scanFromY: 2600 },
+    { type: 'chest',    x:  3500, scanFromY: 2600 },
+    { type: 'bookcase', x:  4800, scanFromY: 2600 },
+    { type: 'table',    x:  6300, scanFromY: 2600 },
+    { type: 'chest',    x:  7800, scanFromY: 2600, pizzaDrop: true },
+    { type: 'bookcase', x:  9100, scanFromY: 2600 },
+    { type: 'table',    x: 10500, scanFromY: 2600 },
+    { type: 'bookcase', x: 13500, scanFromY: 2600 },
+    { type: 'table',    x: 15200, scanFromY: 2600 },
+    { type: 'chest',    x: 16500, scanFromY: 2600 },
+  ],
+  crates: [],
+  items: [
+    { x:  2000, y: 2684, type: 'letter-bug', keyLevel: 9 },
+    { x:  5000, y: 2684, type: 'letter-bug', keyLevel: 9 },
+    { x:  9000, y: 2684, type: 'letter-bug', keyLevel: 9 },
+    { x: 14000, y: 2684, type: 'letter-bug', keyLevel: 9 },
+    { x: 15500, y: 2684, type: 'letter-bug', keyLevel: 9 },
+    { x: 10870, y: 2748, type: 'key-jar',    keyLevel: 9 },
+  ],
+  letterBugPool: [
+    { x:  2000, y: 2684 }, { x:  4000, y: 2684 }, { x:  5000, y: 2684 },
+    { x:  7500, y: 2684 }, { x:  9000, y: 2684 }, { x: 10500, y: 2684 },
+    { x: 13500, y: 2684 }, { x: 14000, y: 2684 }, { x: 15500, y: 2684 },
+    { x: 16000, y: 2684 },
+  ],
+  mimicSpawns: [
+    { x:  3000, y: 2684 },
+    { x:  8000, y: 2684 },
+    { x: 14000, y: 2684 },
+  ],
+}
+
 // Legacy aliases
 export const BOSS_ROOM: RoomConfig = BOSS_TILEMAP_ROOM
 export const TUTORIAL_ROOM: RoomConfig = { ...WORLD_ROOM, isTutorial: true }
 export const THRONE_ROOM:  RoomConfig  = { ...WORLD_ROOM, isThrone: true  }
 // New levels — not yet in the main run; exported for future connection
-export { LEVEL_ONE_ROOM, LEVEL_TWO_ROOM, LEVEL_THREE_ROOM }
+export { LEVEL_ONE_ROOM, LEVEL_TWO_ROOM, LEVEL_THREE_ROOM, LEVEL_FOUR_ROOM, LEVEL_FIVE_ROOM }
 export const WORLD_NAMES = ['THE CASTLE', 'THE DARK SANCTUM']
 export const ROOMS_PER_RUN = 2
 export const LEVEL_POOLS: RoomConfig[][] = [[WORLD_ROOM]]
