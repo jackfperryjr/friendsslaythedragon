@@ -438,7 +438,7 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   worldHeight: 183 * 32,  // 5856
   worldMap: { ...MAP_THREE },
   exits: [],
-  exitPositions: { left: 2928 },
+  exitPositions: { left: 3036 },
   entrySpawns: { right: { x: 5300, y: 608 }, left: { x: 597, y: 672 } },
   bossPortal: { x: 517, y: 672 },
   barrierExit: { x: 5500, y: 608 },
@@ -511,7 +511,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
   bossAttackRate: 700,
   bossSpawnX: 2319,
   bossSpawnY: 1800,
-  bossScale: 5,
+  bossScale: 4,
   starOrb: { x: 1219, y: 512 },
   platforms: [
     { x: 16, y: 640, w: 32, h: 130 },   // seal left exit
@@ -521,9 +521,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
-  mimicSpawns: [
-    { x: 1000, y: 1925 }, { x: 2200, y: 1925 },
-  ],
+  mimicSpawns: [],
 }
 
 // ─── Level One: The Red Halls ─────────────────────────────────────────────────
@@ -545,8 +543,8 @@ const LEVEL_ONE_ROOM: RoomConfig = {
   defaultSpawn:  { x: 174, y: 348 },
   entrySpawns:   { right: { x: 5200, y: 3036 } },
   bossPortal:    { x: 12541, y: 572 },
-  rightExitX:    5313,
-  rightExitYRange: { min: 3036, max: 3306 },
+  rightExitX:    5328,
+  rightExitYRange: { min: 3036, max: 3336 },
   platforms:     [],
   enemies:       [],
   destructibles: [],
@@ -599,7 +597,9 @@ const LEVEL_TWO_ROOM: RoomConfig = {
   isOrange: true,
   exits: ['left', 'right'],
   defaultSpawn:    { x: 128, y: 3004 },
-  entrySpawns:     { left: { x: 128, y: 3004 } },
+  entrySpawns:     { left: { x: 128, y: 3004 }, right: { x: 5277, y: 8124 } },
+  rightExitX:      5277,
+  rightExitYRange: { min: 7900, max: 8416 },
   bossPortal:      { x: 1079, y: 5372 },
   platforms:       [],
   enemies:         [],
@@ -656,9 +656,7 @@ const LEVEL_THREE_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates:          [],
   items:           [],
-  mimicSpawns: [
-    { x: 2000, y: 2012 }, { x: 6000, y: 2012 }, { x: 9200, y: 2012 },
-  ],
+  mimicSpawns: [],
 }
 
 // ─── Level 4: Outside World ───────────────────────────────────────────────────
@@ -904,9 +902,7 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
-  mimicSpawns: [
-    { x: 550, y: 1355 }, { x: 950, y: 1355 },
-  ],
+  mimicSpawns: [],
 }
 
 // ─── Final Final Boss Room ────────────────────────────────────────────────────
@@ -944,9 +940,7 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
   furnitureSpawns: [],
   crates: [],
   items: [],
-  mimicSpawns: [
-    { x: 450, y: 1375 },
-  ],
+  mimicSpawns: [],
 }
 
 export const RUN_LENGTH = 6
@@ -965,12 +959,17 @@ export function generateRun(): RoomConfig[] {
     LEVEL2_BOSS_ROOM,      //  3 — Boss 2: Zombie King
     LEVEL3_WORLD_ROOM,     //  4 — Level 3
     BOSS_THREE_ROOM,       //  5 — Boss 3: Celery Man
-    LEVEL4_WORLD_ROOM,     //  6 — Outside (nighttime)
-    LEVEL5_WORLD_ROOM,     //  7 — Level 5
-    LEVEL6_WORLD_ROOM,     //  8 — Level 6
-    LEVEL7_WORLD_ROOM,     //  9 — Level 7 (boss portal TBD)
-    BOSS_FINAL_ROOM,       // 10 — Final Boss: The Dragon
-    BOSS_FINAL_FINAL_ROOM, // 11 — Secret: The True Dragon (hidden portal only)
+    LEVEL_ONE_ROOM,        //  6 — The Red Halls
+    LEVEL_TWO_ROOM,        //  7 — The Orange Halls
+    LEVEL_THREE_ROOM,      //  8 — The Sunset Fields
+    LEVEL_FOUR_ROOM,       //  9 — The Green Halls
+    LEVEL_FIVE_ROOM,       // 10 — The Blue Halls
+    LEVEL4_WORLD_ROOM,     // 11 — Outside (nighttime)
+    LEVEL5_WORLD_ROOM,     // 12 — Level 5
+    LEVEL6_WORLD_ROOM,     // 13 — Level 6
+    LEVEL7_WORLD_ROOM,     // 14 — Level 7 (boss portal TBD)
+    BOSS_FINAL_ROOM,       // 15 — Final Boss: The Dragon
+    BOSS_FINAL_FINAL_ROOM, // 16 — Secret: The True Dragon (hidden portal only)
   ]
 }
 
@@ -993,9 +992,11 @@ const LEVEL_FOUR_ROOM: RoomConfig = {
   isGreen: true,
   exits: ['left', 'right'],
   defaultSpawn:  { x: 5500, y: 400 },
-  entrySpawns:   { left: { x: 5500, y: 400 } },
-  exitPositions: { left: 400 },
-  bossPortal:    { x: 5000, y: 6240 },
+  entrySpawns:   { left: { x: 151, y: 6268 }, right: { x: 7988, y: 476 } },
+  exitPositions: { left: 6268 },
+  bossPortal:    { x: 5002, y: 668 },
+  rightExitX:      7996,
+  rightExitYRange: { min: 326, max: 626 },
   platforms: [],
   enemies: [
     // Upper right section
@@ -1046,7 +1047,7 @@ const LEVEL_FOUR_ROOM: RoomConfig = {
     { x: 5400, y: 1500, type: 'letter-bug', keyLevel: 10 },
     { x: 7600, y: 3500, type: 'letter-bug', keyLevel: 10 },
     { x: 5200, y: 4000, type: 'letter-bug', keyLevel: 10 },
-    { x: 6000, y: 6274, type: 'key-jar',    keyLevel: 10 },
+    { x: 5139, y: 3548, type: 'key-jar',    keyLevel: 10 },
   ],
   letterBugPool: [
     { x: 5000, y:  400 }, { x: 6200, y:  600 }, { x: 6600, y: 1000 },

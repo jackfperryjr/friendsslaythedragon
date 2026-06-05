@@ -114,7 +114,7 @@ export class GameScene extends Phaser.Scene {
 
   private duckNpcSprite:  Phaser.GameObjects.Image | null = null
   private duckBubble:     Phaser.GameObjects.Container | null = null
-  private arithDucks: { sprite: Phaser.GameObjects.Sprite; bubble: Phaser.GameObjects.Container | null; problemIdx: number; solved: boolean }[] = []
+  private arithDucks: { sprite: Phaser.GameObjects.Sprite; bubble: Phaser.GameObjects.Container | null; problemIdx: number; keyPrefix: string; solved: boolean }[] = []
   private exitBarrier: Phaser.GameObjects.Rectangle | null = null
   private _rightExitPopupLastTime = 0
 
@@ -1215,14 +1215,18 @@ export class GameScene extends Phaser.Scene {
     if (runIndex === 0 && !this.cfg.isBossRoom) this.buildWorldOneNPCs()
     else if (runIndex === 2 && !this.cfg.isBossRoom) this.buildLevel2IntroDuck()
     else if (runIndex === 4 && !this.cfg.isBossRoom) this.buildLevel3Duck()
-    else if (runIndex === 6 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
-    else if (runIndex === 7 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
-    else if (runIndex === 8 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
-    else if (runIndex === 9 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
+    else if (runIndex === 11 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
+    else if (runIndex === 12 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
+    else if (runIndex === 13 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
+    else if (runIndex === 14 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
     else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
     else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
     else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
-    if (this.cfg.isBlue && !this.cfg.isBossRoom) this.buildLevelFiveNPCs()
+    if (this.cfg.isRed    && !this.cfg.isBossRoom) this.buildLevelOneNPCs()
+    if (this.cfg.isOrange && !this.cfg.isBossRoom) this.buildLevelTwoNPCs()
+    if (this.cfg.isSunset && !this.cfg.isBossRoom) { this.buildLevel3WorldNPCs(); this.buildSunsetArithDucks() }
+    if (this.cfg.isGreen  && !this.cfg.isBossRoom) this.buildGreenHallsNPCs()
+    if (this.cfg.isBlue   && !this.cfg.isBossRoom) this.buildLevelFiveNPCs()
   }
 
   private buildLevelFiveNPCs() {
@@ -1370,13 +1374,13 @@ export class GameScene extends Phaser.Scene {
         const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
                         || (pad?.connected && !!(pad.buttons[2]?.pressed))
         if (!interacted) continue
-        const prob = this.registry.get(`level4Problem${duck.problemIdx}`) as { q: string; answer: number } | null
+        const prob = this.registry.get(`${duck.keyPrefix}${duck.problemIdx}`) as { q: string; answer: number } | null
         if (!prob) continue
         const rewards: Array<'speed' | 'attack-boost' | 'invulnerability'> = ['speed', 'attack-boost', 'invulnerability']
         const reward = rewards[duck.problemIdx - 1]
         this.showArithmeticMenu(duck.sprite.x, duck.sprite.y, prob.q, prob.answer, reward, () => {
           duck.solved = true
-          this.registry.set(`level4Problem${duck.problemIdx}Solved`, true)
+          this.registry.set(`${duck.keyPrefix}${duck.problemIdx}Solved`, true)
           for (const pl of this.players) {
             if (!pl.isAlive) continue
             if (reward === 'speed')             pl.applySpeedBoost(true)
@@ -1611,8 +1615,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildLevelTwoNPCs() {
-    this.add.image(661, 3004, 'npc-dad', 8).setDepth(2).setScale(1.5)
-    this.showNpcBubble(661, 2914, [
+    const dx = 962, dy = 3004
+    this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
       'Find 5 letter bugs',
       'hidden in the halls!',
       'Spell the word at',
@@ -1622,24 +1627,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildLevel3WorldNPCs() {
-    // Sunset Fields — no puzzle, just a welcoming duck at the entry
-    const dx = 420, dy = 2048
+    const dx = 1710, dy = 1820
     this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
     this.showNpcBubble(dx, dy - 90, [
       'The Sunset Fields!',
-      'Enjoy the view and',
-      'keep moving right!',
+      'Find 5 math ducks',
+      'to earn boosts!',
     ], null)
   }
 
   buildLevelOneNPCs() {
-    this.add.image(768, 604, 'npc-mom', 10).setDepth(2).setScale(1.5).setFlipX(true)
-    this.showNpcBubble(768, 520, [
+    const dx = 705, dy = 604
+    this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
       'Welcome to the Red Halls!',
       'Find 5 letter bugs',
       'hidden in the level.',
       'Solve the magic jar',
       'to unlock the door!',
+    ], null)
+  }
+
+  private buildGreenHallsNPCs() {
+    const dx = 766, dy = 6268
+    this.add.image(dx, dy, 'npc-dad', 8).setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
+      'The Green Halls!',
+      'Find letter bugs,',
+      'solve the magic jar,',
+      'then enter the door!',
     ], null)
   }
 
@@ -1666,7 +1682,25 @@ export class GameScene extends Phaser.Scene {
       const { x, y } = positions[i]
       const duck = this.add.sprite(x, y, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5).setFlipX(true)
       const bubble = this.showNpcBubble(x, y - 90, [`Reward: ${rewardLabels[i]}`, 'Solve my math', 'problem!'], null)
-      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, solved: false })
+      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, keyPrefix: 'level4Problem', solved: false })
+    }
+  }
+
+  private buildSunsetArithDucks() {
+    const positions = [
+      { x: 2800, y: 2012 },
+      { x: 4600, y: 2012 },
+      { x: 6500, y: 2012 },
+      { x: 8400, y: 2012 },
+      { x: 10100, y: 2012 },
+    ]
+    const rewardLabels = ['Speed Boost', 'Power Boost', 'Invincible!', 'Speed Boost', 'Power Boost']
+    for (let i = 0; i < 5; i++) {
+      if (this.registry.get(`sunsetProblem${i + 1}Solved`)) continue
+      const { x, y } = positions[i]
+      const duck = this.add.sprite(x, y, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5).setFlipX(true)
+      const bubble = this.showNpcBubble(x, y - 90, [`Reward: ${rewardLabels[i]}`, 'Solve my math', 'problem!'], null)
+      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, keyPrefix: 'sunsetProblem', solved: false })
     }
   }
 
@@ -1844,7 +1878,17 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level3BugPositions', positions)
       }
     }
-    if (runIndex === 6 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
+    if (this.cfg.isSunset && !this.cfg.isBossRoom && !this.registry.get('sunsetProblem1')) {
+      const genAdd = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
+      const genSub = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
+      const genMul = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
+      this.registry.set('sunsetProblem1', genAdd())
+      this.registry.set('sunsetProblem2', genSub())
+      this.registry.set('sunsetProblem3', genMul())
+      this.registry.set('sunsetProblem4', genAdd())
+      this.registry.set('sunsetProblem5', genSub())
+    }
+    if (runIndex === 11 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
       const genAdd  = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
       const genSub  = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
       const genMul  = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
@@ -4855,7 +4899,9 @@ export class GameScene extends Phaser.Scene {
     const worldW = this.cfg.worldWidth
     const worldH = this.cfg.worldHeight ?? 800
 
-    const MAX_W = 200, MAX_H = 90
+    const isDesktop = !this.sys.game.device.input.touch
+    const MAX_W = isDesktop ? 300 : 200
+    const MAX_H = isDesktop ? 135 : 90
     const scaleX = MAX_W / worldW
     const scaleY = MAX_H / worldH
     const s = Math.min(scaleX, scaleY)
@@ -5333,6 +5379,16 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('level4Problem2Solved', null)
     this.registry.set('level4Problem3Solved', null)
     ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+    this.registry.set('sunsetProblem1', null)
+    this.registry.set('sunsetProblem2', null)
+    this.registry.set('sunsetProblem3', null)
+    this.registry.set('sunsetProblem4', null)
+    this.registry.set('sunsetProblem5', null)
+    this.registry.set('sunsetProblem1Solved', null)
+    this.registry.set('sunsetProblem2Solved', null)
+    this.registry.set('sunsetProblem3Solved', null)
+    this.registry.set('sunsetProblem4Solved', null)
+    this.registry.set('sunsetProblem5Solved', null)
     this.registry.set('level5Word', null)
     this.registry.set('level5BugLetters', null)
     this.registry.set('level5BugPositions', null)
@@ -5581,6 +5637,16 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level4Problem2Solved', null)
         this.registry.set('level4Problem3Solved', null)
         ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('sunsetProblem1', null)
+        this.registry.set('sunsetProblem2', null)
+        this.registry.set('sunsetProblem3', null)
+        this.registry.set('sunsetProblem4', null)
+        this.registry.set('sunsetProblem5', null)
+        this.registry.set('sunsetProblem1Solved', null)
+        this.registry.set('sunsetProblem2Solved', null)
+        this.registry.set('sunsetProblem3Solved', null)
+        this.registry.set('sunsetProblem4Solved', null)
+        this.registry.set('sunsetProblem5Solved', null)
         this.registry.set('level5Word', null)
         this.registry.set('level5BugLetters', null)
         this.registry.set('level5BugPositions', null)
@@ -5713,6 +5779,16 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level4Problem2Solved', null)
         this.registry.set('level4Problem3Solved', null)
         ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('sunsetProblem1', null)
+        this.registry.set('sunsetProblem2', null)
+        this.registry.set('sunsetProblem3', null)
+        this.registry.set('sunsetProblem4', null)
+        this.registry.set('sunsetProblem5', null)
+        this.registry.set('sunsetProblem1Solved', null)
+        this.registry.set('sunsetProblem2Solved', null)
+        this.registry.set('sunsetProblem3Solved', null)
+        this.registry.set('sunsetProblem4Solved', null)
+        this.registry.set('sunsetProblem5Solved', null)
         this.registry.set('level5Word', null)
         this.registry.set('level5BugLetters', null)
         this.registry.set('level5BugPositions', null)
@@ -5891,6 +5967,16 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('level4Problem2Solved', null)
       this.registry.set('level4Problem3Solved', null)
       ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+      this.registry.set('sunsetProblem1', null)
+      this.registry.set('sunsetProblem2', null)
+      this.registry.set('sunsetProblem3', null)
+      this.registry.set('sunsetProblem4', null)
+      this.registry.set('sunsetProblem5', null)
+      this.registry.set('sunsetProblem1Solved', null)
+      this.registry.set('sunsetProblem2Solved', null)
+      this.registry.set('sunsetProblem3Solved', null)
+      this.registry.set('sunsetProblem4Solved', null)
+      this.registry.set('sunsetProblem5Solved', null)
       this.registry.set('level5Word', null)
       this.registry.set('level5BugLetters', null)
       this.registry.set('level5BugPositions', null)
@@ -6124,8 +6210,8 @@ export class GameScene extends Phaser.Scene {
         if (p.x < 0   && exits.includes('left')   && Math.abs(p.y - (ep2.left   ?? 640))   < DOOR_H / 2) { this.exitRoom('left');   return }
         const rightTrigX = this.cfg.rightExitX ?? W
         const runIdx0 = this.registry.get('runIndex') ?? 0
-        const rightPuzzleBlocked = (runIdx0 === 7 && !this.registry.get('level5WordSolved'))
-                                || (runIdx0 === 8 && !this.registry.get('level6WordSolved'))
+        const rightPuzzleBlocked = (runIdx0 === 12 && !this.registry.get('level5WordSolved'))
+                                || (runIdx0 === 13 && !this.registry.get('level6WordSolved'))
         const rightYOk = this.cfg.rightExitYRange
           ? (p.y >= this.cfg.rightExitYRange.min && p.y <= this.cfg.rightExitYRange.max)
           : (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)
@@ -6160,12 +6246,12 @@ export class GameScene extends Phaser.Scene {
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         const runIdx: number = this.registry.get('runIndex') ?? 0
         const portalBlocked = (runIdx === 4  && !this.registry.get('level3WordSolved'))
-                           || (runIdx === 6  && !this.registry.get('hasLevel4Key'))
-                           || (runIdx === 7  && !this.registry.get('hasLevel8Key'))
-                           || (runIdx === 10 && !this.registry.get('level7WordSolved'))
+                           || (runIdx === 11 && !this.registry.get('hasLevel4Key'))
+                           || (runIdx === 12 && !this.registry.get('hasLevel8Key'))
+                           || (runIdx === 15 && !this.registry.get('level7WordSolved'))
         if (nearPortal && portalBlocked) {
           if (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))
-            this.showPopup(p.x, p.y - 40, (runIdx === 6 || runIdx === 7) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+            this.showPopup(p.x, p.y - 40, (runIdx === 11 || runIdx === 12) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
         } else if (nearPortal && (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))) {
           this.winGame()
         }

@@ -126,11 +126,11 @@ const ANIM_FRAMES = {
 const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number; walkFrames?: number[] }[] = [
   { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
   { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
-  { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
   { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
+  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 3 },
   { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
   { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',  fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
 ]
