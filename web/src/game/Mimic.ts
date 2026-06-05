@@ -29,7 +29,7 @@ export class Mimic extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)
     body.setSize(44, 44)
-    body.setOffset(10, 10)
+    body.setOffset(10, 3)
   }
 
   wake() {

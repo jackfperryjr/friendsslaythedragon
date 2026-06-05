@@ -17,7 +17,7 @@ const ENEMY_SHEET: Record<AbilityType, string> = {
   [AbilityType.None]:        'sheet-enemy-mom',
   [AbilityType.Fire]:        'sheet-enemy-zombie',
   [AbilityType.Lightning]:   'sheet-enemy-skeleton',
-  [AbilityType.Ice]:         'npc-duck',
+  [AbilityType.Ice]:         'sheet-enemy-zombie',
   [AbilityType.Bat]:         'sheet-enemy-bat',
   [AbilityType.BlackDragon]: 'sheet-black-dragon',
 }
@@ -26,7 +26,7 @@ const ENEMY_BODY: Record<AbilityType, [number, number]> = {
   [AbilityType.None]:        [44, 50],
   [AbilityType.Fire]:        [38, 50],
   [AbilityType.Lightning]:   [38, 50],
-  [AbilityType.Ice]:         [40, 34],
+  [AbilityType.Ice]:         [38, 50],
   [AbilityType.Bat]:         [36, 28],
   [AbilityType.BlackDragon]: [38, 40],
 }
@@ -42,7 +42,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected hp = 5
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
-    const isFlying = ability === AbilityType.Ice || ability === AbilityType.Bat || ability === AbilityType.BlackDragon
+    const isFlying = ability === AbilityType.Bat || ability === AbilityType.BlackDragon
     const sheetKey = ENEMY_SHEET[ability]
     super(scene, x, y, sheetKey)
     this.abilityType = ability

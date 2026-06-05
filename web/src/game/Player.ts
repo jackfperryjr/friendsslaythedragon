@@ -22,7 +22,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isTruck          = false
   isTrex           = false
   isDinoForm       = false   // Carter in dinosaur form
-  carterAbility: 'duplicate' | 'dino' = 'dino'
+  carterAbility: 'duplicate' | 'dino' = 'duplicate'
   isTransforming   = false   // true during transform/untransform animation
   isShadowForm     = false   // Coco wearing the Shadow costume
   isSpindashing    = false   // Coco executing a spindash

@@ -8,11 +8,13 @@ export class UIManager {
   private heartIcons: Phaser.GameObjects.Image[][] = []
   private rowYs: number[] = []
   private bossBarFill: Phaser.GameObjects.Rectangle | null = null
+  private bossBarFill2: Phaser.GameObjects.Rectangle | null = null
   private bossHudObjects: Phaser.GameObjects.GameObject[] = []
   private speedBoostIcons: Phaser.GameObjects.Image[] = []
   private strengthBoostIcons: Phaser.GameObjects.Image[] = []
   private invulnerabilityIcons: Phaser.GameObjects.Image[] = []
   private letterSlots: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
+  private coinCountText: Phaser.GameObjects.Text | null = null
 
   constructor(
     scene: Phaser.Scene,
@@ -21,6 +23,8 @@ export class UIManager {
     isBossRoom = false,
     bossMaxHp = 0,
     bossName = 'BOSS',
+    boss2MaxHp = 0,
+    boss2Name = '',
   ) {
     this.scene = scene
     const { width } = scene.scale
@@ -40,15 +44,28 @@ export class UIManager {
         .setScrollFactor(0).setDepth(21)
 
       this.bossHudObjects = [bossLabel, bossBg, this.bossBarFill]
+
+      if (boss2MaxHp > 0 && boss2Name) {
+        const by2 = by + 32
+        const boss2Label = scene.add.text(bx, by2 - 10, boss2Name, {
+          fontSize: '8px', fontFamily: FONT, color: '#ff4444',
+        }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20)
+        const boss2Bg = scene.add.rectangle(bx, by2, 152, 12, 0x330000)
+          .setScrollFactor(0).setDepth(20)
+        this.bossBarFill2 = scene.add.rectangle(bx - 75, by2, 150, 10, 0xff6600)
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0).setDepth(21)
+        this.bossHudObjects.push(boss2Label, boss2Bg, this.bossBarFill2)
+      }
     }
 
     const ROW_H    = 42
     const HEAD_SZ  = 56
     const HEAD_CX  = 32
     const SHIFT    = 40
-    // Super-ability icons start where the old elemental slot was (ABX),
-    // but now there's no elemental slot so they begin directly after hearts.
-    const SUPER_X  = 172 + SHIFT   // first super-ability icon center-x
+    // Super-ability icons shifted right to leave room for coin counter between hearts and boosts
+    const SUPER_X  = 196 + SHIFT   // first super-ability icon center-x
+    const COIN_HUD_X = 172         // coin counter sits between last heart (~152) and first boost icon
     const FALLBACK_COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
 
     const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
@@ -91,12 +108,23 @@ export class UIManager {
       this.speedBoostIcons.push(speedIcon)
       this.strengthBoostIcons.push(strengthIcon)
       this.invulnerabilityIcons.push(invulnIcon)
+
+      // Coin counter between hearts and boost icons — only on first player row
+      if (i === 0) {
+        const coinGfx = scene.add.graphics().setScrollFactor(0).setDepth(20)
+        coinGfx.fillStyle(0xffd700, 1);   coinGfx.fillCircle(COIN_HUD_X, rowY, 6)
+        coinGfx.fillStyle(0xffff99, 0.6); coinGfx.fillCircle(COIN_HUD_X - 2, rowY - 2, 2)
+        this.coinCountText = scene.add.text(COIN_HUD_X + 10, rowY + 1, '0', {
+          fontSize: '9px', fontFamily: FONT, color: '#ffd700',
+          stroke: '#000000', strokeThickness: 3,
+        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(21)
+      }
     }
 
-    // Letter bug tray — up to 5 collected-letter slots, offset from player HUD with a gap
+    // Letter bug tray — up to 7 collected-letter slots, offset from player HUD with a gap
     const LETTER_Y = 22
     const LETTER_START_X = 350  // 30px gap after the player HUD block (~320px wide)
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const slotX = LETTER_START_X + i * 36
       const bg = scene.add.rectangle(slotX, LETTER_Y, 30, 30, 0x000000, 0.55)
         .setStrokeStyle(1, 0x556677).setScrollFactor(0).setDepth(20)
@@ -120,7 +148,13 @@ export class UIManager {
   updateBossBar(current: number, max: number) {
     if (!this.bossBarFill) return
     const pct = max > 0 ? Math.max(0, current / max) : 0
-    this.bossBarFill.width = Math.round(200 * pct)
+    this.bossBarFill.width = Math.round(150 * pct)
+  }
+
+  updateBoss2Bar(current: number, max: number) {
+    if (!this.bossBarFill2) return
+    const pct = max > 0 ? Math.max(0, current / max) : 0
+    this.bossBarFill2.width = Math.round(150 * pct)
   }
 
   updateLetters(letters: string[]) {
@@ -129,11 +163,16 @@ export class UIManager {
     })
   }
 
+  updateCoinCount(n: number) {
+    this.coinCountText?.setText(String(n))
+  }
+
   hideBossBar() {
     if (!this.bossHudObjects.length) return
     const targets = this.bossHudObjects
     this.bossHudObjects = []
     this.bossBarFill = null
+    this.bossBarFill2 = null
     this.scene.tweens.add({
       targets,
       alpha: 0,

@@ -122,17 +122,24 @@ const ANIM_FRAMES = {
   ability: { start: 12, end: 11 },
 }
 // ── Enemy sheet config ────────────────────────────────────────────────────────
-// New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
+// Boss sprites: 256×256 total, 128×128 per frame (2×2 grid → 4 frames)
+// Regular enemy sprites: 256×256 with 16 frames in a 4×4 grid → fw=64, fh=64
 const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number; walkFrames?: number[] }[] = [
-  { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
-  { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
-  { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 3 },
-  { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
-  { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',  fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
+  { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',          fw: 64,  fh: 64,  walkStart: 11, walkEnd: 14 },
+  { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',        fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 7  },
+  { key: 'sheet-celery',         file: 'enemies/celery.png',          fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',     fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png',   fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',             fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',      fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',     fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',    fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 15 },
+  // New bosses — 256×256, 128×128 frames
+  { key: 'sheet-pac-dude',       file: 'enemies/pac_dude.png',        fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-mushroom-man',   file: 'enemies/mushroom_man.png',    fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-fowser',         file: 'enemies/fowser.png',          fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-standing-man',   file: 'enemies/standing_man.png',    fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-moving-man',     file: 'enemies/moving_man.png',      fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -224,6 +231,14 @@ export class BootScene extends Phaser.Scene {
     this.load.image('boss-tileset-final',               'maps/boss_final/spritesheet.png')
     this.load.tilemapTiledJSON('boss-map-final-final',  'maps/boss_final_final/map.json')
     this.load.image('boss-tileset-final-final',         'maps/boss_final_final/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-one',   'maps/boss_level_one/map.json')
+    this.load.image('boss-tileset-level-one',          'maps/boss_level_one/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-two',   'maps/boss_level_two/map.json')
+    this.load.image('boss-tileset-level-two',          'maps/boss_level_two/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-four',  'maps/boss_level_four/map.json')
+    this.load.image('boss-tileset-level-four',         'maps/boss_level_four/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-five',  'maps/boss_level_five/map.json')
+    this.load.image('boss-tileset-level-five',         'maps/boss_level_five/spritesheet.png')
     this.load.audio('music-title',              'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay',           'assets/music/gameplay_loop.mp3')
     this.load.audio('music-boss',               'assets/music/boss.mp3')
@@ -236,13 +251,15 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('music-end-game',           'assets/music/end_game.mp3')
     this.load.image('cutscene-celery-man-down', 'assets/players/celery_man_down.png')
     this.load.image('cutscene-victory',         'assets/players/victory.png')
-    // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
+    // Boss victory cutscene images — {char}_{boss}.jpg and {char}01.png in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {
       // scarlett's skeleton king filename has a typo
       const skelFile = char === 'scarlett' ? `${char}_skeletong_king.jpg` : `${char}_skeleton_king.jpg`
       this.load.image(`cutscene-${char}-skeleton_king`, `assets/players/${skelFile}`)
       this.load.image(`cutscene-${char}-zombie_king`,   `assets/players/${char}_zombie_king.jpg`)
+      // Generic victory pose for new boss rooms
+      this.load.image(`cutscene-${char}-01`, `assets/players/${char}01.png`)
     }
   }
 
