@@ -44,7 +44,7 @@ const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?
    },
   coco:    { file: 'coco.png',              fw: 64, fh: 64, selectable: true, name: 'COCO',    previewFrame: 15,
     anim: {
-        idle:   { start: 8, end: 8 },
+        idle:   { start: 6, end: 6 },
         walk:   { start: 0, end: 6 },
         jump:   { start: 10, end: 10 },
         float:  { start: 12, end: 12 },
@@ -122,17 +122,24 @@ const ANIM_FRAMES = {
   ability: { start: 12, end: 11 },
 }
 // ── Enemy sheet config ────────────────────────────────────────────────────────
-// New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
+// Boss sprites: 256×256 total, 128×128 per frame (2×2 grid → 4 frames)
+// Regular enemy sprites: 256×256 with 16 frames in a 4×4 grid → fw=64, fh=64
 const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number; walkFrames?: number[] }[] = [
-  { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
-  { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
-  { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',    fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
-  { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
-  { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',  fw: 64, fh: 64, walkStart: 0,  walkEnd: 15 },
+  { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',          fw: 64,  fh: 64,  walkStart: 11, walkEnd: 14 },
+  { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',        fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 7  },
+  { key: 'sheet-celery',         file: 'enemies/celery.png',          fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',     fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png',   fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',             fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-red-dragon',     file: 'enemies/red_dragon.png',      fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-gold-dragon',    file: 'enemies/gold_dragon.png',     fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-black-dragon',   file: 'enemies/black_dragon.png',    fw: 64,  fh: 64,  walkStart: 0,  walkEnd: 15 },
+  // New bosses — 256×256, 128×128 frames
+  { key: 'sheet-pac-dude',       file: 'enemies/pac_dude.png',        fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-mushroom-man',   file: 'enemies/mushroom_man.png',    fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-fowser',         file: 'enemies/fowser.png',          fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-standing-man',   file: 'enemies/standing_man.png',    fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-moving-man',     file: 'enemies/moving_man.png',      fw: 128, fh: 128, walkStart: 0,  walkEnd: 3  },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -179,6 +186,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('npc-mom',  'assets/npcs/mom.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-dad',  'assets/npcs/dad.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('npc-duck', 'assets/npcs/duck.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-carter-transform',  'assets/players/carter_transform.png',  { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-carter-dino-jump',  'assets/players/carter_dino_jump.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-eric-transformer', 'assets/players/eric_transformer.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-army-truck',       'assets/players/army_truck.png',       { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
@@ -214,10 +223,22 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset-level-two',                'maps/level_two/spritesheet.png')
     this.load.tilemapTiledJSON('world-map-level-three', 'maps/level_three/map.json')
     this.load.image('tileset-level-three',              'maps/level_three/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-level-four',  'maps/level_four/map.json')
+    this.load.image('tileset-level-four',               'maps/level_four/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-level-five',  'maps/level_five/map.json')
+    this.load.image('tileset-level-five',               'maps/level_five/spritesheet.png')
     this.load.tilemapTiledJSON('boss-map-final',        'maps/boss_final/map.json')
     this.load.image('boss-tileset-final',               'maps/boss_final/spritesheet.png')
     this.load.tilemapTiledJSON('boss-map-final-final',  'maps/boss_final_final/map.json')
     this.load.image('boss-tileset-final-final',         'maps/boss_final_final/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-one',   'maps/boss_level_one/map.json')
+    this.load.image('boss-tileset-level-one',          'maps/boss_level_one/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-two',   'maps/boss_level_two/map.json')
+    this.load.image('boss-tileset-level-two',          'maps/boss_level_two/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-four',  'maps/boss_level_four/map.json')
+    this.load.image('boss-tileset-level-four',         'maps/boss_level_four/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-level-five',  'maps/boss_level_five/map.json')
+    this.load.image('boss-tileset-level-five',         'maps/boss_level_five/spritesheet.png')
     this.load.audio('music-title',              'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay',           'assets/music/gameplay_loop.mp3')
     this.load.audio('music-boss',               'assets/music/boss.mp3')
@@ -230,13 +251,15 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('music-end-game',           'assets/music/end_game.mp3')
     this.load.image('cutscene-celery-man-down', 'assets/players/celery_man_down.png')
     this.load.image('cutscene-victory',         'assets/players/victory.png')
-    // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
+    // Boss victory cutscene images — {char}_{boss}.jpg and {char}01.png in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {
       // scarlett's skeleton king filename has a typo
       const skelFile = char === 'scarlett' ? `${char}_skeletong_king.jpg` : `${char}_skeleton_king.jpg`
       this.load.image(`cutscene-${char}-skeleton_king`, `assets/players/${skelFile}`)
       this.load.image(`cutscene-${char}-zombie_king`,   `assets/players/${char}_zombie_king.jpg`)
+      // Generic victory pose for new boss rooms
+      this.load.image(`cutscene-${char}-01`, `assets/players/${char}01.png`)
     }
   }
 
@@ -252,6 +275,7 @@ export class BootScene extends Phaser.Scene {
     this.setupEricTransformerAnimations()
     this.setupConradTruckAnimations()
     this.setupNpcAnimations()
+    this.setupCarterDinoAnimations()
     this.setupCocoShadowFormAnimations()
     this.setupScarlettTRexAnimations()
     this.setupScarlettTransformAnimations()
@@ -294,6 +318,23 @@ export class BootScene extends Phaser.Scene {
     if (!this.textures.exists('npc-duck')) return
     this.anims.create({ key: 'npc-duck-idle', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 6, repeat: -1 })
     this.anims.create({ key: 'npc-duck-walk', frames: this.anims.generateFrameNumbers('npc-duck', { start: 11, end: 13 }), frameRate: 8, repeat: -1 })
+  }
+
+  private setupCarterDinoAnimations() {
+    const ct  = 'sheet-carter-transform'
+    const cdj = 'sheet-carter-dino-jump'
+    if (!this.textures.exists(ct) || !this.textures.exists(cdj)) return
+
+    // carter_transform sheet: transform in (0-7), dino idle (7), dino walk (8-15)
+    this.anims.create({ key: 'carter-transform-in',  frames: this.anims.generateFrameNumbers(ct, { start: 0, end: 7 }),             frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'carter-transform-out', frames: this.anims.generateFrameNumbers(ct, { frames: [7,6,5,4,3,2,1,0] }),    frameRate: 12, repeat: 0  })
+    this.anims.create({ key: 'carter-dino-idle',     frames: this.anims.generateFrameNumbers(ct, { frames: [7] }),                  frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'carter-dino-walk',     frames: this.anims.generateFrameNumbers(ct, { start: 8, end: 15 }),            frameRate: 10, repeat: -1 })
+
+    // carter_dino_jump sheet: jump (1,3,5-9), float (8), fall (10-12)
+    this.anims.create({ key: 'carter-dino-jump',     frames: this.anims.generateFrameNumbers(cdj, { frames: [1, 3, 5, 6, 7, 8, 9] }), frameRate: 10, repeat: 0  })
+    this.anims.create({ key: 'carter-dino-float',    frames: this.anims.generateFrameNumbers(cdj, { frames: [8] }),                   frameRate: 1,  repeat: -1 })
+    this.anims.create({ key: 'carter-dino-fall',     frames: this.anims.generateFrameNumbers(cdj, { frames: [9] }),          frameRate: 8,  repeat: -1 })
   }
 
   private setupCocoShadowFormAnimations() {

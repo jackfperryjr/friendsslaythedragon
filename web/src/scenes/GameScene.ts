@@ -9,7 +9,7 @@ import { ConradArmyTruck } from '../game/ConradArmyTruck'
 import { GameManager } from '../game/GameManager'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
-import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3 } from '../levels'
+import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3, WORD_LIST_L4, WORD_LIST_L5 } from '../levels'
 import { AbilityType, DamageType } from '../types'
 import { ItemSpawn, ItemType } from '../levels'
 import { NetworkManager, RemoteInput } from '../network/NetworkManager'
@@ -59,11 +59,14 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = []
   private mimics:  Mimic[]  = []
   private boss: Boss | null = null
+  private boss2: Boss | null = null
+  private boss2Defeated = false
   private enemyGroup!: Phaser.Physics.Arcade.Group
   private destructibles: Destructible[] = []
   private crates: Phaser.Physics.Arcade.Image[] = []
   private projectiles!: Phaser.Physics.Arcade.Group
   private enemyProjectiles!: Phaser.Physics.Arcade.Group
+  private bossProjectiles!: Phaser.Physics.Arcade.Group
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup
   private spikeBalls: Phaser.Physics.Arcade.Image[] = []
@@ -99,6 +102,8 @@ export class GameScene extends Phaser.Scene {
   private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
+  private carterDinoSpinTween:   Phaser.Tweens.Tween | null = null
+  private minimapDots: Phaser.GameObjects.Graphics | null = null
   private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
 
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
@@ -112,7 +117,7 @@ export class GameScene extends Phaser.Scene {
 
   private duckNpcSprite:  Phaser.GameObjects.Image | null = null
   private duckBubble:     Phaser.GameObjects.Container | null = null
-  private arithDucks: { sprite: Phaser.GameObjects.Sprite; bubble: Phaser.GameObjects.Container | null; problemIdx: number; solved: boolean }[] = []
+  private arithDucks: { sprite: Phaser.GameObjects.Sprite; bubble: Phaser.GameObjects.Container | null; problemIdx: number; keyPrefix: string; solved: boolean }[] = []
   private exitBarrier: Phaser.GameObjects.Rectangle | null = null
   private _rightExitPopupLastTime = 0
 
@@ -136,6 +141,7 @@ export class GameScene extends Phaser.Scene {
     this.players = []; this.enemies = []; this.mimics = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
+    this.carterDinoSpinTween = null
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
@@ -145,6 +151,8 @@ export class GameScene extends Phaser.Scene {
     this._sessionId = null
     this.score = 0
     this.boss = null
+    this.boss2 = null
+    this.boss2Defeated = false
     this.throneLabel = null
     this.throneX = 0
     this.bossPortalPos = null
@@ -233,6 +241,8 @@ export class GameScene extends Phaser.Scene {
       (this.cfg.isBossRoom ?? false) && !_bossAlreadyDefeated,
       this.cfg.bossHp ?? 0,
       this.cfg.bossName ?? 'BOSS',
+      this.cfg.boss2Hp ?? 0,
+      this.cfg.boss2Name ?? '',
     )
 
     if (this.boss) {
@@ -240,12 +250,19 @@ export class GameScene extends Phaser.Scene {
       if (!this.cfg.bossNoAttack) this.boss.on('bossAttack', (ability: AbilityType) => this.fireBossSpecial(ability))
       this.ui.updateBossBar(this.cfg.bossHp!, this.cfg.bossHp!)
     }
+    if (this.boss2) {
+      this.boss2.players = this.players
+      this.boss2.on('hpChanged', (hp: number, max: number) => this.ui.updateBoss2Bar(hp, max))
+      this.ui.updateBoss2Bar(this.cfg.boss2Hp!, this.cfg.boss2Hp!)
+    }
 
     this.wirePlayerUIEvents()
     this.ui.updateLetters(this.registry.get('collectedLetters') ?? [])
+    this.ui.updateCoinCount(this.registry.get('goldCoins') ?? 0)
     this.buildNPCs()
     this.buildTorches()
     this.buildPauseMenu()
+    this.buildMapOverlay()
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
 
@@ -295,28 +312,30 @@ export class GameScene extends Phaser.Scene {
       const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
 
       if (this.cfg.isSunset) {
-        // ── Sunset sky: deep blue at top fading to warm orange at the horizon ──
+        // ── Sunset sky: blue at top fading through yellow to warm horizon ──
         g.fillGradientStyle(0x1a3a6e, 0x1a3a6e, 0x6b8cc0, 0x6b8cc0, 1, 1, 1, 1)
-        g.fillRect(0, 0, width, height * 0.55)
-        g.fillGradientStyle(0x6b8cc0, 0x6b8cc0, 0xff9040, 0xff9040, 1, 1, 1, 1)
-        g.fillRect(0, height * 0.55, width, height * 0.45)
+        g.fillRect(0, 0, width, height * 0.42)
+        g.fillGradientStyle(0x6b8cc0, 0x6b8cc0, 0xffe060, 0xffe060, 1, 1, 1, 1)
+        g.fillRect(0, height * 0.42, width, height * 0.33)
+        g.fillGradientStyle(0xffe060, 0xffe060, 0xffc030, 0xffc030, 1, 1, 1, 1)
+        g.fillRect(0, height * 0.75, width, height * 0.25)
 
-        // Sun — soft layered glow near the right horizon
-        const sunX = width * 0.82, sunY = height * 0.80
+        // Sun — bright yellow-white glow
+        const sunX = width * 0.82, sunY = height * 0.78
         const sunG = this.add.graphics().setScrollFactor(0).setDepth(-1)
-        sunG.fillStyle(0xffe080, 0.10); sunG.fillCircle(sunX, sunY, 100)
-        sunG.fillStyle(0xffcc40, 0.18); sunG.fillCircle(sunX, sunY, 72)
-        sunG.fillStyle(0xffb020, 0.32); sunG.fillCircle(sunX, sunY, 50)
-        sunG.fillStyle(0xff9000, 0.55); sunG.fillCircle(sunX, sunY, 30)
-        sunG.fillStyle(0xffb840, 0.92); sunG.fillCircle(sunX, sunY, 16)
+        sunG.fillStyle(0xffff80, 0.12); sunG.fillCircle(sunX, sunY, 110)
+        sunG.fillStyle(0xffee40, 0.22); sunG.fillCircle(sunX, sunY, 76)
+        sunG.fillStyle(0xffe000, 0.40); sunG.fillCircle(sunX, sunY, 50)
+        sunG.fillStyle(0xffd000, 0.65); sunG.fillCircle(sunX, sunY, 28)
+        sunG.fillStyle(0xffffa0, 0.95); sunG.fillCircle(sunX, sunY, 14)
         this.tweens.add({ targets: sunG, alpha: 0.82, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
 
-        // Horizon glow beneath the sun
+        // Horizon glow — yellow
         const hG = this.add.graphics().setScrollFactor(0).setDepth(-1)
-        hG.fillStyle(0xff6820, 0.22); hG.fillEllipse(sunX, sunY, 680, 130)
-        hG.fillStyle(0xffaa30, 0.12); hG.fillEllipse(sunX, sunY, 460, 80)
+        hG.fillStyle(0xffe040, 0.28); hG.fillEllipse(sunX, sunY, 720, 140)
+        hG.fillStyle(0xffcc20, 0.16); hG.fillEllipse(sunX, sunY, 480, 90)
 
-        // Warm sunset clouds
+        // Yellow-toned sunset clouds
         const cloudG = this.add.graphics().setScrollFactor(0).setDepth(-1)
         const drawSunCloud = (clx: number, cly: number, wr: number, hr: number, col: number, a: number) => {
           cloudG.fillStyle(col, a)
@@ -324,11 +343,14 @@ export class GameScene extends Phaser.Scene {
           cloudG.fillEllipse(clx - wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
           cloudG.fillEllipse(clx + wr * 0.28, cly + hr * 0.18, wr * 0.55, hr * 0.65)
         }
-        drawSunCloud(width * 0.10, height * 0.40, 220, 70, 0xff9060, 0.50)
-        drawSunCloud(width * 0.35, height * 0.24, 180, 58, 0xffb880, 0.45)
-        drawSunCloud(width * 0.60, height * 0.44, 240, 76, 0xff8040, 0.50)
-        drawSunCloud(width * 0.83, height * 0.30, 160, 52, 0xffcc80, 0.42)
+        drawSunCloud(width * 0.10, height * 0.40, 220, 70, 0xffe090, 0.50)
+        drawSunCloud(width * 0.35, height * 0.24, 180, 58, 0xffd870, 0.45)
+        drawSunCloud(width * 0.60, height * 0.44, 240, 76, 0xffcc50, 0.50)
+        drawSunCloud(width * 0.83, height * 0.30, 160, 52, 0xffe880, 0.42)
         this.tweens.add({ targets: cloudG, alpha: 0.72, duration: 5000, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+
+        // Yellow ambient wash over the scene
+        this.add.rectangle(cx, cy, width, height, 0xffe060, 0.22).setScrollFactor(0).setDepth(-1)
 
       } else {
         // ── Night sky: near-black top, deep purple horizon ────────────────────
@@ -388,6 +410,16 @@ export class GameScene extends Phaser.Scene {
     // Orange rooms: orange overlay
     if (this.cfg.isOrange && !this.cfg.isBossRoom) {
       this.add.rectangle(cx, cy, width, height, 0x200800, 0.15).setScrollFactor(0).setDepth(1)
+    }
+
+    // Green rooms: green overlay
+    if (this.cfg.isGreen && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x001408, 0.15).setScrollFactor(0).setDepth(1)
+    }
+
+    // Blue rooms: blue overlay
+    if (this.cfg.isBlue && !this.cfg.isBossRoom) {
+      this.add.rectangle(cx, cy, width, height, 0x000820, 0.18).setScrollFactor(0).setDepth(1)
     }
 
     if (this.cfg.roomImage) {
@@ -701,10 +733,10 @@ export class GameScene extends Phaser.Scene {
 
   // ── Dark-level torches ────────────────────────────────────────────────────────
   private buildTorches() {
-    if ((!this.cfg.isDark && !this.cfg.isRed && !this.cfg.isOrange) || this.cfg.isBossRoom) return
+    if ((!this.cfg.isDark && !this.cfg.isRed && !this.cfg.isOrange && !this.cfg.isGreen && !this.cfg.isBlue) || this.cfg.isBossRoom) return
     const W = this.cfg.worldWidth
 
-    if (this.cfg.isRed || this.cfg.isOrange) {
+    if (this.cfg.isRed || this.cfg.isOrange || this.cfg.isGreen || this.cfg.isBlue) {
       if (this.cfg.isOrange && this.cfg.worldMap) {
         // Vertical world-map level: spread torches down the play area
         const startY = (this.cfg.defaultSpawn?.y ?? 3004) - 50
@@ -724,11 +756,16 @@ export class GameScene extends Phaser.Scene {
         }
         return
       }
-      // Fixed bands near the active play area; wider spacing for the large map
-      const bands = [420, 620]
+      // Fixed bands near the active play area — derived from defaultSpawn Y for large maps
+      const spawnY = this.cfg.defaultSpawn?.y ?? 500
+      const band1 = spawnY - 200, band2 = spawnY - 80
+      const bands = [band1, band2]
+      const offsets = [0, 32, -32, 64, -64, 96, -96]
       let idx = 0
       for (let x = 300; x < W - 200; x += 1200) {
-        this.spawnTorch(x, bands[idx % bands.length], idx * 220)
+        const ty = bands[idx % bands.length]
+        const clear = offsets.find(ox => !this.isInsideWall(x + ox, ty))
+        if (clear !== undefined) this.spawnTorch(x + clear, ty, idx * 220)
         idx++
       }
       return
@@ -865,7 +902,7 @@ export class GameScene extends Phaser.Scene {
     const isInsideWall = (x: number, y: number) => this.isInsideWall(x, y)
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 }
+    const letterBugIdx: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 }
     const placedBugPositions: Array<{ x: number; y: number }> = []
     const BUG_MIN_DIST = 80
     const CLEAR = 22
@@ -904,6 +941,8 @@ export class GameScene extends Phaser.Scene {
                           : kl === 2 ? !!this.registry.get('hasLevel2Key')
                           : kl === 4 ? !!this.registry.get('hasLevel4Key')
                           : kl === 8 ? !!this.registry.get('hasLevel8Key')
+                          : kl === 9  ? !!this.registry.get('hasLevel9Key')
+                          : kl === 10 ? !!this.registry.get('hasLevel10Key')
                           : !!this.registry.get(`level${kl}WordSolved`)
         if (levelSolved) continue
         const idx = letterBugIdx[kl] ?? 0
@@ -993,6 +1032,7 @@ export class GameScene extends Phaser.Scene {
       player.hearts = Math.min(5, player.hearts + 1)
       this.showPopup(item.x, item.y, '+PIZZA', '#ff4d6a')
       SoundManager.collectHeart()
+      if (item.type === 'pizza') this.registry.set('pizzasCollected', (this.registry.get('pizzasCollected') ?? 0) + 1)
     } else if (item.type === 'life') {
       const lives: number = (this.registry.get('lives') ?? 1) + 1
       this.registry.set('lives', lives)
@@ -1035,8 +1075,28 @@ export class GameScene extends Phaser.Scene {
       this.ui.updateLetters([])
       this.showPopup(item.x, item.y, 'YOU FOUND A KEY!', '#ffdd00')
       SoundManager.collectAbility()
+    } else if (item.type === 'gold-coin') {
+      const coins: number = (this.registry.get('goldCoins') ?? 0) + 1
+      this.registry.set('goldCoins', coins)
+      this.showPopup(item.x, item.y, 'COIN!', '#ffd700')
+      SoundManager.collectHeart()
+      this.ui?.updateCoinCount(coins)
+      return  // no score bonus for coins
     }
     this.addScore(500)
+  }
+
+  private resetRoomLetterBugs() {
+    const bugItem = this.cfg?.items.find(i => i.type === 'letter-bug')
+    if (!bugItem) return
+    const kl = bugItem.keyLevel ?? 1
+    const solved = kl <= 2
+      ? !!this.registry.get(`hasLevel${kl}Key`)
+      : !!this.registry.get(`level${kl}WordSolved`)
+    if (!solved) {
+      this.registry.set('collectedLetters', null)
+      if (kl >= 3) this.registry.set(`level${kl}CollectedLetters`, null)
+    }
   }
 
   private clearLetterBugs() {
@@ -1189,13 +1249,29 @@ export class GameScene extends Phaser.Scene {
     if (runIndex === 0 && !this.cfg.isBossRoom) this.buildWorldOneNPCs()
     else if (runIndex === 2 && !this.cfg.isBossRoom) this.buildLevel2IntroDuck()
     else if (runIndex === 4 && !this.cfg.isBossRoom) this.buildLevel3Duck()
-    else if (runIndex === 6 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
-    else if (runIndex === 7 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
-    else if (runIndex === 8 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
-    else if (runIndex === 9 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
+    else if (runIndex === 15 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
+    else if (runIndex === 16 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
+    else if (runIndex === 17 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
+    else if (runIndex === 18 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
     else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
     else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
     else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
+    if (this.cfg.isRed    && !this.cfg.isBossRoom) this.buildLevelOneNPCs()
+    if (this.cfg.isOrange && !this.cfg.isBossRoom) this.buildLevelTwoNPCs()
+    if (this.cfg.isSunset && !this.cfg.isBossRoom) { this.buildLevel3WorldNPCs(); this.buildSunsetArithDucks() }
+    if (this.cfg.isGreen  && !this.cfg.isBossRoom) this.buildGreenHallsNPCs()
+    if (this.cfg.isBlue   && !this.cfg.isBossRoom) this.buildLevelFiveNPCs()
+  }
+
+  private buildLevelFiveNPCs() {
+    const mx = 1362, my = 2684
+    this.add.image(mx, my, 'npc-mom', 12).setDepth(2).setScale(1.5).setFlipX(true)
+    this.showNpcBubble(mx, my - 90, [
+      'Find the letter bugs',
+      'hidden in the halls!',
+      'The magic jar holds',
+      'the secret word.',
+    ], null)
   }
 
   private buildWorldOneNPCs() {
@@ -1332,33 +1408,16 @@ export class GameScene extends Phaser.Scene {
         const interacted = (keys?.['ability'] && Phaser.Input.Keyboard.JustDown(keys['ability']))
                         || (pad?.connected && !!(pad.buttons[2]?.pressed))
         if (!interacted) continue
-        const prob = this.registry.get(`level4Problem${duck.problemIdx}`) as { q: string; answer: number } | null
+        const prob = this.registry.get(`${duck.keyPrefix}${duck.problemIdx}`) as { q: string; answer: number } | null
         if (!prob) continue
-        const rewards: Array<'speed' | 'attack-boost' | 'invulnerability'> = ['speed', 'attack-boost', 'invulnerability']
-        const reward = rewards[duck.problemIdx - 1]
-        this.showArithmeticMenu(duck.sprite.x, duck.sprite.y, prob.q, prob.answer, reward, () => {
+        this.showArithmeticMenu(duck.sprite.x, duck.sprite.y, prob.q, prob.answer, 'speed', () => {
           duck.solved = true
-          this.registry.set(`level4Problem${duck.problemIdx}Solved`, true)
-          for (const pl of this.players) {
-            if (!pl.isAlive) continue
-            if (reward === 'speed')             pl.applySpeedBoost(true)
-            else if (reward === 'attack-boost') pl.applyStrengthBoost(true)
-            else                                pl.applyInvulnerability(true)
-            // Persist per-player backup key
-            const prev = this.registry.get(`level4DuckBoost_${pl.playerId}`) as { speed: boolean; strength: boolean; invuln: boolean } | null
-            this.registry.set(`level4DuckBoost_${pl.playerId}`, {
-              speed:    (prev?.speed    ?? false) || reward === 'speed',
-              strength: (prev?.strength ?? false) || reward === 'attack-boost',
-              invuln:   (prev?.invuln   ?? false) || reward === 'invulnerability',
-            })
-          }
-          // Immediately sync persistedBoosts so exitRoom captures current state
-          this.registry.set('persistedBoosts', this.players.map(p => ({
-            speedBoostActive:      p.speedBoostActive,
-            strengthBoostActive:   p.strengthBoostActive,
-            invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive,
-            isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm,
-          })))
+          this.registry.set(`${duck.keyPrefix}${duck.problemIdx}Solved`, true)
+          const coinReward = Phaser.Math.Between(100, 300)
+          const totalCoins = (this.registry.get('goldCoins') ?? 0) + coinReward
+          this.registry.set('goldCoins', totalCoins)
+          this.ui?.updateCoinCount(totalCoins)
+          this.showPopup(duck.sprite.x, duck.sprite.y, `+${coinReward} COINS!`, '#ffd700')
           duck.bubble?.destroy(); duck.bubble = null
           this.tweens.add({
             targets: duck.sprite, y: duck.sprite.y - 30, alpha: 0, duration: 600,
@@ -1400,7 +1459,7 @@ export class GameScene extends Phaser.Scene {
       if (!ready) {
         const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
         if (!existing?.active) {
-          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '7 letters!'], 2500)
           duck.setData('alertBubble', b)
         }
         return
@@ -1457,7 +1516,7 @@ export class GameScene extends Phaser.Scene {
       if (!ready) {
         const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
         if (!existing?.active) {
-          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '7 letters!'], 2500)
           duck.setData('alertBubble', b)
         }
         return
@@ -1514,7 +1573,7 @@ export class GameScene extends Phaser.Scene {
       if (!ready) {
         const existing = duck.getData('alertBubble') as Phaser.GameObjects.Container | undefined
         if (!existing?.active) {
-          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '5 letters!'], 2500)
+          const b = this.showNpcBubble(duck.x, duck.y - 185, ['You need all', '7 letters!'], 2500)
           duck.setData('alertBubble', b)
         }
         return
@@ -1573,9 +1632,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildLevelTwoNPCs() {
-    this.add.image(661, 3004, 'npc-dad', 8).setDepth(2).setScale(1.5)
-    this.showNpcBubble(661, 2914, [
-      'Find 5 letter bugs',
+    const dx = 962, dy = 3004
+    this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
+      'Find 6 letter bugs',
       'hidden in the halls!',
       'Spell the word at',
       'the magic jar, then',
@@ -1584,24 +1644,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildLevel3WorldNPCs() {
-    // Sunset Fields — no puzzle, just a welcoming duck at the entry
-    const dx = 420, dy = 2048
+    const dx = 1710, dy = 1820
     this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
     this.showNpcBubble(dx, dy - 90, [
       'The Sunset Fields!',
-      'Enjoy the view and',
-      'keep moving right!',
+      'Find 5 math ducks',
+      'to earn boosts!',
     ], null)
   }
 
   buildLevelOneNPCs() {
-    this.add.image(768, 604, 'npc-mom', 10).setDepth(2).setScale(1.5).setFlipX(true)
-    this.showNpcBubble(768, 520, [
+    const dx = 705, dy = 604
+    this.add.sprite(dx, dy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
       'Welcome to the Red Halls!',
-      'Find 5 letter bugs',
+      'Find 6 letter bugs',
       'hidden in the level.',
       'Solve the magic jar',
       'to unlock the door!',
+    ], null)
+  }
+
+  private buildGreenHallsNPCs() {
+    const dx = 766, dy = 6268
+    this.add.image(dx, dy, 'npc-dad', 8).setDepth(2).setScale(1.5)
+    this.showNpcBubble(dx, dy - 90, [
+      'The Green Halls!',
+      'Find letter bugs,',
+      'solve the magic jar,',
+      'then enter the door!',
     ], null)
   }
 
@@ -1613,7 +1684,7 @@ export class GameScene extends Phaser.Scene {
       'Welcome to Level 4!',
       'Find 3 ducks and',
       'solve their math',
-      'problems for boosts!',
+      'problems for coins!',
     ], null)
 
     // Arithmetic ducks — one per problem, spread across the level
@@ -1622,13 +1693,40 @@ export class GameScene extends Phaser.Scene {
       { x: 5848, y: 1212 },
       { x: 8668, y:  860 },
     ]
-    const rewardLabels = ['Speed Boost', 'Power Boost', 'Invincible!']
     for (let i = 0; i < 3; i++) {
       if (this.registry.get(`level4Problem${i + 1}Solved`)) continue
       const { x, y } = positions[i]
       const duck = this.add.sprite(x, y, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5).setFlipX(true)
-      const bubble = this.showNpcBubble(x, y - 90, [`Reward: ${rewardLabels[i]}`, 'Solve my math', 'problem!'], null)
-      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, solved: false })
+      const bubble = this.showNpcBubble(x, y - 90, ['Reward: Gold Coins!', 'Solve my math', 'problem!'], null)
+      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, keyPrefix: 'level4Problem', solved: false })
+    }
+  }
+
+  private buildSunsetArithDucks() {
+    // Scan the full column to find the floor surface closest to approxY
+    const snapToFloor = (wx: number, approxY: number): number => {
+      if (this.tilemapLayers.length === 0) return approxY
+      const worldH = this.cfg.worldHeight ?? 2208
+      let best = approxY, bestDist = Infinity, prevWall = false
+      for (let y = 0; y <= worldH; y += 4) {
+        const inWall = this.isInsideWall(wx, y)
+        if (inWall && !prevWall) {
+          const floorY = y - 24
+          const dist = Math.abs(floorY - approxY)
+          if (dist < bestDist) { best = floorY; bestDist = dist }
+        }
+        prevWall = inWall
+      }
+      return best
+    }
+    const xPositions = [2800, 4600, 6500, 8400, 10100]
+    for (let i = 0; i < 5; i++) {
+      if (this.registry.get(`sunsetProblem${i + 1}Solved`)) continue
+      const x = xPositions[i]
+      const y = snapToFloor(x, 2012)
+      const duck = this.add.sprite(x, y, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5).setFlipX(true)
+      const bubble = this.showNpcBubble(x, y - 90, ['Reward: Gold Coins!', 'Solve my math', 'problem!'], null)
+      this.arithDucks.push({ sprite: duck, bubble, problemIdx: i + 1, keyPrefix: 'sunsetProblem', solved: false })
     }
   }
 
@@ -1638,7 +1736,7 @@ export class GameScene extends Phaser.Scene {
     this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
     this.showNpcBubble(sx, sy - 90, [
       'Welcome to Level 5!',
-      '5-letter words here.',
+      '7-letter words here.',
       'Find letter bugs,',
       'then talk to my',
       'friend by the exit!',
@@ -1664,7 +1762,7 @@ export class GameScene extends Phaser.Scene {
     this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
     this.showNpcBubble(sx, sy - 90, [
       'Welcome to Level 6!',
-      '5-letter words here.',
+      '7-letter words here.',
       'Find letter bugs,',
       'then talk to my',
       'friend by the exit!',
@@ -1690,7 +1788,7 @@ export class GameScene extends Phaser.Scene {
     this.add.sprite(sx, sy, 'npc-duck').play('npc-duck-idle').setDepth(2).setScale(1.5)
     this.showNpcBubble(sx, sy - 90, [
       'Welcome to Level 7!',
-      '5-letter words here.',
+      '7-letter words here.',
       'Find letter bugs,',
       'then talk to my',
       'friend by the boss',
@@ -1806,7 +1904,17 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level3BugPositions', positions)
       }
     }
-    if (runIndex === 6 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
+    if (this.cfg.isSunset && !this.cfg.isBossRoom && !this.registry.get('sunsetProblem1')) {
+      const genAdd = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
+      const genSub = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
+      const genMul = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
+      this.registry.set('sunsetProblem1', genAdd())
+      this.registry.set('sunsetProblem2', genSub())
+      this.registry.set('sunsetProblem3', genMul())
+      this.registry.set('sunsetProblem4', genAdd())
+      this.registry.set('sunsetProblem5', genSub())
+    }
+    if (runIndex === 15 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
       const genAdd  = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
       const genSub  = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
       const genMul  = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
@@ -1814,31 +1922,33 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('level4Problem2', genSub())
       this.registry.set('level4Problem3', genMul())
     }
-    if (runIndex === 7 && !this.cfg.isBossRoom && !this.registry.get('level5Word')) {
-      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
-      this.registry.set('level5Word', word)
-      this.registry.set('level5BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level5BugPositions', positions)
+    for (const [ri, kl] of [[16, 5], [17, 6], [18, 7]] as const) {
+      if (runIndex === ri && !this.cfg.isBossRoom && !this.registry.get(`level${kl}WordSolved`)) {
+        const existingLetters = this.registry.get(`level${kl}BugLetters`) as string[] | null
+        const needsInit = !this.registry.get(`level${kl}Word`) || !existingLetters || existingLetters.length !== 7
+        if (needsInit) {
+          const word = WORD_LIST_L5[Math.floor(Math.random() * WORD_LIST_L5.length)]
+          this.registry.set(`level${kl}Word`, word)
+          this.registry.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 7))
+          this.registry.set(`level${kl}CollectedLetters`, null)
+          if (this.cfg.letterBugPool) {
+            const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, 7)
+            this.registry.set(`level${kl}BugPositions`, positions)
+          }
+        }
       }
     }
-    if (runIndex === 8 && !this.cfg.isBossRoom && !this.registry.get('level6Word')) {
-      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
-      this.registry.set('level6Word', word)
-      this.registry.set('level6BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level6BugPositions', positions)
-      }
-    }
-    if (runIndex === 9 && !this.cfg.isBossRoom && !this.registry.get('level7Word')) {
-      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
-      this.registry.set('level7Word', word)
-      this.registry.set('level7BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level7BugPositions', positions)
+    // Disconnected levels (halls): 6-letter words, 6 bugs
+    for (const kl of [4, 8, 9, 10] as const) {
+      if (!this.cfg.isBossRoom && !this.registry.get(`level${kl}BugLetters`) &&
+          this.cfg.items.some(i => i.type === 'letter-bug' && i.keyLevel === kl)) {
+        const word = WORD_LIST_L4[Math.floor(Math.random() * WORD_LIST_L4.length)]
+        this.registry.set(`level${kl}Word`, word)
+        this.registry.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 6))
+        if (this.cfg.letterBugPool) {
+          const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, 6)
+          this.registry.set(`level${kl}BugPositions`, positions)
+        }
       }
     }
   }
@@ -1897,6 +2007,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = this.physics.add.group()
     this.enemyGroup  = this.physics.add.group()
     this.enemyProjectiles = this.physics.add.group()
+    this.bossProjectiles  = this.physics.add.group()
 
     if (this.cfg.worldMap) {
       // ── Tilemap world: create Phaser tile layers, mark collision tiles ──────
@@ -1926,6 +2037,14 @@ export class GameScene extends Phaser.Scene {
       const solidLayers  = solidNames.map((n: string) => mkLayer(n, 1, true))
       const overlayLayers = overlayNames.map((n: string, i: number) => mkLayer(n, 3 + i * 2))
 
+      // Sunset rooms: lime-biased tint compensates for tiles' red channel so result reads yellow
+      if (this.cfg.isSunset) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x80e000)
+        solidLayers.forEach(l  => tint(l,  0x90f000))
+        overlayLayers.forEach(l => tint(l, 0xa8f820))
+      }
+
       // Dark rooms (levels 5-7+): tint tile layers with grey/purple hues
       if (this.cfg.isDark) {
         const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
@@ -1948,6 +2067,22 @@ export class GameScene extends Phaser.Scene {
         tint(bgLayer, 0xc08040)
         solidLayers.forEach(l  => tint(l,  0xd09050))
         overlayLayers.forEach(l => tint(l, 0xe0a060))
+      }
+
+      // Green rooms: tint tile layers with green hues
+      if (this.cfg.isGreen) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x408050)
+        solidLayers.forEach(l  => tint(l,  0x509060))
+        overlayLayers.forEach(l => tint(l, 0x60a070))
+      }
+
+      // Blue rooms: tint tile layers with blue hues
+      if (this.cfg.isBlue) {
+        const tint = (l: Phaser.Tilemaps.TilemapLayer | null, c: number) => { if (l) l.setTint(c) }
+        tint(bgLayer, 0x5080c0)
+        solidLayers.forEach(l  => tint(l,  0x6090d0))
+        overlayLayers.forEach(l => tint(l, 0x78a8e0))
       }
 
       this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
@@ -1976,6 +2111,8 @@ export class GameScene extends Phaser.Scene {
         return null
       }
 
+      const CLUSTER_DIST = 72
+      const placedFurnPos: Array<{x: number, y: number}> = []
       for (const fs of (this.cfg.furnitureSpawns ?? [])) {
         const fh = fs.type === 'bookcase' ? 80 : fs.type === 'table' ? 36 : 40
         let furnY: number
@@ -1986,6 +2123,8 @@ export class GameScene extends Phaser.Scene {
           if (floorY === null) continue
           furnY = floorY - fh / 2
         }
+        if (placedFurnPos.some(p => Math.hypot(fs.x - p.x, furnY - p.y) < CLUSTER_DIST)) continue
+        placedFurnPos.push({x: fs.x, y: furnY})
         const hp = fs.type === 'chest' ? 3 : fs.type === 'bookcase' ? 2 : 1
         const chestYOffset = fs.type === 'chest' && (this.cfg.isRed || this.cfg.isOrange) ? 10 : 0
         this.spawnFurniturePiece(fs.type, fs.x, furnY + chestYOffset, fs.ability ?? AbilityType.None, hp, {}, fs.pizzaDrop, fs.itemDrop)
@@ -2008,7 +2147,10 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      const placedEnemyPos: Array<{x: number, y: number}> = []
       for (const e of this.cfg.enemies) {
+        if (placedEnemyPos.some(p => Math.hypot(e.x - p.x, e.y - p.y) < CLUSTER_DIST)) continue
+        placedEnemyPos.push({x: e.x, y: e.y})
         const enemy = new Enemy(this, e.x, e.y, e.ability)
         this.enemies.push(enemy); this.enemyGroup.add(enemy)
       }
@@ -2024,11 +2166,12 @@ export class GameScene extends Phaser.Scene {
         if (bossAlreadyDefeated) {
           // Boss already beaten — passthrough: exits open, no respawn
           this.bossDefeated = true
+          this.boss2Defeated = true
           const runRooms0: RoomConfig[] = this.registry.get('runRooms') ?? []
           const runIndex0: number       = this.registry.get('runIndex') ?? 0
           if (runIndex0 + 1 < runRooms0.length) this.openLevel2Exit(W)
         } else {
-          // Seal both exits until the boss dies
+          // Seal both exits until all bosses die
           const barrierH = this.cfg.worldHeight ?? 720
           const barrier = this.add.rectangle(this.cfg.bossLeftBarrierX ?? 150, barrierH / 2, 20, barrierH, 0x000000, 0)
           this.physics.add.existing(barrier, true)
@@ -2040,10 +2183,11 @@ export class GameScene extends Phaser.Scene {
           this.platforms.add(rBarrier as unknown as Phaser.Physics.Arcade.Image)
           this.bossRoomRightBarrier = rBarrier
 
-          this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.bossScale ?? 3.45)
-          this.boss.on('bossDead', () => {
-            this.bossDefeated = true
-            if (this.cfg.bossDefeatedKey) this.registry.set(this.cfg.bossDefeatedKey, true)
+          const NEW_BOSS_KEYS = ['pacDudeDefeated', 'mushroomManDefeated', 'fowserDefeated', 'duoDefeated']
+          const dk = this.cfg.bossDefeatedKey
+
+          // Callback shared by both single and dual-boss rooms once all bosses are dead
+          const onAllBossesDead = () => {
             if (this.bossRoomLeftBarrier) {
               ;(this.bossRoomLeftBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
               this.bossRoomLeftBarrier = null
@@ -2052,20 +2196,21 @@ export class GameScene extends Phaser.Scene {
               ;(this.bossRoomRightBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
               this.bossRoomRightBarrier = null
             }
-            SoundManager.bossDeath()
-            this.cameras.main.shake(300, 0.010)
-            this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
-            this.addScore(2000)
+            if (dk) this.registry.set(dk, true)
             this.ui.hideBossBar()
+
+            const coinReward = Phaser.Math.Between(100, 300)
+            const totalCoins = (this.registry.get('goldCoins') ?? 0) + coinReward
+            this.registry.set('goldCoins', totalCoins)
+            this.ui.updateCoinCount(totalCoins)
+            this.showPopup(this.cfg.worldWidth / 2, 320, `+${coinReward} COINS!`, '#ffd700')
 
             const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
             const runIndex: number       = this.registry.get('runIndex') ?? 0
-            const dk = this.cfg.bossDefeatedKey
             const hasCutscene = dk === 'skeletonKingDefeated' || dk === 'zombieKingDefeated'
             const cutsceneSuffix = dk === 'skeletonKingDefeated' ? 'skeleton_king' : 'zombie_king'
 
             if (hasCutscene) {
-              // Show cutscene immediately — it handles its own music
               this.showBossCutscene(cutsceneSuffix, () => {
                 if (this.cfg.backPortal) this.buildBackPortal()
                 if (runIndex + 1 < runRooms.length) this.openLevel2Exit(W)
@@ -2077,13 +2222,17 @@ export class GameScene extends Phaser.Scene {
                 if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) this.openLevel2Exit(W)
                 else this.showBossDefeatedOverlay()
               }, 'cutscene-celery-man-down')
+            } else if (dk && NEW_BOSS_KEYS.includes(dk)) {
+              this.showBossCutscene('01', () => {
+                if (this.cfg.backPortal) this.buildBackPortal()
+                if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) this.openLevel2Exit(W)
+                else this.showBossDefeatedOverlay()
+              }, true)
             } else if (runIndex + 1 < runRooms.length && !runRooms[runIndex + 1].isSecretBonus) {
-              // More levels — reveal right exit and back portal after brief celebration
               SoundManager.startTrack(this.sound, 'music-gameplay')
               if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
               this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
             } else {
-              // Final boss (or secret-bonus gate) — fanfare + overlay + hidden portal
               if (this.cfg.backPortal)   this.time.delayedCall(800, () => this.buildBackPortal())
               if (this.cfg.hiddenPortal) this.time.delayedCall(800, () => this.buildHiddenPortal())
               if (this.cfg.isSecretBonus) {
@@ -2092,7 +2241,36 @@ export class GameScene extends Phaser.Scene {
                 this.time.delayedCall(1800, () => this.showBossDefeatedOverlay())
               }
             }
+          }
+
+          this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.bossScale ?? 3.45)
+          if (this.cfg.bossBodyOffsetY !== undefined) {
+            const bFrame = this.textures.getFrame(this.cfg.bossKey ?? '', 0)
+            const bFs = (bFrame?.realWidth ?? 64) / 64
+            ;(this.boss.body as Phaser.Physics.Arcade.Body).setOffset(Math.round(16 * bFs), this.cfg.bossBodyOffsetY)
+          }
+          this.boss.on('bossDead', () => {
+            this.bossDefeated = true
+            SoundManager.bossDeath()
+            this.cameras.main.shake(300, 0.010)
+            this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
+            this.addScore(2000)
+            if (this.boss2Defeated || !this.cfg.boss2Key) onAllBossesDead()
           })
+
+          // Spawn second boss for dual-boss rooms
+          if (this.cfg.boss2Key && this.cfg.boss2Hp && this.cfg.boss2SpawnX) {
+            const b2y = this.cfg.boss2SpawnY ?? bossY
+            this.boss2 = new Boss(this, this.cfg.boss2SpawnX, b2y, this.cfg.boss2Hp, 3000, this.cfg.boss2Key, false, this.cfg.boss2Stationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.boss2Scale ?? 3.45)
+            this.boss2.on('bossDead', () => {
+              this.boss2Defeated = true
+              SoundManager.bossDeath()
+              this.cameras.main.shake(300, 0.010)
+              this.showPopup(W / 2, 500, 'BOSS DEFEATED!', '#ffe066')
+              this.addScore(2000)
+              if (this.bossDefeated) onAllBossesDead()
+            })
+          }
         }
       }
 
@@ -2246,8 +2424,9 @@ export class GameScene extends Phaser.Scene {
         if (!!(gateKey && this.registry.get(gateKey))) this.buildHiddenPortal()
       }
 
-      // Star-burst orb — boss room instant-kill collectible
-      if (this.cfg.isBossRoom) {
+      // Star-burst orb — boss room instant-kill collectible (dev/localhost only)
+      const _isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      if (this.cfg.isBossRoom && _isLocalhost) {
         const orbX = this.cfg.starOrb ? this.cfg.starOrb.x : (this.cfg.starOrbSide === 'left' ? 120 : this.cfg.worldWidth - 120)
         const orbY = this.cfg.starOrb ? this.cfg.starOrb.y : 220
         const orbRing = this.add.circle(orbX, orbY, 22, 0x000000, 0)
@@ -2262,12 +2441,17 @@ export class GameScene extends Phaser.Scene {
           orbUsed = true
           orbRing.destroy(); orbImg.destroy()
           this.cameras.main.flash(300, 255, 240, 80, false)
-          // Instantly kill all enemies and boss — no star-contact required
+          // Instantly kill all enemies and bosses — no star-contact required
           this.enemies.forEach(e => { if (e.active) { e.die(); this.addScore(SCORE_ENEMY) } })
           if (this.boss?.active) {
             ;(this.boss.body as Phaser.Physics.Arcade.Body).setEnable(false)
             this.boss.emit('hpChanged', 0, this.boss.maxHp)
             this.boss.bossDie()
+          }
+          if (this.boss2?.active) {
+            ;(this.boss2.body as Phaser.Physics.Arcade.Body).setEnable(false)
+            this.boss2.emit('hpChanged', 0, this.boss2.maxHp)
+            this.boss2.bossDie()
           }
           // Pure visual star shower
           const COUNT = 32
@@ -2359,24 +2543,23 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: gg, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
       }
 
-      // Purple exit glow at right edge
+      // Exit glow at right edge (or custom world position via exitGlowRightX/Y)
       if (this.cfg.comingSoonGlowRight) {
-        const W2  = this.cfg.worldWidth
-        const ey  = this.cfg.exitPositions?.right ?? 1952
-        const gy  = ey - 25
-        const color = 0xcc55ff
+        const gx  = this.cfg.exitGlowRightX ?? this.cfg.worldWidth
+        const gy  = (this.cfg.exitGlowRightY ?? (this.cfg.exitPositions?.right ?? 1952)) - 25
+        const color = this.cfg.exitGlowRightColor ?? 0xcc55ff
         const gg = this.add.graphics().setDepth(3)
         for (let i = 9; i >= 0; i--) {
           const t   = i / 9
           const exp = t * 52
           gg.fillStyle(color, (1 - t) * 0.30 + 0.02)
-          gg.fillRect(W2 - 16 - exp, gy - 65 - exp, 16 + exp * 2, 130 + exp * 2)
+          gg.fillRect(gx - 16 - exp, gy - 65 - exp, 16 + exp * 2, 130 + exp * 2)
         }
         gg.lineStyle(2, color, 0.90)
-        gg.strokeRect(W2 - 16, gy - 65, 16, 130)
+        gg.strokeRect(gx - 16, gy - 65, 16, 130)
         gg.lineStyle(3, color, 1)
-        gg.beginPath(); gg.moveTo(W2 - 16, gy - 70); gg.lineTo(W2 - 16, gy + 70); gg.strokePath()
-        gg.beginPath(); gg.moveTo(W2,      gy - 70); gg.lineTo(W2,      gy + 70); gg.strokePath()
+        gg.beginPath(); gg.moveTo(gx - 16, gy - 70); gg.lineTo(gx - 16, gy + 70); gg.strokePath()
+        gg.beginPath(); gg.moveTo(gx,      gy - 70); gg.lineTo(gx,      gy + 70); gg.strokePath()
         this.tweens.add({ targets: gg, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
       }
 
@@ -2533,6 +2716,23 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      // Mimic enemies — skip in boss rooms, dormant until player proximity
+      if (!this.cfg.isBossRoom) {
+        const furnXs = (this.cfg.furnitureSpawns ?? []).map(f => f.x)
+        for (const ms of (this.cfg.mimicSpawns ?? [])) {
+          if (this.enemies.some(e => Math.hypot(ms.x - e.x, ms.y - e.y) < CLUSTER_DIST)) continue
+          if (furnXs.some(fx => Math.abs(ms.x - fx) < 100)) continue
+          const mimicY = ms.y + 2
+          if (this.isInsideWall(ms.x, mimicY) ||
+              this.isInsideWall(ms.x - 22, mimicY) ||
+              this.isInsideWall(ms.x + 22, mimicY)) continue
+          const mimic = new Mimic(this, ms.x, mimicY)
+          this.mimics.push(mimic)
+          this.physics.add.collider(mimic, this.platforms)
+          this.tilemapLayers.forEach(l => this.physics.add.collider(mimic, l))
+        }
+      }
+
       this.spawnSpikeBalls()
       return
     }
@@ -2637,6 +2837,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const e of this.cfg.enemies) {
+      if (this.tilemapLayers.length > 0 && this.isInsideWall(e.x, e.y)) continue
       const enemy = new Enemy(this, e.x, e.y, e.ability)
       this.enemies.push(enemy)
       this.enemyGroup.add(enemy)
@@ -2644,6 +2845,11 @@ export class GameScene extends Phaser.Scene {
 
     if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
       this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false, this.cfg.bossStationary ?? false, this.cfg.bossAttackRate ?? 3000, this.cfg.bossScale ?? 3.45)
+      if (this.cfg.bossBodyOffsetY !== undefined) {
+        const bFrame = this.textures.getFrame(this.cfg.bossKey ?? '', 0)
+        const bFs = (bFrame?.realWidth ?? 64) / 64
+        ;(this.boss.body as Phaser.Physics.Arcade.Body).setOffset(Math.round(16 * bFs), this.cfg.bossBodyOffsetY)
+      }
       this.boss.on('bossDead', () => {
         this.bossDefeated = true
         SoundManager.bossDeath()
@@ -2677,7 +2883,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Mimic enemies — dormant until player proximity, then patrol like normal enemies
+    const furnXsNonMap = (this.cfg.furnitureSpawns ?? []).map(f => f.x)
     for (const ms of (this.cfg.mimicSpawns ?? [])) {
+      if (furnXsNonMap.some(fx => Math.abs(ms.x - fx) < 100)) continue
       const mimic = new Mimic(this, ms.x, ms.y)
       this.mimics.push(mimic)
       this.physics.add.collider(mimic, this.platforms)
@@ -2827,9 +3035,10 @@ export class GameScene extends Phaser.Scene {
     let fw: number, fh: number
 
     if (type === 'bookcase') {
+      y -= 15
       fw = 40; fh = 80
       const bsFrame = Phaser.Math.RND.pick([0, 8, 14])
-      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(50, 100))
+      v(this.add.image(x, y, 'bookshelf', bsFrame).setDepth(3).setDisplaySize(80, 130))
 
     } else if (type === 'table') {
       fw = 96; fh = 36
@@ -2839,9 +3048,10 @@ export class GameScene extends Phaser.Scene {
       v(this.add.rectangle(cx, cy + 4,  5, 12, 0xf0e8d8, 0.92).setDepth(2))
       const fl = v(this.add.rectangle(cx, cy - 4, 5, 8, 0xffdd88, 0.88).setDepth(2))
       this.tweens.add({ targets: fl, scaleX: 0.55, scaleY: 0.72, duration: 85 + Phaser.Math.Between(0, 50), yoyo: true, repeat: -1 })
-      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(120, 48))
+      v(this.add.image(x, y, 'table', tableFrame).setDepth(3).setDisplaySize(160, 88))
 
     } else { // chest
+      y += 5
       fw = 48; fh = 40
       const frame = (itemDrop === 'invulnerability' || itemDrop === 'attack-boost' || itemDrop === 'speed')
                   ? 2
@@ -2867,10 +3077,12 @@ export class GameScene extends Phaser.Scene {
       this.destructibles = this.destructibles.filter(z => z !== obj)
       this.addScore(SCORE_DESTRUCT)
       visuals.forEach(go => { if (go.active) go.destroy() })
+      this.registry.set('furnitureDestroyed', (this.registry.get('furnitureDestroyed') ?? 0) + 1)
       if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
       if (itemDrop) this.spawnDroppedItem(obj.x, obj.y, itemDrop)
       else if (pizzaDrop) this.spawnPizzaDrop(obj.x, obj.y)
       else if (Math.random() < 0.25) this.spawnFurnitureDrop(obj.x, obj.y)
+      if (Math.random() < 0.4) this.spawnGoldCoins(obj.x, obj.y, Phaser.Math.Between(1, 3))
     })
   }
 
@@ -2894,7 +3106,8 @@ export class GameScene extends Phaser.Scene {
       dest.setData('lastActionTime', this.time.now)
 
       const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? ''
-      const collected: string[] = this.registry.get('collectedLetters') ?? []
+      const collectedKey = keyLevel >= 3 ? `level${keyLevel}CollectedLetters` : 'collectedLetters'
+      const collected: string[] = this.registry.get(collectedKey) ?? []
 
       if (!targetWord || !this.canSpellWord(targetWord, collected)) {
         this.showPopup(x, y, 'Need letter bugs!', '#ff8888')
@@ -3155,7 +3368,7 @@ export class GameScene extends Phaser.Scene {
   private showArithmeticMenu(
     duckX: number, duckY: number,
     question: string, correct: number,
-    reward: 'speed' | 'attack-boost' | 'invulnerability',
+    _reward: 'speed' | 'attack-boost' | 'invulnerability',
     onCorrect: () => void,
   ) {
     if (this.wordMenuObjects.length > 0) return
@@ -3183,8 +3396,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: '36px', fontFamily: FONT, color: '#ffffff', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
-    const rewardLabel = reward === 'speed' ? 'SPEED BOOST' : reward === 'attack-boost' ? 'POWER BOOST' : 'INVINCIBLE'
-    const rewardTxt = this.add.text(width / 2, height * 0.50, `Reward: ${rewardLabel}!`, {
+    const rewardTxt = this.add.text(width / 2, height * 0.50, 'Reward: GOLD COINS!', {
       fontSize: '10px', fontFamily: FONT, color: '#aaffcc',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(D)
 
@@ -3337,6 +3549,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnDroppedItem(x: number, y: number, type: ItemType) {
+    if (type === 'pizza') { this.spawnPizzaDrop(x, y); return }
     const tex = type === 'invulnerability' ? 'invulnerability_icon'
               : type === 'mystery'         ? 'item-mystery'
               : type === 'heart'           ? 'item-heart'
@@ -3358,11 +3571,34 @@ export class GameScene extends Phaser.Scene {
     this.spawnPizzaDrop(x, y)
   }
 
+  private spawnGoldCoins(x: number, y: number, count: number) {
+    for (let i = 0; i < count; i++) {
+      const cx = x + (Math.random() - 0.5) * 48
+      let dropY = y - 8
+      if (this.tilemapLayers.length > 0) {
+        for (let sy = y; sy < y + 240; sy += 4) {
+          if (this.isInsideWall(cx, sy)) { dropY = sy - 14; break }
+        }
+      }
+      const coin  = this.add.container(cx, dropY).setDepth(8)
+      coin.add(this.add.circle(0, 0, 7, 0xffd700, 1))
+      coin.add(this.add.circle(-2, -2, 3, 0xffff99, 0.65))
+      coin.setData('item', { type: 'gold-coin', x: cx, y: dropY })
+      this.tweens.add({ targets: coin, y: dropY - 18, duration: 550 + i * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      this.collectibleSprites.push(coin)
+      this.time.delayedCall(12000, () => {
+        if (!coin.active) return
+        this.collectibleSprites = this.collectibleSprites.filter(s => s !== coin)
+        this.tweens.add({ targets: coin, alpha: 0, duration: 700, onComplete: () => coin.destroy() })
+      })
+    }
+  }
+
   private spawnRoomFurnitureRandom() {
     const W = this.cfg.worldWidth
     const FLOOR_Y = 672
     const pool = [AbilityType.None, AbilityType.None, AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
-    const FURN_MIN_DIST = 110
+    const FURN_MIN_DIST = 150
     const placedX: number[] = []
     const pickX = (anchor: number, jitter: number): number => {
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -3443,7 +3679,8 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.resetRoomLetterBugs()
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3509,6 +3746,22 @@ export class GameScene extends Phaser.Scene {
     this.hiddenPortalPos = this.cfg.hiddenPortal
   }
 
+  private enterBossPortal() {
+    const ri: number = this.registry.get('runIndex') ?? 0
+    if (this.roomTransitioning) return
+    this.roomTransitioning = true
+    this.gm.pause()
+    this.physics.world.isPaused = true
+    this.registry.set('score', this.score)
+    this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.resetRoomLetterBugs()
+    this.registry.set('runIndex', ri + 1)
+    this.registry.set('entryDir', 'left')
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+  }
+
   private useHiddenPortal() {
     const ri: number = this.registry.get('runIndex') ?? 0
     if (this.roomTransitioning) return
@@ -3517,7 +3770,8 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.resetRoomLetterBugs()
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
     this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -3537,10 +3791,10 @@ export class GameScene extends Phaser.Scene {
     // Boosts from level 3 do not carry into level 4; boosts earned in level 4+ always carry forward
     const currentRunIdx: number = this.registry.get('runIndex') ?? 0
     if (currentRunIdx === 6) {
-      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
       const prev = this.registry.get('persistedBoosts') as PB[] | null
       this.registry.set('persistedBoosts', prev
-        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false }))
+        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false, isDinoForm: pb?.isDinoForm ?? false, carterAbility: pb?.carterAbility ?? 'duplicate' }))
         : null)
     }
 
@@ -3555,7 +3809,7 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
-    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean }
+    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
     const persistedBoosts: PersistedBoost[] | null = this.registry.get('persistedBoosts')
     if (persistedBoosts) {
       this.players.forEach((p, i) => {
@@ -3576,6 +3830,15 @@ export class GameScene extends Phaser.Scene {
         if (pb?.hasShadow && p.charKey === 'coco') {
           p.isShadowForm = true
           p.play('coco-shadow-idle', true)
+        }
+        if (p.charKey === 'carter') {
+          if (pb?.carterAbility) p.carterAbility = pb.carterAbility
+          if (pb?.isDinoForm) {
+            p.isDinoForm      = true
+            p.speedMultiplier = 2.0
+            p.setTexture('sheet-carter-transform', 7)
+            p.play('carter-dino-idle', true)
+          }
         }
       })
     }
@@ -3752,7 +4015,8 @@ export class GameScene extends Phaser.Scene {
       this.players.forEach(p => this.physics.add.collider(p, layer))
       this.enemies.forEach(e => { this.physics.add.collider(e, layer) })
       this.crates.forEach(c => this.physics.add.collider(c, layer))
-      if (this.boss) this.physics.add.collider(this.boss, layer)
+      if (this.boss)  this.physics.add.collider(this.boss,  layer)
+      if (this.boss2) this.physics.add.collider(this.boss2, layer)
     })
 
     // Per-enemy platform colliders — flying enemies are excluded
@@ -3765,7 +4029,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold') || this.cocoIsOnAttackFrame(player)) {
+        if (player.isTruck || player.isTrex || player.isSpindashing || player.getData('abbySpinHold') || this.cocoIsOnAttackFrame(player) || this.carterDinoIsOnAttackFrame(player)) {
           enemy.die()
           this.addScore(SCORE_ENEMY)
           this.trackEnemyKill()
@@ -3780,7 +4044,7 @@ export class GameScene extends Phaser.Scene {
       this.mimics.forEach(m => {
         this.physics.add.collider(p, m, () => {
           if (!m.isAwake || !m.active) return
-          if (p.isTruck || p.isTrex || p.isSpindashing || p.getData('abbySpinHold') || this.cocoIsOnAttackFrame(p)) {
+          if (p.isTruck || p.isTrex || p.isSpindashing || p.getData('abbySpinHold') || this.cocoIsOnAttackFrame(p) || this.carterDinoIsOnAttackFrame(p)) {
             m.die(); this.addScore(SCORE_ENEMY); this.trackEnemyKill()
           } else {
             p.hitByEnemy()
@@ -3790,19 +4054,25 @@ export class GameScene extends Phaser.Scene {
     })
 
     // Boss colliders (separate from enemy group)
-    if (this.boss) {
-      this.physics.add.collider(this.boss, this.platforms)
+    const addBossColliders = (b: Boss) => {
+      this.physics.add.collider(b, this.platforms)
       this.players.forEach(p => {
-        this.physics.add.overlap(p, this.boss!, (_p, _b) => {
+        this.physics.add.overlap(p, b, (_p, _b) => {
           if (this.cfg.bossNoAttack) return
           const player = _p as Player
-          const boss   = _b as unknown as Boss
-          if (Math.abs(player.y - boss.y) > 350) return
-          if (player.isTruck || player.isTrex || player.isSpindashing || this.cocoIsOnAttackFrame(player)) this.hitBoss(player)
-          else player.hitByEnemy()
+          const bossObj = _b as unknown as Boss
+          if (Math.abs(player.y - bossObj.y) > 350) return
+          if (player.isTruck || player.isTrex || player.isSpindashing || this.cocoIsOnAttackFrame(player) || this.carterDinoIsOnAttackFrame(player)) {
+            if (bossObj === this.boss) this.hitBoss(player)
+            else if (bossObj === this.boss2) this.hitBoss2(player)
+          } else {
+            player.hitByEnemy()
+          }
         })
       })
     }
+    if (this.boss)  addBossColliders(this.boss)
+    if (this.boss2) addBossColliders(this.boss2)
 
     // Spike balls — bounce off world geometry, block players and deal damage on contact
     this.spikeBalls.forEach(ball => {
@@ -3834,11 +4104,20 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.enemyProjectiles, this.platforms, (proj) => {
       ;(proj as Phaser.Physics.Arcade.Image).destroy()
     })
+
+    // Boss projectiles hit players but pass through walls
+    this.players.forEach(p => {
+      this.physics.add.overlap(p, this.bossProjectiles, (_p, proj) => {
+        ;(proj as Phaser.Physics.Arcade.Image).destroy()
+        ;(_p as Player).hitByEnemy()
+      })
+    })
   }
 
   // ── abilities ───────────────────────────────────────────────────────────────
 
   private doMeleeSwing(src: Player) {
+    if (src.isDinoForm) { this.fireCarterDinoMeleeLaser(src); return }
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
@@ -3892,6 +4171,14 @@ export class GameScene extends Phaser.Scene {
           bb.setVelocityY(-180)
         }
       }
+      if (this.boss2?.active) {
+        const bb = this.boss2.body as Phaser.Physics.Arcade.Body
+        const dx = this.boss2.x - src.x
+        const dy = Math.abs(bb.center.y - src.y)
+        if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
+          this.hitBoss2(src)
+        }
+      }
       this.destructibles.forEach(d => {
         if (!d.active) return
         const dx = d.x - src.x, dy = Math.abs(d.y - src.y)
@@ -3922,6 +4209,11 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.boss.hit()
     }
+  }
+
+  private hitBoss2(_src: Player) {
+    if (!this.boss2?.active) return
+    this.boss2.hit()
   }
 
   // ── Conrad army truck ability ─────────────────────────────────────────────────
@@ -3961,6 +4253,10 @@ export class GameScene extends Phaser.Scene {
       if (this.boss?.active) {
         const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss.x, this.boss.y)
         if (d < nearDist) { nearDist = d; nearTarget = this.boss }
+      }
+      if (this.boss2?.active) {
+        const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss2.x, this.boss2.y)
+        if (d < nearDist) { nearDist = d; nearTarget = this.boss2 }
       }
 
       const now      = this.time.now
@@ -4013,6 +4309,10 @@ export class GameScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss.x, this.boss.y)
       if (d < best) { best = d; target = this.boss }
     }
+    if (this.boss2?.active) {
+      const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss2.x, this.boss2.y)
+      if (d < best) { best = d; target = this.boss2 }
+    }
     type TruckEffect = 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning'
     const effectType = Phaser.Math.RND.pick(['fire', 'ice', 'explode', 'blackhole', 'lightning'] as TruckEffect[])
     const frame = effectType === 'fire' ? 1 : effectType === 'ice' ? 2 : effectType === 'explode' ? 3 : effectType === 'blackhole' ? 7 : 9
@@ -4044,6 +4344,13 @@ export class GameScene extends Phaser.Scene {
         onHit(this.boss!.x, this.boss!.y)
       })
     }
+    if (this.boss2?.active) {
+      this.physics.add.overlap(proj, this.boss2, () => {
+        SoundManager.bossHit()
+        this.boss2!.hit()
+        onHit(this.boss2!.x, this.boss2!.y)
+      })
+    }
     // Delay surface colliders so the bullet escapes the truck's spawn tile first
     this.time.delayedCall(150, () => {
       if (!proj.active) return
@@ -4066,6 +4373,9 @@ export class GameScene extends Phaser.Scene {
         if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
           SoundManager.bossHit(); this.boss.hit()
         }
+        if (this.boss2?.active && Phaser.Math.Distance.Between(x, y, this.boss2.x, this.boss2.y) < RADIUS) {
+          SoundManager.bossHit(); this.boss2.hit()
+        }
       }
     } else if (type === 'blackhole') {
       const RADIUS = 180
@@ -4086,6 +4396,9 @@ export class GameScene extends Phaser.Scene {
           if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
             SoundManager.bossHit(); this.boss.hit()
           }
+          if (this.boss2?.active && Phaser.Math.Distance.Between(x, y, this.boss2.x, this.boss2.y) < RADIUS) {
+            SoundManager.bossHit(); this.boss2.hit()
+          }
         })
       }
     } else if (type === 'lightning') {
@@ -4097,6 +4410,9 @@ export class GameScene extends Phaser.Scene {
       if (src) targets.forEach(e => this.hitEnemy(e, src))
       if (this.boss?.active && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < RADIUS) {
         SoundManager.bossHit(); this.boss.hit()
+      }
+      if (this.boss2?.active && Phaser.Math.Distance.Between(x, y, this.boss2.x, this.boss2.y) < RADIUS) {
+        SoundManager.bossHit(); this.boss2.hit()
       }
       targets.forEach((e, i) => {
         this.time.delayedCall(i * 80, () => {
@@ -4358,6 +4674,9 @@ export class GameScene extends Phaser.Scene {
               (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
           SoundManager.bossHit()
           this.boss!.hit()
+        } else if (targetObj === this.boss2) {
+          SoundManager.bossHit()
+          this.boss2!.hit()
         } else {
           SoundManager.enemyHit()
           ;(targetObj as Enemy).hit()
@@ -4372,6 +4691,9 @@ export class GameScene extends Phaser.Scene {
       })
       if (this.boss?.active) {
         this.physics.add.overlap(num, this.boss, () => onHit(this.boss!))
+      }
+      if (this.boss2?.active) {
+        this.physics.add.overlap(num, this.boss2, () => onHit(this.boss2!))
       }
 
       // Phase 2: after 1.5 s, each number shoots toward nearest enemy
@@ -4390,6 +4712,10 @@ export class GameScene extends Phaser.Scene {
         if (this.boss?.active) {
           const d = Phaser.Math.Distance.Between(num.x, num.y, this.boss.x, this.boss.y)
           if (d < best) { best = d; target = this.boss }
+        }
+        if (this.boss2?.active) {
+          const d = Phaser.Math.Distance.Between(num.x, num.y, this.boss2.x, this.boss2.y)
+          if (d < best) { best = d; target = this.boss2 }
         }
         if (target) {
           const angle = Phaser.Math.Angle.Between(num.x, num.y, target.x, target.y)
@@ -4577,6 +4903,265 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // ── Carter dinosaur transformation ───────────────────────────────────────────
+
+  private transformCarterToDino(carter: Player) {
+    if (carter.isDinoForm || carter.isTransforming) return
+    carter.isTransforming = true
+    carter.setTexture('sheet-carter-transform', 0)
+    carter.play('carter-transform-in', true)
+    carter.once('animationcomplete-carter-transform-in', () => {
+      if (!carter.active) return
+      carter.isDinoForm     = true
+      carter.isTransforming = false
+      carter.speedMultiplier = 2.0
+      carter.play('carter-dino-idle', true)
+    })
+  }
+
+  private untransformCarterFromDino(carter: Player) {
+    if (!carter.isDinoForm || carter.isTransforming) return
+    carter.isDinoForm = false
+    this.stopCarterDinoSpin(carter)
+    carter.speedMultiplier = 1.0
+    carter.isTransforming  = true
+    carter.setTexture('sheet-carter-transform', 7)
+    carter.play('carter-transform-out', true)
+    carter.once('animationcomplete-carter-transform-out', () => {
+      if (!carter.active) return
+      carter.isTransforming = false
+      carter.setTexture(`sheet-${carter.charKey}`, 0)
+      carter.play(`char-${carter.charKey}-idle`, true)
+    })
+  }
+
+  private updateCarterDino() {
+    const carter = this.players.find(p => p.charKey === 'carter' && p.isAlive)
+    if (!carter?.isDinoForm) return
+    if (carter.isTransforming) return
+
+    const body    = carter.body as Phaser.Physics.Arcade.Body
+    const airborne = !body.blocked.down
+
+    if (airborne) {
+      if (body.velocity.y < -60) {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-jump') carter.play('carter-dino-jump', true)
+      } else if (body.velocity.y > 80) {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-fall') {
+          carter.setTexture('sheet-carter-dino-jump')
+          carter.play('carter-dino-fall', true)
+        }
+      } else {
+        if (carter.anims.currentAnim?.key !== 'carter-dino-float') {
+          carter.setTexture('sheet-carter-dino-jump')
+          carter.play('carter-dino-float', true)
+        }
+      }
+
+      // Spin while on frames 5-9 of the dino-jump sheet
+      const frame = carter.anims.currentFrame?.textureFrame as number ?? -1
+      if (frame >= 5 && frame <= 9) {
+        if (!this.carterDinoSpinTween) this.startCarterDinoSpin(carter)
+      } else {
+        if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
+      }
+    } else {
+      // Landed — restore transform sheet for idle/walk
+      if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
+      if (carter.texture.key !== 'sheet-carter-transform') carter.setTexture('sheet-carter-transform')
+      const moving = Math.abs(body.velocity.x) > 10
+      const key    = moving ? 'carter-dino-walk' : 'carter-dino-idle'
+      if (carter.anims.currentAnim?.key !== key) carter.play(key, true)
+    }
+  }
+
+  private startCarterDinoSpin(carter: Player) {
+    this.carterDinoSpinTween?.stop()
+    this.carterDinoSpinTween = this.tweens.add({
+      targets: carter, angle: carter.flipX ? -360 : 360,
+      duration: 280, repeat: -1,
+    })
+  }
+
+  private stopCarterDinoSpin(carter: Player) {
+    this.carterDinoSpinTween?.stop()
+    this.carterDinoSpinTween = null
+    carter.setAngle(0)
+  }
+
+  private carterDinoIsOnAttackFrame(player: Player): boolean {
+    if (player.charKey !== 'carter' || !player.isDinoForm) return false
+    const frame = player.anims.currentFrame?.textureFrame
+    return typeof frame === 'number' && frame >= 5 && frame <= 9
+  }
+
+  private fireCarterDinoMeleeLaser(carter: Player) {
+    const RANGE = 500
+    let target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null = null
+    let best = RANGE
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    for (const dest of this.destructibles) {
+      if (!dest.active) continue
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, dest.x, dest.y)
+      if (d < best) { best = d; target = dest }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (this.boss2?.active) {
+      const d = Phaser.Math.Distance.Between(carter.x, carter.y, this.boss2.x, this.boss2.y)
+      if (d < best) { best = d; target = this.boss2 }
+    }
+    if (!target) return
+
+    const tx   = target.x
+    const ty   = target.y - 20
+    const eyeX = carter.x + (carter.flipX ? -14 : 14)
+    const eyeY = carter.y - 20
+
+    const gfx = this.add.graphics().setDepth(15)
+    gfx.lineStyle(6, 0xff2200, 0.85)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    gfx.lineStyle(12, 0xff6600, 0.30)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
+
+    const flash = this.add.circle(tx, ty, 12, 0xff2200, 1).setDepth(16)
+    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.8, scaleY: 2.8, duration: 200, ease: 'Power2', onComplete: () => flash.destroy() })
+    const sparkColors = [0xff0000, 0xff4400, 0xff8800, 0xffcc44]
+    for (let i = 0; i < 7; i++) {
+      const angle = (i / 7) * Math.PI * 2
+      const speed = 55 + Math.random() * 75
+      const spark = this.add.rectangle(tx, ty, 5, 5, sparkColors[i % sparkColors.length], 1).setDepth(16)
+      this.tweens.add({
+        targets: spark,
+        x: tx + Math.cos(angle) * speed,
+        y: ty + Math.sin(angle) * speed,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: 230 + Math.random() * 130,
+        ease: 'Quad.Out',
+        onComplete: () => spark.destroy(),
+      })
+    }
+
+    if (target === this.boss) {
+      if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+          (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+      SoundManager.bossHit()
+      this.boss!.hit()
+    } else if (target === this.boss2) {
+      SoundManager.bossHit()
+      this.boss2!.hit()
+    } else if (target instanceof Destructible) {
+      target.takeDamage(30, DamageType.Physical)
+    } else {
+      this.hitEnemy(target as Enemy, carter)
+      this.hitEnemy(target as Enemy, carter)
+    }
+  }
+
+  // ── Map position overlay ──────────────────────────────────────────────────────
+
+  // Minimap layout — set once in buildMapOverlay, read in updateMapOverlay
+  private _mmLeft = 0
+  private _mmTop  = 0
+  private _mmW    = 0
+  private _mmH    = 0
+
+  private buildMapOverlay() {
+    const { width } = this.scale
+    const worldW = this.cfg.worldWidth
+    const worldH = this.cfg.worldHeight ?? 800
+
+    const isDesktop = !this.sys.game.device.input.touch
+    const MAX_W = isDesktop ? 300 : 200
+    const MAX_H = isDesktop ? 135 : 90
+    const scaleX = MAX_W / worldW
+    const scaleY = MAX_H / worldH
+    const s = Math.min(scaleX, scaleY)
+    const mw = Math.round(worldW * s)
+    const mh = Math.round(worldH * s)
+    const ml = Math.round(width / 2 - mw / 2)   // left edge
+    const mt = 8                                  // top edge
+
+    this._mmLeft = ml; this._mmTop = mt
+    this._mmW = mw;    this._mmH = mh
+
+    // Static layer: background + tile geometry
+    const gfx = this.add.graphics().setScrollFactor(0).setDepth(22)
+    gfx.fillStyle(0x000011, 0.72)
+    gfx.fillRect(ml, mt, mw, mh)
+
+    // Draw solid tiles from every collision layer
+    if (this.tilemapLayers.length > 0) {
+      gfx.fillStyle(0x8899aa, 0.35)
+      for (const layer of this.tilemapLayers) {
+        const tileW = layer.tilemap.tileWidth  * layer.scaleX
+        const tileH = layer.tilemap.tileHeight * layer.scaleY
+        const ox    = layer.x
+        const oy    = layer.y
+        const rows  = layer.layer.data
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r]
+          for (let c = 0; c < row.length; c++) {
+            const tile = row[c]
+            if (!tile || tile.index === -1) continue
+            const wx = ox + c * tileW
+            const wy = oy + r * tileH
+            const px = Math.round(ml + wx * s)
+            const py = Math.round(mt + wy * s)
+            const pw = Math.max(1, Math.round(tileW * s))
+            const ph = Math.max(1, Math.round(tileH * s))
+            gfx.fillRect(px, py, pw, ph)
+          }
+        }
+      }
+    } else {
+      // Platform-only rooms: draw cfg.platforms as bars
+      gfx.fillStyle(0x8899aa, 0.35)
+      for (const plat of this.cfg.platforms) {
+        const px = Math.round(ml + (plat.x - plat.w / 2) * s)
+        const py = Math.round(mt + (plat.y - plat.h / 2) * s)
+        const pw = Math.max(1, Math.round(plat.w * s))
+        const ph = Math.max(1, Math.round(plat.h * s))
+        gfx.fillRect(px, py, pw, ph)
+      }
+    }
+
+    // Border drawn on top of tiles
+    gfx.lineStyle(1, 0xffffff, 0.30)
+    gfx.strokeRect(ml, mt, mw, mh)
+
+    // Dynamic layer for player dots (cleared + redrawn each frame)
+    this.minimapDots = this.add.graphics().setScrollFactor(0).setDepth(23)
+  }
+
+  private updateMapOverlay() {
+    if (!this.minimapDots) return
+    const ml = this._mmLeft, mt = this._mmTop
+    const mw = this._mmW,   mh = this._mmH
+    const worldH = this.cfg.worldHeight ?? 800
+    const COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
+
+    this.minimapDots.clear()
+    this.players.forEach((p, i) => {
+      if (!p.isAlive) return
+      const px = ml + (p.x / this.cfg.worldWidth) * mw
+      const py = mt + (p.y / worldH) * mh
+      // White halo + colored center
+      this.minimapDots!.fillStyle(0xffffff, 0.70)
+      this.minimapDots!.fillCircle(px, py, 4)
+      this.minimapDots!.fillStyle(COLORS[i % COLORS.length], 1)
+      this.minimapDots!.fillCircle(px, py, 2.5)
+    })
+  }
+
   // ── Carter force field ────────────────────────────────────────────────────────
 
   private startCarterForceField(p: Player) {
@@ -4611,13 +5196,24 @@ export class GameScene extends Phaser.Scene {
           Phaser.Math.Distance.Between(p.x, p.y, this.boss.x, this.boss.y) < FF_R) {
         SoundManager.bossHit(); this.boss.hit()
       }
+      if (this.boss2?.active &&
+          Phaser.Math.Distance.Between(p.x, p.y, this.boss2.x, this.boss2.y) < FF_R) {
+        SoundManager.bossHit(); this.boss2.hit()
+      }
     }
   }
 
   // ── Carter duplicate ability ─────────────────────────────────────────────────
 
   private handleCharacterAbility(src: Player) {
-    if (src.charKey === 'carter') this.spawnCarterDuplicate(src)
+    if (src.charKey === 'carter') {
+      if (src.carterAbility === 'dino') {
+        if (src.isDinoForm) this.untransformCarterFromDino(src)
+        else this.transformCarterToDino(src)
+      } else {
+        this.spawnCarterDuplicate(src)
+      }
+    }
     else if (src.charKey === 'eric') {
       if (src.isTruck) this.untransformEric(src)
       else this.transformEricToTruck(src)
@@ -4669,7 +5265,7 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private spawnCarterDuplicate(src: Player) {
+  spawnCarterDuplicate(src: Player) {
     const sheet = `sheet-${src.charKey}`
     if (!this.textures.exists(sheet)) return
     const dup = new CarterDuplicate(this, src.x, src.y, sheet)
@@ -4680,9 +5276,8 @@ export class GameScene extends Phaser.Scene {
     this.enemies.forEach(e => {
       this.physics.add.overlap(dup, e, () => dup.hit())
     })
-    if (this.boss?.active) {
-      this.physics.add.overlap(dup, this.boss, () => dup.hit())
-    }
+    if (this.boss?.active)  this.physics.add.overlap(dup, this.boss,  () => dup.hit())
+    if (this.boss2?.active) this.physics.add.overlap(dup, this.boss2, () => dup.hit())
     dup.on('fireLaser', (d: CarterDuplicate) => this.fireDuplicateLaser(d))
     dup.on('duplicateDied', (d: CarterDuplicate) => {
       this.carterDuplicates = this.carterDuplicates.filter(x => x !== d)
@@ -4704,6 +5299,10 @@ export class GameScene extends Phaser.Scene {
     if (this.boss?.active) {
       const d = Phaser.Math.Distance.Between(dup.x, dup.y, this.boss.x, this.boss.y)
       if (d < best) { best = d; target = this.boss }
+    }
+    if (this.boss2?.active) {
+      const d = Phaser.Math.Distance.Between(dup.x, dup.y, this.boss2.x, this.boss2.y)
+      if (d < best) { best = d; target = this.boss2 }
     }
     if (!target) return
 
@@ -4743,6 +5342,9 @@ export class GameScene extends Phaser.Scene {
           (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
       SoundManager.bossHit()
       this.boss!.hit()
+    } else if (target === this.boss2) {
+      SoundManager.bossHit()
+      this.boss2!.hit()
     } else {
       this.hitEnemy(target as Enemy, this.players[0] ?? this.players[0])
     }
@@ -4761,7 +5363,7 @@ export class GameScene extends Phaser.Scene {
     const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
     const proj = this.physics.add.image(bx, by, texKey)
     proj.setTint(0x22cc55).setScale(0.7, 1.8)
-    this.enemyProjectiles.add(proj)
+    this.bossProjectiles.add(proj)
     ;(proj.body as Phaser.Physics.Arcade.Body)
       .setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed)
       .setGravityY(-800)
@@ -4769,12 +5371,36 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(2500, () => { if (proj.active) proj.destroy() })
   }
 
+  private fireMushroom() {
+    if (!this.boss?.active) return
+    const bx = this.boss.x
+    const by = this.boss.y
+    const alive = this.players.filter(p => p.isAlive)
+    if (alive.length === 0) return
+    const target = alive.reduce((a, b) =>
+      Math.abs(a.x - bx) < Math.abs(b.x - bx) ? a : b)
+    const angle = Phaser.Math.Angle.Between(bx, by, target.x, target.y)
+    const speed = 420
+    const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
+    const proj = this.physics.add.image(bx, by, texKey)
+    proj.setTint(0xaa5500).setScale(0.55)
+    this.bossProjectiles.add(proj)
+    ;(proj.body as Phaser.Physics.Arcade.Body)
+      .setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed)
+      .setGravityY(-800)
+    this.time.delayedCall(2500, () => { if (proj.active) proj.destroy() })
+  }
+
   private fireBossSpecial(ability: AbilityType) {
     if (!this.boss?.active) return
 
-    // Celery man: rapid single stalk aimed at nearest player
+    // Celery man / Mushroom Man: rapid single projectile aimed at nearest player
     if (this.cfg.bossKey === 'sheet-celery') {
       this.fireCeleryStalk()
+      return
+    }
+    if (this.cfg.bossKey === 'sheet-mushroom-man') {
+      this.fireMushroom()
       return
     }
 
@@ -4798,7 +5424,7 @@ export class GameScene extends Phaser.Scene {
         offsets.forEach(offset => {
           const a = baseAngle + offset
           const proj = this.physics.add.image(bx, by + 20, fireTexKey)
-          this.enemyProjectiles.add(proj)
+          this.bossProjectiles.add(proj)
           ;(proj.body as Phaser.Physics.Arcade.Body)
             .setVelocity(Math.cos(a) * speed, Math.sin(a) * speed)
             .setGravityY(-800)
@@ -4817,7 +5443,7 @@ export class GameScene extends Phaser.Scene {
         for (let i = 0; i < 5; i++) {
           const spreadX = target.x + (i - 2) * 130
           const proj = this.physics.add.image(spreadX, by, iceTexKey)
-          this.enemyProjectiles.add(proj)
+          this.bossProjectiles.add(proj)
           ;(proj.body as Phaser.Physics.Arcade.Body)
             .setVelocity(0, 440)
             .setGravityY(-800)
@@ -4967,6 +5593,16 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('level4Problem2Solved', null)
     this.registry.set('level4Problem3Solved', null)
     ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+    this.registry.set('sunsetProblem1', null)
+    this.registry.set('sunsetProblem2', null)
+    this.registry.set('sunsetProblem3', null)
+    this.registry.set('sunsetProblem4', null)
+    this.registry.set('sunsetProblem5', null)
+    this.registry.set('sunsetProblem1Solved', null)
+    this.registry.set('sunsetProblem2Solved', null)
+    this.registry.set('sunsetProblem3Solved', null)
+    this.registry.set('sunsetProblem4Solved', null)
+    this.registry.set('sunsetProblem5Solved', null)
     this.registry.set('level5Word', null)
     this.registry.set('level5BugLetters', null)
     this.registry.set('level5BugPositions', null)
@@ -4985,6 +5621,9 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
+    this.registry.set('pizzasCollected',    0)
+    this.registry.set('furnitureDestroyed', 0)
+    this.registry.set('goldCoins',          0)
     SoundManager.stopTrack()
     this.cameras.main.fadeOut(800, 80, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -5010,9 +5649,14 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
-      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.charKey === 'coco' && p.isShadowForm })))
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm, carterAbility: p.carterAbility })))
 
-    const nextIndex = goBack ? runIndex - 1 : runIndex + 1
+    const advance = goBack
+      ? (this.cfg.leftExitBack ?? 1)
+      : (!goBack && dir === 'right' && (this.cfg.rightExitAdvance ?? 1) > 1)
+        ? this.cfg.rightExitAdvance!
+        : 1
+    const nextIndex = goBack ? runIndex - advance : runIndex + advance
 
     // Past the last room = true win → go to victory screen
     if (nextIndex >= runRooms.length) {
@@ -5021,6 +5665,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
+    this.resetRoomLetterBugs()
     this.registry.set('runIndex', nextIndex)
     this.registry.set('entryDir', OPPOSITE[dir])
 
@@ -5036,7 +5681,7 @@ export class GameScene extends Phaser.Scene {
     this.exitRoom('right')
   }
 
-  private showBossCutscene(suffix: string, onComplete: () => void) {
+  private showBossCutscene(suffix: string, onComplete: () => void, compact = false) {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
     const selectedChars: string[] | undefined = this.registry.get('selectedChars')
@@ -5061,7 +5706,9 @@ export class GameScene extends Phaser.Scene {
       const slotX = slotW * (idx + 0.5)
       const img = this.add.image(slotX, cy, imgKey)
         .setScrollFactor(0).setDepth(201).setAlpha(0)
-      const scale = Math.min(slotW / img.width, height / img.height)
+      const maxH = compact ? height * 0.55 : height
+      const maxW = compact ? slotW * 0.55 : slotW
+      const scale = Math.min(maxW / img.width, maxH / img.height)
       img.setScale(scale)
       elements.push(img)
       this.tweens.add({ targets: img, alpha: 1, duration: 350, delay: 150 })
@@ -5215,6 +5862,16 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level4Problem2Solved', null)
         this.registry.set('level4Problem3Solved', null)
         ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('sunsetProblem1', null)
+        this.registry.set('sunsetProblem2', null)
+        this.registry.set('sunsetProblem3', null)
+        this.registry.set('sunsetProblem4', null)
+        this.registry.set('sunsetProblem5', null)
+        this.registry.set('sunsetProblem1Solved', null)
+        this.registry.set('sunsetProblem2Solved', null)
+        this.registry.set('sunsetProblem3Solved', null)
+        this.registry.set('sunsetProblem4Solved', null)
+        this.registry.set('sunsetProblem5Solved', null)
         this.registry.set('level5Word', null)
         this.registry.set('level5BugLetters', null)
         this.registry.set('level5BugPositions', null)
@@ -5245,20 +5902,27 @@ export class GameScene extends Phaser.Scene {
     ]
     let focusIdx = 0
 
+    let focusTimer: Phaser.Time.TimerEvent | null = null
+    let overlayActive = true
+
     const moveFocus = (dir: number) => {
+      if (!overlayActive || !btnContinue.active || !btnMenu.active) return
       focusIdx = (focusIdx + dir + items.length) % items.length
       const b = items[focusIdx].text.getBounds()
       cursor.setPosition(b.left - 10, b.centerY).setVisible(true)
-      items.forEach((it, i) => it.text.setColor(i === focusIdx ? '#ffe066' : '#ffffff'))
+      items.forEach((it, i) => { if (it.text.active) it.text.setColor(i === focusIdx ? '#ffe066' : '#ffffff') })
     }
 
     const gpHandler = (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
+      if (!overlayActive) return
       if (button.index === 14 || button.index === 12) { moveFocus(-1); return }
       if (button.index === 15 || button.index === 13) { moveFocus(1);  return }
       if (button.index === 0  || button.index === 9)  { items[focusIdx]?.action() }
     }
 
     const cleanup = () => {
+      overlayActive = false
+      focusTimer?.remove()
       this.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
     }
     this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
@@ -5267,7 +5931,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: [title, sub, btnContinue, btnMenu], alpha: 1, duration: 400, delay: 300 })
 
     // Show cursor on first button after content is visible
-    this.time.delayedCall(750, () => moveFocus(0))
+    focusTimer = this.time.delayedCall(750, () => moveFocus(0))
   }
 
   private showCongratulatoryOverlay() {
@@ -5281,31 +5945,54 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(90).setAlpha(0)
     this.tweens.add({ targets: congBg, alpha: 1, duration: 300 })
 
-    this.add.text(cx, cy - 160, 'CONGRATULATIONS!', {
+    this.add.text(cx, cy - 185, 'CONGRATULATIONS!', {
       fontSize: '22px', fontFamily: FONT, color: '#ffd700',
       stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
 
-    this.add.text(cx, cy - 110, 'You found the Silly Dragon!', {
+    this.add.text(cx, cy - 140, 'You found the Silly Dragon!', {
       fontSize: '9px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
 
-    const enemiesKilled: number = this.registry.get('enemiesKilled') ?? 0
-    const hitsTaken: number     = this.registry.get('hitsTaken')     ?? 0
-    const startTime: number     = this.registry.get('runStartTime')  ?? Date.now()
+    const enemiesKilled: number     = this.registry.get('enemiesKilled')     ?? 0
+    const hitsTaken: number         = this.registry.get('hitsTaken')         ?? 0
+    const furnitureDestroyed: number = this.registry.get('furnitureDestroyed') ?? 0
+    const goldCoins: number         = this.registry.get('goldCoins')         ?? 0
+    const pizzasConsumed: number    = this.registry.get('pizzasCollected')   ?? 0
+    const startTime: number         = this.registry.get('runStartTime')      ?? Date.now()
+
+    const mathKeys = [
+      'level4Problem1Solved', 'level4Problem2Solved', 'level4Problem3Solved',
+      'sunsetProblem1Solved', 'sunsetProblem2Solved', 'sunsetProblem3Solved',
+      'sunsetProblem4Solved', 'sunsetProblem5Solved',
+    ]
+    const mathSolved = mathKeys.filter(k => !!this.registry.get(k)).length
+
+    const wordKeys = [
+      'hasLevel1Key', 'hasLevel2Key', 'level3WordSolved',
+      'hasLevel4Key', 'hasLevel8Key', 'hasLevel9Key', 'hasLevel10Key',
+      'level5WordSolved', 'level6WordSolved', 'level7WordSolved',
+    ]
+    const wordSolved = wordKeys.filter(k => !!this.registry.get(k)).length
+
     const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
     const mins = Math.floor(elapsedSec / 60)
     const secs = (elapsedSec % 60).toString().padStart(2, '0')
     const timeStr = `${mins}m ${secs}s`
 
     const stats = [
-      { label: 'Enemies slain',        value: `${enemiesKilled}` },
-      { label: 'Times hit',            value: `${hitsTaken}`     },
-      { label: 'Time to Silly Dragon', value: timeStr            },
+      { label: 'Enemies slain',        value: `${enemiesKilled}`           },
+      { label: 'Furniture destroyed',  value: `${furnitureDestroyed}`      },
+      { label: 'Pizzas consumed',      value: `${pizzasConsumed}`          },
+      { label: 'Coins collected',      value: `${goldCoins}`               },
+      { label: 'Math puzzles solved',  value: `${mathSolved} / ${mathKeys.length}` },
+      { label: 'Word puzzles solved',  value: `${wordSolved} / ${wordKeys.length}` },
+      { label: 'Times hit',            value: `${hitsTaken}`               },
+      { label: 'Time to Silly Dragon', value: timeStr                      },
     ]
     stats.forEach(({ label, value }, i) => {
-      const y = cy - 55 + i * 32
+      const y = cy - 100 + i * 26
       this.add.text(cx - 20, y, label, {
         fontSize: '8px', fontFamily: FONT, color: '#aaaaaa',
         stroke: '#000000', strokeThickness: 2,
@@ -5316,7 +6003,7 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(91)
     })
 
-    const btnMenu = this.add.text(cx, cy + 80, 'MAIN MENU', {
+    const btnMenu = this.add.text(cx, cy + 120, 'MAIN MENU', {
       fontSize: '10px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
       backgroundColor: '#00000066', padding: { x: 16, y: 12 },
@@ -5347,6 +6034,16 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('level4Problem2Solved', null)
         this.registry.set('level4Problem3Solved', null)
         ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+        this.registry.set('sunsetProblem1', null)
+        this.registry.set('sunsetProblem2', null)
+        this.registry.set('sunsetProblem3', null)
+        this.registry.set('sunsetProblem4', null)
+        this.registry.set('sunsetProblem5', null)
+        this.registry.set('sunsetProblem1Solved', null)
+        this.registry.set('sunsetProblem2Solved', null)
+        this.registry.set('sunsetProblem3Solved', null)
+        this.registry.set('sunsetProblem4Solved', null)
+        this.registry.set('sunsetProblem5Solved', null)
         this.registry.set('level5Word', null)
         this.registry.set('level5BugLetters', null)
         this.registry.set('level5BugPositions', null)
@@ -5456,10 +6153,10 @@ export class GameScene extends Phaser.Scene {
           const nearPortal = Phaser.Math.Distance.Between(player.x, player.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
           const ri2: number = this.registry.get('runIndex') ?? 0
           const portalBlocked2 = (ri2 === 4  && !this.registry.get('level3WordSolved'))
-                              || (ri2 === 6  && !this.registry.get('hasLevel4Key'))
-                              || (ri2 === 7  && !this.registry.get('hasLevel8Key'))
-                              || (ri2 === 10 && !this.registry.get('level7WordSolved'))
-          if (nearPortal && !portalBlocked2) this.winGame()
+                              || (ri2 === 11 && !this.registry.get('hasLevel4Key'))
+                              || (ri2 === 13 && !this.registry.get('hasLevel8Key'))
+                              || (ri2 === 18 && !this.registry.get('level7WordSolved'))
+          if (nearPortal && !portalBlocked2) this.enterBossPortal()
         }
         if (button.index === 12 && this.backPortalPos) {
           const nearBack = Phaser.Math.Distance.Between(player.x, player.y, this.backPortalPos.x, this.backPortalPos.y) < 90
@@ -5525,6 +6222,16 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('level4Problem2Solved', null)
       this.registry.set('level4Problem3Solved', null)
       ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
+      this.registry.set('sunsetProblem1', null)
+      this.registry.set('sunsetProblem2', null)
+      this.registry.set('sunsetProblem3', null)
+      this.registry.set('sunsetProblem4', null)
+      this.registry.set('sunsetProblem5', null)
+      this.registry.set('sunsetProblem1Solved', null)
+      this.registry.set('sunsetProblem2Solved', null)
+      this.registry.set('sunsetProblem3Solved', null)
+      this.registry.set('sunsetProblem4Solved', null)
+      this.registry.set('sunsetProblem5Solved', null)
       this.registry.set('level5Word', null)
       this.registry.set('level5BugLetters', null)
       this.registry.set('level5BugPositions', null)
@@ -5758,10 +6465,12 @@ export class GameScene extends Phaser.Scene {
         if (p.x < 0   && exits.includes('left')   && Math.abs(p.y - (ep2.left   ?? 640))   < DOOR_H / 2) { this.exitRoom('left');   return }
         const rightTrigX = this.cfg.rightExitX ?? W
         const runIdx0 = this.registry.get('runIndex') ?? 0
-        const rightPuzzleBlocked = (runIdx0 === 7 && !this.registry.get('level5WordSolved'))
-                                || (runIdx0 === 8 && !this.registry.get('level6WordSolved'))
-        if (p.x > rightTrigX && exits.includes('right') &&
-            (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)) {
+        const rightPuzzleBlocked = (runIdx0 === 16 && !this.registry.get('level5WordSolved'))
+                                || (runIdx0 === 17 && !this.registry.get('level6WordSolved'))
+        const rightYOk = this.cfg.rightExitYRange
+          ? (p.y >= this.cfg.rightExitYRange.min && p.y <= this.cfg.rightExitYRange.max)
+          : (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)
+        if (p.x > rightTrigX && exits.includes('right') && rightYOk) {
           if (rightPuzzleBlocked) {
             if (this.time.now - this._rightExitPopupLastTime > 2000) {
               this._rightExitPopupLastTime = this.time.now
@@ -5792,14 +6501,14 @@ export class GameScene extends Phaser.Scene {
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         const runIdx: number = this.registry.get('runIndex') ?? 0
         const portalBlocked = (runIdx === 4  && !this.registry.get('level3WordSolved'))
-                           || (runIdx === 6  && !this.registry.get('hasLevel4Key'))
-                           || (runIdx === 7  && !this.registry.get('hasLevel8Key'))
-                           || (runIdx === 10 && !this.registry.get('level7WordSolved'))
+                           || (runIdx === 11 && !this.registry.get('hasLevel4Key'))   // Green Halls needs Red key
+                           || (runIdx === 13 && !this.registry.get('hasLevel8Key'))   // Blue Halls needs Orange key
+                           || (runIdx === 18 && !this.registry.get('level7WordSolved'))
         if (nearPortal && portalBlocked) {
           if (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))
-            this.showPopup(p.x, p.y - 40, (runIdx === 6 || runIdx === 7) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+            this.showPopup(p.x, p.y - 40, (runIdx === 11 || runIdx === 13) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
         } else if (nearPortal && (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))) {
-          this.winGame()
+          this.enterBossPortal()
         }
       }
 
@@ -5876,7 +6585,7 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     for (const m of this.mimics) {
       if (!m.isAwake) {
         for (const p of this.players) {
-          if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, m.x, m.y) < 80) {
+          if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, m.x, m.y) < 200) {
             m.wake()
             this.enemies.push(m as unknown as Enemy)
             this.enemyGroup.add(m)
@@ -5886,14 +6595,20 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
       }
     }
 
-    // Boss
+    // Boss(es)
     if (this.boss?.active) {
       this.boss.players = this.players
       this.boss.update()
     }
+    if (this.boss2?.active) {
+      this.boss2.players = this.players
+      this.boss2.update()
+    }
 
     this.updateConradTrucks()
     this.updateCarterForceField()
+    this.updateCarterDino()
+    this.updateMapOverlay()
     this.updateLevel3Duck()
     this.updateLevel4Ducks()
     this.updateLevel5Duck()

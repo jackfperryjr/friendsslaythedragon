@@ -105,6 +105,24 @@ export class VictoryScene extends Phaser.Scene {
     // Separator
     const sep = this.add.rectangle(cx, cy + 30, 400, 1, 0x334466, 0).setOrigin(0.5)
 
+    // Stats
+    const pizzas    = this.registry.get('pizzasCollected')    ?? 0
+    const furniture = this.registry.get('furnitureDestroyed') ?? 0
+    const coins     = this.registry.get('goldCoins')          ?? 0
+    const statStyle = { fontSize: '11px', fontFamily: FONT, color: '#aaccff', stroke: '#000', strokeThickness: 3 }
+    const valStyle  = { fontSize: '11px', fontFamily: FONT, color: '#ffe066', stroke: '#000', strokeThickness: 3 }
+    const statRows: Phaser.GameObjects.Text[] = []
+    const stats: [string, number][] = [
+      ['PIZZAS EATEN', pizzas],
+      ['FURNITURE SMASHED', furniture],
+      ['GOLD COINS', coins],
+    ]
+    stats.forEach(([label, val], i) => {
+      const rowY = cy + 60 + i * 38
+      statRows.push(this.add.text(cx - 20, rowY, label + ':', statStyle).setOrigin(1, 0.5).setAlpha(0))
+      statRows.push(this.add.text(cx + 20, rowY, String(val), valStyle).setOrigin(0, 0.5).setAlpha(0))
+    })
+
     // Buttons — stacked at bottom centre; Continue on top as primary action
     const btnContinue = this.menuButton(cx, height - 130, 'CONTINUE EXPLORING').setAlpha(0)
     const btnMenu     = this.menuButton(cx, height -  70, 'MAIN MENU').setAlpha(0)
@@ -127,6 +145,9 @@ export class VictoryScene extends Phaser.Scene {
         this.registry.set('momSaved',              false)
         this.registry.set('wormCount',             0)
         this.registry.set('rolyPolyCount',         0)
+        this.registry.set('pizzasCollected',       0)
+        this.registry.set('furnitureDestroyed',    0)
+        this.registry.set('goldCoins',             0)
         this.registry.set('level4Problem1', null)
         this.registry.set('level4Problem2', null)
         this.registry.set('level4Problem3', null)
@@ -199,7 +220,8 @@ export class VictoryScene extends Phaser.Scene {
           targets: msg2, alpha: 1, duration: 400, delay: 350,
           onComplete: () => {
             this.tweens.add({ targets: sep, alpha: 0.5, duration: 500 })
-            this.tweens.add({ targets: [btnContinue, btnMenu], alpha: 1, duration: 400, delay: 200 })
+            this.tweens.add({ targets: statRows, alpha: 1, duration: 400, delay: 100 })
+            this.tweens.add({ targets: [btnContinue, btnMenu], alpha: 1, duration: 400, delay: 300 })
           },
         })
       },

@@ -49,11 +49,17 @@ export class Boss extends Enemy {
         body.setAllowGravity(false)
         this.bossFlying = true
       }
-      // setSize/setOffset use source (pre-scale) pixels.
-      // body.bottom = sprite.y + scaleY*(offset.y − frameOriginY) + sourceH*scaleY
-      // offset.y = 41 puts body.bottom == sprite.bottom, so boss stands on the floor surface.
-      body.setSize(32, 23)
-      body.setOffset(16, flying ? 20 : 41)
+      if (stationary) {
+        // Anchor stationary bosses — no gravity, stays exactly at spawn position
+        body.setAllowGravity(false)
+      }
+      // Scale hitbox proportionally to frame size.
+      // Base calibration is for 64×64 frames: setSize(32,23), setOffset(16, flying?20:41)
+      const frame = scene.textures.getFrame(textureKey, 0)
+      const fw = frame?.realWidth ?? 64
+      const fs = fw / 64
+      body.setSize(32 * fs, 23 * fs)
+      body.setOffset(16 * fs, flying ? 20 * fs : 41 * fs)
       const walkAnim = `${textureKey}-walk`
       if (scene.anims.exists(walkAnim)) this.play(walkAnim)
     } else {

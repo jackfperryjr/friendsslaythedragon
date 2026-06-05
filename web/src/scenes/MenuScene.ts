@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
+import type { RoomConfig } from '../levels'
 
 type Screen = 'main' | 'controls' | 'devMenu'
 
@@ -268,24 +269,26 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
 
-    const panel = this.add.rectangle(cx, cy, 600, 490, 0x000000, 0.92)
+    const mainRooms = generateRun()
+    const devRooms  = mainRooms
+
+    const panel = this.add.rectangle(cx, cy, 600, 570, 0x000000, 0.92)
       .setStrokeStyle(1, 0xaa0000, 0.9)
 
-    const header = this.add.text(cx, cy - 222, 'DEV: SELECT LEVEL', {
+    const header = this.add.text(cx, cy - 262, 'DEV: SELECT LEVEL', {
       fontSize: '14px', fontFamily: FONT, color: '#ff4444',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5)
 
     const goBack = () => this.showScreen('main')
-    const back = this.menuButton(cx, cy + 218, '< BACK')
+    const back = this.menuButton(cx, cy + 310, '< BACK')
     back.on('pointerdown', goBack)
 
-    const rooms = generateRun()
     const gpItems: MenuItem[] = []
     const rowItems: Phaser.GameObjects.GameObject[] = []
-    let y = cy - 192
+    let y = cy - 232
 
-    rooms.forEach((room, i) => {
+    mainRooms.forEach((room, i) => {
       const prefix = String(i).padStart(2, '0')
       const label  = `[${prefix}]  ${room.name}`
       const btn = this.add.text(cx, y, label, {
@@ -293,20 +296,20 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       btn.on('pointerover', () => btn.setColor(CLR_TITLE))
       btn.on('pointerout',  () => btn.setColor(CLR_SELECT))
-      btn.on('pointerdown', () => this.startAtLevel(i))
-      gpItems.push({ text: btn, action: () => this.startAtLevel(i) })
+      btn.on('pointerdown', () => this.startAtLevel(i, devRooms))
+      gpItems.push({ text: btn, action: () => this.startAtLevel(i, devRooms) })
       rowItems.push(btn)
-      y += 26
+      y += 24
     })
 
     this.devMenuGroup = this.add.container(0, 0, [panel, header, ...rowItems, back])
     this.devMenuGroup.setData('gpItems', [...gpItems, { text: back, action: goBack }])
   }
 
-  private startAtLevel(index: number) {
+  private startAtLevel(index: number, rooms?: RoomConfig[]) {
     SoundManager.unlock()
-    const rooms = generateRun()
-    this.registry.set('runRooms',    rooms)
+    const r = rooms ?? generateRun()
+    this.registry.set('runRooms',    r)
     this.registry.set('runIndex',    index)
     this.registry.set('entryDir',    null)
     this.registry.set('playerCount', 1)
