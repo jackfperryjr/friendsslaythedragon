@@ -22,7 +22,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isTruck          = false
   isTrex           = false
   isDinoForm       = false   // Carter in dinosaur form
-  carterAbility: 'duplicate' | 'dino' = 'duplicate'
+  carterAbility: 'duplicate' | 'dino' = 'dino'
+  isConradTransformed = false
+  isFlyingDown        = false
+  conradAbility: 'truck' | 'transform' = 'transform'
   isTransforming   = false   // true during transform/untransform animation
   isShadowForm     = false   // Coco wearing the Shadow costume
   isSpindashing    = false   // Coco executing a spindash
@@ -155,6 +158,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   update() {
     if (!this.isAlive) return
     const body = this.body as Phaser.Physics.Arcade.Body
+    if (this.isConradTransformed) {
+      const spd = MOVE_SPEED * this.speedMultiplier
+      body.setVelocityY(this.isFloating ? -spd : this.isFlyingDown ? spd : 0)
+      body.setGravityY(0)
+      this.updateAnimation()
+      return
+    }
     body.setGravityY(this.isFloating ? FLOAT_GRAVITY * this.speedMultiplier : 0)
     if (body.blocked.down) this.isFloating = false
     this.updateAnimation()
@@ -162,7 +172,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private updateAnimation() {
     if (!this.animPrefix) return
-    if (this.isTruck || this.isTrex || this.isDinoForm || this.isTransforming || this.isShadowForm || this.isSpindashing) return  // managed externally
+    if (this.isTruck || this.isTrex || this.isDinoForm || this.isConradTransformed || this.isTransforming || this.isShadowForm || this.isSpindashing) return  // managed externally
     const body = this.body as Phaser.Physics.Arcade.Body
     const vx = Math.abs(body.velocity.x)
 

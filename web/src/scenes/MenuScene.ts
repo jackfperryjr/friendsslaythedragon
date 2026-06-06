@@ -124,7 +124,8 @@ export class MenuScene extends Phaser.Scene {
 
     const btn1P  = this.menuButton(width / 2, height * 0.79, '1  PLAYER')
     const btn24P = this.menuButton(width / 2, height * 0.84, '2-4  PLAYERS')
-    const btnCt  = this.menuButton(width / 2, height * 0.89, 'CONTROLS')
+    btn24P.setVisible(false).disableInteractive()
+    const btnCt  = this.menuButton(width / 2, height * 0.84, 'CONTROLS')
 
     const startGame = () => this.startGame(1)
     const goLobby   = () => {
@@ -144,7 +145,6 @@ export class MenuScene extends Phaser.Scene {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     const gpItems: MenuItem[] = [
       { text: btn1P,  action: startGame  },
-      { text: btn24P, action: goLobby    },
       { text: btnCt,  action: goControls },
     ]
 

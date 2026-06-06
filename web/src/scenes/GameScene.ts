@@ -6,6 +6,7 @@ import { Destructible } from '../game/Destructible'
 import { CarterDuplicate } from '../game/CarterDuplicate'
 import { Mimic } from '../game/Mimic'
 import { ConradArmyTruck } from '../game/ConradArmyTruck'
+import { ConradWhiteVehicle, WhiteVehicleType } from '../game/ConradWhiteVehicle'
 import { GameManager } from '../game/GameManager'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
@@ -99,6 +100,7 @@ export class GameScene extends Phaser.Scene {
   private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
   private carterDuplicates: CarterDuplicate[] = []
   private conradTrucks: ConradArmyTruck[] = []
+  private conradWhiteVehicles: ConradWhiteVehicle[] = []
   private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
@@ -139,7 +141,7 @@ export class GameScene extends Phaser.Scene {
 
   init() {
     this.players = []; this.enemies = []; this.mimics = []; this.destructibles = []
-    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
+    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.celeryNpcX = null; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.conradWhiteVehicles = []; this.callumNumbers = []; this.wordMenuObjects = []; this.wordMenuNav = null
     this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
     this.carterDinoSpinTween = null
     this.dadHintBubble = null; this.momHintBubble = null
@@ -3679,7 +3681,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility, conradAbility: pl.conradAbility, isConradTransformed: pl.isConradTransformed })))
     this.resetRoomLetterBugs()
     this.registry.set('runIndex', ri - 1)
     this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
@@ -3754,7 +3756,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility, conradAbility: pl.conradAbility, isConradTransformed: pl.isConradTransformed })))
     this.resetRoomLetterBugs()
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
@@ -3770,7 +3772,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility })))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${pl.playerId}`) as {invuln?:boolean}|null)?.invuln) : pl.invulnerabilityActive, isTruck: pl.isTruck, isTrex: pl.isTrex, hasShadow: pl.isShadowForm, isDinoForm: pl.isDinoForm, carterAbility: pl.carterAbility, conradAbility: pl.conradAbility, isConradTransformed: pl.isConradTransformed })))
     this.resetRoomLetterBugs()
     this.registry.set('runIndex', ri + 1)
     this.registry.set('entryDir', 'left')
@@ -3791,10 +3793,10 @@ export class GameScene extends Phaser.Scene {
     // Boosts from level 3 do not carry into level 4; boosts earned in level 4+ always carry forward
     const currentRunIdx: number = this.registry.get('runIndex') ?? 0
     if (currentRunIdx === 6) {
-      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
+      type PB = { isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino'; conradAbility?: 'truck' | 'transform'; isConradTransformed?: boolean }
       const prev = this.registry.get('persistedBoosts') as PB[] | null
       this.registry.set('persistedBoosts', prev
-        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false, isDinoForm: pb?.isDinoForm ?? false, carterAbility: pb?.carterAbility ?? 'duplicate' }))
+        ? prev.map(pb => ({ speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false, isTruck: pb?.isTruck ?? false, isTrex: pb?.isTrex ?? false, hasShadow: pb?.hasShadow ?? false, isDinoForm: pb?.isDinoForm ?? false, carterAbility: pb?.carterAbility ?? 'duplicate', conradAbility: pb?.conradAbility ?? 'truck', isConradTransformed: pb?.isConradTransformed ?? false }))
         : null)
     }
 
@@ -3809,7 +3811,7 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
-    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino' }
+    type PersistedBoost = { speedBoostActive: boolean; strengthBoostActive: boolean; invulnerabilityActive?: boolean; isTruck?: boolean; isTrex?: boolean; hasShadow?: boolean; isDinoForm?: boolean; carterAbility?: 'duplicate' | 'dino'; conradAbility?: 'truck' | 'transform'; isConradTransformed?: boolean }
     const persistedBoosts: PersistedBoost[] | null = this.registry.get('persistedBoosts')
     if (persistedBoosts) {
       this.players.forEach((p, i) => {
@@ -3838,6 +3840,19 @@ export class GameScene extends Phaser.Scene {
             p.speedMultiplier = 2.0
             p.setTexture('sheet-carter-transform', 7)
             p.play('carter-dino-idle', true)
+          }
+        }
+        if (p.charKey === 'conrad') {
+          if (pb?.conradAbility) p.conradAbility = pb.conradAbility
+          if (pb?.isConradTransformed) {
+            p.isConradTransformed = true
+            p.speedMultiplier     = 2.0
+            p.setScale(1.8)
+            const rb = p.body as Phaser.Physics.Arcade.Body
+            rb.setOffset(18, 10)
+            rb.setAllowGravity(false)
+            p.setTexture('sheet-conrad-transform', 14)
+            p.play('conrad-form-idle', true)
           }
         }
       })
@@ -4118,6 +4133,7 @@ export class GameScene extends Phaser.Scene {
 
   private doMeleeSwing(src: Player) {
     if (src.isDinoForm) { this.fireCarterDinoMeleeLaser(src); return }
+    if (src.charKey === 'conrad' && src.isConradTransformed) { this.spawnConradWhiteVehicle(src); return }
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
@@ -4352,6 +4368,209 @@ export class GameScene extends Phaser.Scene {
       })
     }
     // Delay surface colliders so the bullet escapes the truck's spawn tile first
+    this.time.delayedCall(150, () => {
+      if (!proj.active) return
+      this.physics.add.collider(proj, this.platforms, () => onHit(proj.x, proj.y))
+      this.tilemapLayers.forEach(l => this.physics.add.collider(proj, l, () => onHit(proj.x, proj.y)))
+    })
+    this.time.delayedCall(2200, () => { if (proj.active) onHit(proj.x, proj.y) })
+  }
+
+  // ── Conrad transform ability ──────────────────────────────────────────────────
+
+  private transformConrad(player: Player) {
+    if (player.isConradTransformed || player.isTransforming) return
+    player.isTransforming = true
+    player.setTexture('sheet-conrad-transform', 0)
+    player.play('conrad-transform-in', true)
+    player.once('animationcomplete-conrad-transform-in', () => {
+      if (!player.active) return
+      player.isConradTransformed = true
+      player.isTransforming      = false
+      player.speedMultiplier     = 2.0
+      player.setScale(1.8)
+      const fb = player.body as Phaser.Physics.Arcade.Body
+      fb.setOffset(18, 10)
+      fb.setAllowGravity(false)
+      player.play('conrad-form-idle', true)
+    })
+  }
+
+  private untransformConrad(player: Player) {
+    if (!player.isConradTransformed || player.isTransforming) return
+    player.isConradTransformed = false
+    player.isFlyingDown        = false
+    player.speedMultiplier     = 1.0
+    player.setScale(1.3)
+    const ub = player.body as Phaser.Physics.Arcade.Body
+    ub.setOffset(18, 0)
+    ub.setAllowGravity(true)
+    ub.setVelocityY(0)
+    player.isTransforming      = true
+    player.setTexture('sheet-conrad-transform', 6)
+    player.play('conrad-transform-out', true)
+    player.once('animationcomplete-conrad-transform-out', () => {
+      if (!player.active) return
+      player.isTransforming = false
+      player.setTexture(`sheet-${player.charKey}`, 0)
+      player.play(`char-${player.charKey}-idle`, true)
+    })
+  }
+
+  private updateConradTransformAnim() {
+    const p = this.players.find(pl => pl.charKey === 'conrad' && pl.isAlive)
+    if (!p?.isConradTransformed || p.isTransforming) return
+    const body = p.body as Phaser.Physics.Arcade.Body
+    const vy   = Math.abs(body.velocity.y)
+    const vx   = Math.abs(body.velocity.x)
+    const key  = vy > 10 ? 'conrad-form-air' : vx > 10 ? 'conrad-form-walk' : 'conrad-form-idle'
+    if (p.anims.currentAnim?.key !== key) {
+      p.setTexture('sheet-conrad-transform')
+      p.play(key, true)
+    }
+
+    // Break furniture and chests on contact
+    const now = this.time.now
+    for (const d of this.destructibles) {
+      if (!d.active) continue
+      if (Phaser.Math.Distance.Between(p.x, p.y, d.x, d.y) > 60) continue
+      const lastHit: number = d.getData('conradJetHit') ?? 0
+      if (now - lastHit < 350) continue
+      d.setData('conradJetHit', now)
+      d.takeDamage(30, DamageType.Physical)
+    }
+  }
+
+  private spawnConradWhiteVehicle(src: Player) {
+    src.swingMelee()
+    const types: WhiteVehicleType[] = ['truck', 'tank', 'helicopter']
+    const vehicleType = Phaser.Math.RND.pick(types)
+    const sheetKey = vehicleType === 'helicopter' ? 'sheet-white-heli' : vehicleType === 'tank' ? 'sheet-white-tank' : 'sheet-white-truck'
+    if (!this.textures.exists(sheetKey)) return
+    const spawnY = vehicleType === 'helicopter' ? src.y - 90 : src.y
+    const vehicle = new ConradWhiteVehicle(this, src.x, spawnY, vehicleType)
+    vehicle.setFlipX(src.flipX)
+    vehicle.setData('patrolDir', src.flipX ? -1 : 1)
+    this.conradWhiteVehicles.push(vehicle)
+    if (vehicleType !== 'helicopter') {
+      this.physics.add.collider(vehicle, this.platforms)
+      this.tilemapLayers.forEach(l => this.physics.add.collider(vehicle, l))
+    }
+    vehicle.on('fireShot',    (v: ConradWhiteVehicle) => this.fireConradWhiteVehicleShot(v))
+    vehicle.on('vehicleExpired', (v: ConradWhiteVehicle) => {
+      this.conradWhiteVehicles = this.conradWhiteVehicles.filter(x => x !== v)
+    })
+  }
+
+  private updateConradWhiteVehicles() {
+    const RANGE = ConradWhiteVehicle.attackRange
+    const SPEED = ConradWhiteVehicle.moveSpeed
+
+    for (const vehicle of this.conradWhiteVehicles) {
+      if (!vehicle.active) continue
+      const body = vehicle.body as Phaser.Physics.Arcade.Body
+
+      let nearTarget: Phaser.GameObjects.Sprite | null = null
+      let nearDist = RANGE
+      for (const e of this.enemies) {
+        if (!e.active) continue
+        const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, e.x, e.y)
+        if (d < nearDist) { nearDist = d; nearTarget = e }
+      }
+      if (this.boss?.active) {
+        const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, this.boss.x, this.boss.y)
+        if (d < nearDist) { nearDist = d; nearTarget = this.boss }
+      }
+      if (this.boss2?.active) {
+        const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, this.boss2.x, this.boss2.y)
+        if (d < nearDist) { nearDist = d; nearTarget = this.boss2 }
+      }
+
+      const now = this.time.now
+      const holdUntil: number = vehicle.getData('shootHold') ?? 0
+
+      if (nearTarget) {
+        body.setVelocityX(0)
+        const wasAlreadyShooting = vehicle.isShooting
+        vehicle.isShooting = true
+        vehicle.setData('shootHold', now + 800)
+        vehicle.setFlipX(nearTarget.x < vehicle.x)
+        if (!wasAlreadyShooting) this.time.delayedCall(180, () => { if (vehicle.active && vehicle.isShooting) this.fireConradWhiteVehicleShot(vehicle) })
+      } else if (vehicle.isShooting && now < holdUntil) {
+        body.setVelocityX(0)
+      } else {
+        vehicle.isShooting = false
+        let dir: number = vehicle.getData('patrolDir') ?? 1
+        if ((dir > 0 && body.blocked.right) || (dir < 0 && body.blocked.left)) {
+          dir = -dir
+          vehicle.setData('patrolDir', dir)
+        }
+        body.setVelocityX(dir * SPEED)
+        vehicle.setFlipX(dir < 0)
+      }
+
+      const animPrefix = vehicle.vehicleType === 'helicopter' ? 'heli' : vehicle.vehicleType
+      const moving     = Math.abs(body.velocity.x) > 10
+      const animKey    = moving ? `white-${animPrefix}-move` : `white-${animPrefix}-idle`
+      if (vehicle.anims.currentAnim?.key !== animKey) vehicle.play(animKey, true)
+    }
+  }
+
+  private fireConradWhiteVehicleShot(vehicle: ConradWhiteVehicle) {
+    if (!vehicle.active) return
+    let target: Phaser.GameObjects.Sprite | null = null
+    let best = ConradWhiteVehicle.attackRange
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (this.boss2?.active) {
+      const d = Phaser.Math.Distance.Between(vehicle.x, vehicle.y, this.boss2.x, this.boss2.y)
+      if (d < best) { best = d; target = this.boss2 }
+    }
+    type TruckEffect = 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning'
+    const effectType = Phaser.Math.RND.pick(['fire', 'ice', 'explode', 'blackhole', 'lightning'] as TruckEffect[])
+    const frame = effectType === 'fire' ? 1 : effectType === 'ice' ? 2 : effectType === 'explode' ? 3 : effectType === 'blackhole' ? 7 : 9
+    const angle = target
+      ? Phaser.Math.Angle.Between(vehicle.x, vehicle.y - 10, target.x, target.y)
+      : (vehicle.flipX ? Math.PI : 0)
+    const proj = this.physics.add.image(vehicle.x, vehicle.y - 10, 'sheet-truck-projectiles', frame)
+    proj.setScale(1.8).setRotation(angle)
+    ;(proj.body as Phaser.Physics.Arcade.Body)
+      .setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
+      .setGravityY(-800)
+
+    const onHit = (hx: number, hy: number) => {
+      if (!proj.active) return
+      this.triggerTruckBulletEffect(effectType, hx, hy)
+      proj.destroy()
+    }
+
+    this.enemies.forEach(e => {
+      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, this.players[0]); onHit(e.x, e.y) })
+    })
+    if (this.boss?.active) {
+      this.physics.add.overlap(proj, this.boss, () => {
+        if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+            (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+        SoundManager.bossHit()
+        this.boss!.hit()
+        onHit(this.boss!.x, this.boss!.y)
+      })
+    }
+    if (this.boss2?.active) {
+      this.physics.add.overlap(proj, this.boss2, () => {
+        SoundManager.bossHit()
+        this.boss2!.hit()
+        onHit(this.boss2!.x, this.boss2!.y)
+      })
+    }
     this.time.delayedCall(150, () => {
       if (!proj.active) return
       this.physics.add.collider(proj, this.platforms, () => onHit(proj.x, proj.y))
@@ -5075,7 +5294,6 @@ export class GameScene extends Phaser.Scene {
   private _mmH    = 0
 
   private buildMapOverlay() {
-    const { width } = this.scale
     const worldW = this.cfg.worldWidth
     const worldH = this.cfg.worldHeight ?? 800
 
@@ -5087,7 +5305,7 @@ export class GameScene extends Phaser.Scene {
     const s = Math.min(scaleX, scaleY)
     const mw = Math.round(worldW * s)
     const mh = Math.round(worldH * s)
-    const ml = Math.round(width / 2 - mw / 2)   // left edge
+    const ml = 328                                // left edge — right of HUD (320px) + 8px gap
     const mt = 8                                  // top edge
 
     this._mmLeft = ml; this._mmTop = mt
@@ -5218,7 +5436,14 @@ export class GameScene extends Phaser.Scene {
       if (src.isTruck) this.untransformEric(src)
       else this.transformEricToTruck(src)
     }
-    else if (src.charKey === 'conrad') this.spawnConradTruck(src)
+    else if (src.charKey === 'conrad') {
+      if (src.conradAbility === 'transform') {
+        if (src.isConradTransformed) this.untransformConrad(src)
+        else this.transformConrad(src)
+      } else {
+        this.spawnConradTruck(src)
+      }
+    }
     else if (src.charKey === 'coco') this.handleCocoShadow(src)
     else if (src.charKey === 'callum') this.spawnCallumNumber(src)
     else if (src.charKey === 'abby') {
@@ -5649,7 +5874,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
-      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm, carterAbility: p.carterAbility })))
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive, invulnerabilityActive: p.charKey === 'carter' ? !!((this.registry.get(`level4DuckBoost_${p.playerId}`) as {invuln?:boolean}|null)?.invuln) : p.invulnerabilityActive, isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm, carterAbility: p.carterAbility, conradAbility: p.conradAbility, isConradTransformed: p.isConradTransformed })))
 
     const advance = goBack
       ? (this.cfg.leftExitBack ?? 1)
@@ -6082,6 +6307,8 @@ export class GameScene extends Phaser.Scene {
     if (keys['jump']?.isDown) p.jump()
     else p.jumpReleased()
 
+    if (p.isConradTransformed) p.isFlyingDown = !!keys['down']?.isDown
+
     p.setShielding(!!keys['shield']?.isDown)
     if (Phaser.Input.Keyboard.JustDown(keys['ability'])) {
       // Down + ability while in shadow form starts spindash — don't toggle transform
@@ -6100,6 +6327,8 @@ export class GameScene extends Phaser.Scene {
 
     if (pad.A) p.jump()
     else p.jumpReleased()
+
+    if (p.isConradTransformed) p.isFlyingDown = pad.leftStick.y > 0.25 || !!(pad.down || pad.buttons[13]?.pressed)
 
     p.setShielding(pad.buttons[3]?.pressed ?? false)
   }
@@ -6282,8 +6511,8 @@ export class GameScene extends Phaser.Scene {
   private togglePause() {
     if (this.wordMenuNav) return  // word menu is modal — ESC/Start cannot interrupt it
     const nowPaused = this.gm.isPlaying()
-    if (nowPaused) this.gm.pause()
-    else this.gm.resume()
+    if (nowPaused) { this.gm.pause(); SoundManager.pauseTrack() }
+    else           { this.gm.resume(); SoundManager.resumeTrack() }
     this.pauseContainer.setVisible(nowPaused)
     this.physics.world.isPaused = nowPaused
     // Reset cursor when closing pause
@@ -6606,6 +6835,8 @@ const jumpKey3 = this.playerKeysets.get(p.playerId)?.['jump']
     }
 
     this.updateConradTrucks()
+    this.updateConradWhiteVehicles()
+    this.updateConradTransformAnim()
     this.updateCarterForceField()
     this.updateCarterDino()
     this.updateMapOverlay()

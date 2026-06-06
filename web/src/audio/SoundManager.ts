@@ -543,6 +543,9 @@ export const SoundManager = {
     window.speechSynthesis?.cancel()
   },
 
+  pauseTrack()  { if (_track) try { (_track as Phaser.Sound.WebAudioSound).pause()  } catch (_e) {} },
+  resumeTrack() { if (_track) try { (_track as Phaser.Sound.WebAudioSound).resume() } catch (_e) {} },
+
   stopTrack() {
     clearFadeTimer()
     if (!_track) return
