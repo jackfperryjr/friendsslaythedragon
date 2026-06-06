@@ -190,6 +190,10 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('sheet-carter-dino-jump',  'assets/players/carter_dino_jump.png',  { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-eric-transformer', 'assets/players/eric_transformer.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-army-truck',       'assets/players/army_truck.png',       { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-conrad-transform', 'assets/players/conrad_transform.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-white-truck',      'assets/players/white_truck.png',      { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-white-tank',       'assets/players/white_tank.png',       { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-white-heli',       'assets/players/white_helicopter.png', { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-scarlett-transformer',   'assets/players/scarlett_transform.png',     { frameWidth: 64, frameHeight: 64 })
     this.load.spritesheet('sheet-coco-transform',         'assets/players/coco_transform.png',         { frameWidth: 64, frameHeight: 64 })
@@ -274,6 +278,7 @@ export class BootScene extends Phaser.Scene {
     this.setupEnemyAnimations()
     this.setupEricTransformerAnimations()
     this.setupConradTruckAnimations()
+    this.setupConradTransformAnimations()
     this.setupNpcAnimations()
     this.setupCarterDinoAnimations()
     this.setupCocoShadowFormAnimations()
@@ -405,6 +410,27 @@ export class BootScene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers(key, { frames: [0] }),
       frameRate: 1, repeat: -1,
     })
+  }
+
+  private setupConradTransformAnimations() {
+    const ct = 'sheet-conrad-transform'
+    if (this.textures.exists(ct)) {
+      this.anims.create({ key: 'conrad-transform-in',  frames: this.anims.generateFrameNumbers(ct, { start: 0, end: 6 }),              frameRate: 12, repeat: 0  })
+      this.anims.create({ key: 'conrad-transform-out', frames: this.anims.generateFrameNumbers(ct, { frames: [6,5,4,3,2,1,0] }),        frameRate: 12, repeat: 0  })
+      this.anims.create({ key: 'conrad-form-idle',     frames: this.anims.generateFrameNumbers(ct, { frames: [14] }),                   frameRate: 1,  repeat: -1 })
+      this.anims.create({ key: 'conrad-form-walk',     frames: this.anims.generateFrameNumbers(ct, { frames: [15] }),                   frameRate: 8,  repeat: -1 })
+      this.anims.create({ key: 'conrad-form-air',      frames: this.anims.generateFrameNumbers(ct, { frames: [15] }),                   frameRate: 1,  repeat: -1 })
+    }
+    for (const [type, key] of [['truck', 'sheet-white-truck'], ['tank', 'sheet-white-tank']] as const) {
+      if (!this.textures.exists(key)) continue
+      this.anims.create({ key: `white-${type}-move`, frames: this.anims.generateFrameNumbers(key, { start: 0, end: 3 }), frameRate: 10, repeat: -1 })
+      this.anims.create({ key: `white-${type}-idle`, frames: this.anims.generateFrameNumbers(key, { frames: [0] }),      frameRate: 1,  repeat: -1 })
+    }
+    const hk = 'sheet-white-heli'
+    if (this.textures.exists(hk)) {
+      this.anims.create({ key: 'white-heli-move', frames: this.anims.generateFrameNumbers(hk, { start: 8, end: 11 }), frameRate: 10, repeat: -1 })
+      this.anims.create({ key: 'white-heli-idle', frames: this.anims.generateFrameNumbers(hk, { frames: [0] }),        frameRate: 1,  repeat: -1 })
+    }
   }
 
   private setupEricTransformerAnimations() {

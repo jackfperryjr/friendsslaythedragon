@@ -121,9 +121,9 @@ export class UIManager {
       }
     }
 
-    // Letter bug tray — up to 7 collected-letter slots, offset from player HUD with a gap
-    const LETTER_Y = 22
-    const LETTER_START_X = 350  // 30px gap after the player HUD block (~320px wide)
+    // Letter bug tray — up to 7 collected-letter slots, below the player HUD rows
+    const LETTER_Y = 22 + playerCount * ROW_H + 8
+    const LETTER_START_X = 20  // left-aligned under the HUD
     for (let i = 0; i < 7; i++) {
       const slotX = LETTER_START_X + i * 36
       const bg = scene.add.rectangle(slotX, LETTER_Y, 30, 30, 0x000000, 0.55)
