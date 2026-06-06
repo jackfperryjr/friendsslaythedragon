@@ -6511,8 +6511,8 @@ export class GameScene extends Phaser.Scene {
   private togglePause() {
     if (this.wordMenuNav) return  // word menu is modal — ESC/Start cannot interrupt it
     const nowPaused = this.gm.isPlaying()
-    if (nowPaused) this.gm.pause()
-    else this.gm.resume()
+    if (nowPaused) { this.gm.pause(); SoundManager.pauseTrack() }
+    else           { this.gm.resume(); SoundManager.resumeTrack() }
     this.pauseContainer.setVisible(nowPaused)
     this.physics.world.isPaused = nowPaused
     // Reset cursor when closing pause
