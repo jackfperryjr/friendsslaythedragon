@@ -101,6 +101,7 @@ export class GameScene extends Phaser.Scene {
   private carterDuplicates: CarterDuplicate[] = []
   private conradTrucks: ConradArmyTruck[] = []
   private conradWhiteVehicles: ConradWhiteVehicle[] = []
+  private conradVehicleSpawnTimer: Phaser.Time.TimerEvent | null = null
   private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
@@ -3853,6 +3854,15 @@ export class GameScene extends Phaser.Scene {
             rb.setAllowGravity(false)
             p.setTexture('sheet-conrad-transform', 14)
             p.play('conrad-form-idle', true)
+            this.conradVehicleSpawnTimer?.remove()
+            this.conradVehicleSpawnTimer = this.time.addEvent({
+              delay: 3000,
+              loop: true,
+              callback: () => {
+                if (!p.active || !p.isConradTransformed) return
+                this.spawnConradWhiteVehicle(p)
+              },
+            })
           }
         }
       })
@@ -4133,7 +4143,7 @@ export class GameScene extends Phaser.Scene {
 
   private doMeleeSwing(src: Player) {
     if (src.isDinoForm) { this.fireCarterDinoMeleeLaser(src); return }
-    if (src.charKey === 'conrad' && src.isConradTransformed) { this.spawnConradWhiteVehicle(src); return }
+    if (src.charKey === 'conrad' && src.isConradTransformed) { this.fireConradJetLaser(src); return }
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
@@ -4393,11 +4403,22 @@ export class GameScene extends Phaser.Scene {
       fb.setOffset(18, 10)
       fb.setAllowGravity(false)
       player.play('conrad-form-idle', true)
+      this.conradVehicleSpawnTimer?.remove()
+      this.conradVehicleSpawnTimer = this.time.addEvent({
+        delay: 3000,
+        loop: true,
+        callback: () => {
+          if (!player.active || !player.isConradTransformed) return
+          this.spawnConradWhiteVehicle(player)
+        },
+      })
     })
   }
 
   private untransformConrad(player: Player) {
     if (!player.isConradTransformed || player.isTransforming) return
+    this.conradVehicleSpawnTimer?.remove()
+    this.conradVehicleSpawnTimer = null
     player.isConradTransformed = false
     player.isFlyingDown        = false
     player.speedMultiplier     = 1.0
@@ -4441,8 +4462,79 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private fireConradJetLaser(src: Player) {
+    const RANGE = 700
+    let target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null = null
+    let best = RANGE
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(src.x, src.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    for (const dest of this.destructibles) {
+      if (!dest.active) continue
+      const d = Phaser.Math.Distance.Between(src.x, src.y, dest.x, dest.y)
+      if (d < best) { best = d; target = dest }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(src.x, src.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (this.boss2?.active) {
+      const d = Phaser.Math.Distance.Between(src.x, src.y, this.boss2.x, this.boss2.y)
+      if (d < best) { best = d; target = this.boss2 }
+    }
+
+    const dir = src.flipX ? -1 : 1
+    const muzzleX = src.x + dir * 32
+    const muzzleY = src.y - 5
+    const tx = target ? target.x : muzzleX + dir * RANGE
+    const ty = target ? (target.y - 10) : muzzleY
+
+    const gfx = this.add.graphics().setDepth(15)
+    gfx.lineStyle(4, 0xff0022, 0.95)
+    gfx.lineBetween(muzzleX, muzzleY, tx, ty)
+    gfx.lineStyle(9, 0xff4444, 0.25)
+    gfx.lineBetween(muzzleX, muzzleY, tx, ty)
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 200, onComplete: () => gfx.destroy() })
+
+    const flash = this.add.circle(tx, ty, 10, 0xff0022, 1).setDepth(16)
+    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.5, scaleY: 2.5, duration: 180, ease: 'Power2', onComplete: () => flash.destroy() })
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2
+      const speed = 40 + Math.random() * 60
+      const spark = this.add.rectangle(tx, ty, 4, 4, 0xff2200, 1).setDepth(16)
+      this.tweens.add({
+        targets: spark,
+        x: tx + Math.cos(angle) * speed,
+        y: ty + Math.sin(angle) * speed,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: 200 + Math.random() * 100,
+        ease: 'Quad.Out',
+        onComplete: () => spark.destroy(),
+      })
+    }
+
+    if (!target) return
+
+    if (target === this.boss) {
+      if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+          (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+      SoundManager.bossHit()
+      this.boss!.hit()
+    } else if (target === this.boss2) {
+      SoundManager.bossHit()
+      this.boss2!.hit()
+    } else if (target instanceof Destructible) {
+      target.takeDamage(30, DamageType.Physical)
+    } else {
+      this.hitEnemy(target as Enemy, src)
+      this.hitEnemy(target as Enemy, src)
+    }
+  }
+
   private spawnConradWhiteVehicle(src: Player) {
-    src.swingMelee()
     const types: WhiteVehicleType[] = ['truck', 'tank', 'helicopter']
     const vehicleType = Phaser.Math.RND.pick(types)
     const sheetKey = vehicleType === 'helicopter' ? 'sheet-white-heli' : vehicleType === 'tank' ? 'sheet-white-tank' : 'sheet-white-truck'
