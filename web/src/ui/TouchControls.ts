@@ -6,6 +6,7 @@ export class TouchControls {
   private dpadRight = false
   private jumpHeld    = false
   private shieldHeld  = false
+  private shieldJust  = false
   private abilityJust = false
   private meleeJust   = false
   private _interactJust = false
@@ -35,6 +36,12 @@ export class TouchControls {
     return v
   }
 
+  consumeShieldJust(): boolean {
+    const v = this.shieldJust
+    this.shieldJust = false
+    return v
+  }
+
   setEnabled(v: boolean) {
     this._enabled = v
     for (const o of this._allObjects) o.setVisible(v)
@@ -43,6 +50,7 @@ export class TouchControls {
       this.dpadRight = false
       this.jumpHeld = false
       this.shieldHeld = false
+      this.shieldJust = false
       this.abilityJust = false
       this.meleeJust = false
       this._interactJust = false
@@ -62,7 +70,7 @@ export class TouchControls {
     const by = height - 80
     this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this._interactJust = true })
     this.btn(bx,      by - 84, 'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.shieldHeld = true }, () => { this.shieldHeld = false })
+    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.shieldHeld = true; this.shieldJust = true }, () => { this.shieldHeld = false })
     this.btn(bx - 84, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
@@ -150,7 +158,8 @@ export class TouchControls {
     if (this.jumpHeld) player.jump()
     else player.jumpReleased()
 
-    player.setShielding(this.shieldHeld)
+    if (!(player.charKey === 'conrad' && player.isConradTransformed))
+      player.setShielding(this.shieldHeld)
     if (this.abilityJust) { player.useCharacterAbility(); this.abilityJust = false }
     if (this.meleeJust)   { player.swingMelee(); this.meleeJust = false }
   }
