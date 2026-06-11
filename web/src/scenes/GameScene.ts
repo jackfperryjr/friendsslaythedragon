@@ -101,7 +101,6 @@ export class GameScene extends Phaser.Scene {
   private carterDuplicates: CarterDuplicate[] = []
   private conradTrucks: ConradArmyTruck[] = []
   private conradWhiteVehicles: ConradWhiteVehicle[] = []
-  private conradVehicleSpawnTimer: Phaser.Time.TimerEvent | null = null
   private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
   private cocoSpinTween: Phaser.Tweens.Tween | null = null
   private cocoDashHitDestructibles = new Set<Destructible>()
@@ -3854,15 +3853,6 @@ export class GameScene extends Phaser.Scene {
             rb.setAllowGravity(false)
             p.setTexture('sheet-conrad-transform', 14)
             p.play('conrad-form-idle', true)
-            this.conradVehicleSpawnTimer?.remove()
-            this.conradVehicleSpawnTimer = this.time.addEvent({
-              delay: 3000,
-              loop: true,
-              callback: () => {
-                if (!p.active || !p.isConradTransformed) return
-                this.spawnConradWhiteVehicle(p)
-              },
-            })
           }
         }
       })
@@ -4403,22 +4393,11 @@ export class GameScene extends Phaser.Scene {
       fb.setOffset(18, 10)
       fb.setAllowGravity(false)
       player.play('conrad-form-idle', true)
-      this.conradVehicleSpawnTimer?.remove()
-      this.conradVehicleSpawnTimer = this.time.addEvent({
-        delay: 3000,
-        loop: true,
-        callback: () => {
-          if (!player.active || !player.isConradTransformed) return
-          this.spawnConradWhiteVehicle(player)
-        },
-      })
     })
   }
 
   private untransformConrad(player: Player) {
     if (!player.isConradTransformed || player.isTransforming) return
-    this.conradVehicleSpawnTimer?.remove()
-    this.conradVehicleSpawnTimer = null
     player.isConradTransformed = false
     player.isFlyingDown        = false
     player.speedMultiplier     = 1.0
@@ -6401,7 +6380,11 @@ export class GameScene extends Phaser.Scene {
 
     if (p.isConradTransformed) p.isFlyingDown = !!keys['down']?.isDown
 
-    p.setShielding(!!keys['shield']?.isDown)
+    if (p.charKey === 'conrad' && p.isConradTransformed) {
+      if (Phaser.Input.Keyboard.JustDown(keys['shield'])) this.spawnConradWhiteVehicle(p)
+    } else {
+      p.setShielding(!!keys['shield']?.isDown)
+    }
     if (Phaser.Input.Keyboard.JustDown(keys['ability'])) {
       // Down + ability while in shadow form starts spindash — don't toggle transform
       const downHeld = !!keys['down']?.isDown
@@ -6422,7 +6405,14 @@ export class GameScene extends Phaser.Scene {
 
     if (p.isConradTransformed) p.isFlyingDown = pad.leftStick.y > 0.25 || !!(pad.down || pad.buttons[13]?.pressed)
 
-    p.setShielding(pad.buttons[3]?.pressed ?? false)
+    if (p.charKey === 'conrad' && p.isConradTransformed) {
+      const pressed = pad.buttons[3]?.pressed ?? false
+      const prev = p.getData('prevGamepadShield') as boolean | undefined ?? false
+      if (pressed && !prev) this.spawnConradWhiteVehicle(p)
+      p.setData('prevGamepadShield', pressed)
+    } else {
+      p.setShielding(pad.buttons[3]?.pressed ?? false)
+    }
   }
 
   private handleRemoteInput(p: Player, ri: RemoteInput) {
@@ -6434,7 +6424,13 @@ export class GameScene extends Phaser.Scene {
     if (ri.jump) p.jump()
     else         p.jumpReleased()
 
-    p.setShielding(ri.shield)
+    if (p.charKey === 'conrad' && p.isConradTransformed) {
+      const prev = p.getData('prevRemoteShield') as boolean | undefined ?? false
+      if (ri.shield && !prev) this.spawnConradWhiteVehicle(p)
+      p.setData('prevRemoteShield', ri.shield)
+    } else {
+      p.setShielding(ri.shield)
+    }
     if (ri.ability) p.useCharacterAbility()
   }
 
@@ -6751,7 +6747,11 @@ export class GameScene extends Phaser.Scene {
         } else {
           const keys = this.playerKeysets.get(p.playerId)
           if (keys) this.handleKeyboard(p, keys)
-          if (this.touchControls) this.touchControls.apply(p)
+          if (this.touchControls) {
+            this.touchControls.apply(p)
+            if (p.charKey === 'conrad' && p.isConradTransformed && this.touchControls.consumeShieldJust())
+              this.spawnConradWhiteVehicle(p)
+          }
         }
 
         if (this.nm) {
