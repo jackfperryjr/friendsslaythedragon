@@ -26,8 +26,31 @@ export class TouchControls {
   private readonly DEAD_ZONE = 15
   private readonly H_DEAD_ZONE = 24
 
+  // Buttons are anchored bottom-right; offsets are relative to (width, height)
+  // so they can be recomputed when the visible viewport changes (mobile browser
+  // chrome showing/hiding resizes the canvas after these controls are built).
+  private buttonOffsets: { circle: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; dx: number; dy: number }[] = []
+
+  private readonly onResize = (gameSize: Phaser.Structs.Size) => this.reposition(gameSize.width, gameSize.height)
+
   constructor(private scene: Phaser.Scene) {
     this.buildButtons()
+    this.scene.scale.on('resize', this.onResize)
+    this.scene.events.once('shutdown', () => this.destroy())
+  }
+
+  private reposition(width: number, height: number) {
+    this.joystickBaseX = 110
+    this.joystickBaseY = height - 110
+    this.joystickBase.setPosition(this.joystickBaseX, this.joystickBaseY)
+    if (!this.joystickActive) this.joystickKnob.setPosition(this.joystickBaseX, this.joystickBaseY)
+
+    const bx = width - 65
+    const by = height - 80
+    for (const b of this.buttonOffsets) {
+      b.circle.setPosition(bx + b.dx, by + b.dy)
+      b.label.setPosition(bx + b.dx, by + b.dy)
+    }
   }
 
   get interactJust(): boolean {
@@ -65,13 +88,13 @@ export class TouchControls {
 
     this.buildJoystick(height)
 
-    // Action buttons (right side)
+    // Action buttons (right side), offsets relative to the bottom-right anchor (bx, by)
     const bx = width - 65
     const by = height - 80
-    this.btn(bx,      by,      '▲', 0x4fc3f7, () => { this._interactJust = true })
-    this.btn(bx,      by - 84, 'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 84, by - 84, 'Z',  0xce93d8, () => { this.shieldHeld = true; this.shieldJust = true }, () => { this.shieldHeld = false })
-    this.btn(bx - 84, by,      '⚔', 0xef9a9a, () => { this.meleeJust = true })
+    this.btn(bx, by, 0,    0,    '▲', 0x4fc3f7, () => { this._interactJust = true })
+    this.btn(bx, by, 0,    -84,  'X',  0xa5d6a7, () => { this.abilityJust = true })
+    this.btn(bx, by, -84,  -84,  'Z',  0xce93d8, () => { this.shieldHeld = true; this.shieldJust = true }, () => { this.shieldHeld = false })
+    this.btn(bx, by, -84,  0,    '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
   private buildJoystick(height: number) {
@@ -138,12 +161,15 @@ export class TouchControls {
     this.joystickKnob.setPosition(this.joystickBaseX, this.joystickBaseY)
   }
 
-  private btn(x: number, y: number, label: string, color: number, onDown: () => void, onUp?: () => void) {
+  private btn(bx: number, by: number, dx: number, dy: number, label: string, color: number, onDown: () => void, onUp?: () => void) {
+    const x = bx + dx
+    const y = by + dy
     const circle = this.scene.add.circle(x, y, 36, color, 0.7)
       .setScrollFactor(0).setDepth(50).setInteractive()
     const lbl = this.scene.add.text(x, y, label, { fontSize: '20px', color: '#000', fontStyle: 'bold' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(51)
     this._allObjects.push(circle, lbl)
+    this.buttonOffsets.push({ circle, label: lbl, dx, dy })
     circle.on('pointerdown', onDown)
     if (onUp) { circle.on('pointerup', onUp); circle.on('pointerout', onUp) }
   }
@@ -165,6 +191,6 @@ export class TouchControls {
   }
 
   destroy() {
-    // objects are scene-managed; no manual teardown needed
+    this.scene.scale.off('resize', this.onResize)
   }
 }
