@@ -25,7 +25,7 @@ export default defineConfig({
       manifest: {
         name: 'Friends Slay the Dragon',
         short_name: 'Friends Slay the Dragon',
-        description: 'Friends Slay the Dragon — local co-op action for 2+ players',
+        description: 'Friends Slay the Dragon — a castle brawler with a dragon at the end',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
         display: 'standalone',

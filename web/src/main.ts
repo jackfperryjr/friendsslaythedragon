@@ -6,9 +6,8 @@ import { MenuScene } from './scenes/MenuScene'
 import { GameScene } from './scenes/GameScene'
 import { VictoryScene } from './scenes/VictoryScene'
 import { GameOverScene } from './scenes/GameOverScene'
-import { LevelCompleteScene } from './scenes/LevelCompleteScene'
-import { LobbyScene } from './scenes/LobbyScene'
 import { CharacterSelectScene } from './scenes/CharacterSelectScene'
+import { loadSettings, setSoundMuted } from './game/settings'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -26,7 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
     gamepad: true,
     activePointers: 4,
   },
-  scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene, LevelCompleteScene, LobbyScene],
+  scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene],
 }
 
 // iOS/Safari requires a user gesture before the Gamepad API and AudioContext
@@ -42,4 +41,10 @@ document.addEventListener('touchstart', unlockOnGesture, { passive: true })
 document.addEventListener('pointerdown', unlockOnGesture, { passive: true })
 document.addEventListener('keydown',    unlockOnGesture)
 
-new Phaser.Game(config)
+const game = new Phaser.Game(config)
+SoundManager.setMuted(loadSettings().muted, game.sound)
+
+// M mutes / unmutes on any screen
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && !e.repeat) setSoundMuted(!SoundManager.isMuted())
+})

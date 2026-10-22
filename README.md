@@ -1,11 +1,8 @@
 # Friends Slay the Dragon
 
-[![Players Online](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ffriendsslaythedragon.up.railway.app%2Fstats&query=%24.currentConnections&label=players%20online&color=brightgreen&cacheSeconds=60)](https://www.friendsslay.com)
-[![Total Players](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ffriendsslaythedragon.up.railway.app%2Fstats&query=%24.totalPlayers&label=total%20players&color=blue&cacheSeconds=60)](https://www.friendsslay.com)
-
 ![Friends Slay the Dragon](web/public/assets/app_icons/friendsslay.jpg)
 
-A chaotic, couch-ready castle brawler where you and your friends charge through gothic halls, swallow terrifying monsters whole, and steal their powers to take down a dragon that absolutely has it coming.
+A chaotic castle brawler where you charge through gothic halls as one of your friends, swallow terrifying monsters whole, and steal their powers to take down a dragon that absolutely has it coming.
 
 ---
 
@@ -15,9 +12,9 @@ You're a little bored. The castle is enormous and full of zombies, skeletons, fl
 
 Somewhere deep in the castle, past a gothic double-door with iron knockers and a foreboding glow, the dragon waits. He breathes fire. He shoots lightning bolts. He rains icicles. He is not having a good day, and neither will you — until you're not.
 
-## Play with friends
+## How to play
 
-Play locally by yourself. Or create a room on the server for up to 4 players. Use a keyboard or connect controllers. The chaos scales perfectly.
+Pick one of your friends and fight your way to the dragon. Use a keyboard, a touch screen, or a Bluetooth controller.
 
 ## Go play
 
@@ -28,4 +25,4 @@ No download. No install. Just vibes and dragon-slaying.
 ---
 
 *Sprites built with [Pixel Lab](https://www.pixellab.ai/) · Maps built with [Sprite Fusion](https://www.spritefusion.com/) · Music built with [Gemini](https://gemini.google.com/)*  
-*Built with [Phaser 3](https://phaser.io/) · Multiplayer powered by WebSockets · Server deployed on [Railway](https://railway.app/)*
+*Built with [Phaser 3](https://phaser.io/)*

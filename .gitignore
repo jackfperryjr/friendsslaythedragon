@@ -5,6 +5,10 @@ node_modules/
 dist/
 dev-dist/
 
+# Compiled TypeScript output (tsc is typecheck-only; Vite bundles the .ts files)
+web/src/**/*.js
+web/vite.config.js
+
 # Environment
 .env
 .env.local

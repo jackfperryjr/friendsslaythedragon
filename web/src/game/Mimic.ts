@@ -6,6 +6,10 @@ const WALK_SPEED = 80
 export class Mimic extends Phaser.Physics.Arcade.Sprite {
   isAwake = false
   private _hp = 3
+  private dead = false
+
+  /** True from the moment the mimic is killed, even while its death animation plays. */
+  get isDead() { return this.dead }
   private walkDir = 1
   private stunTimer = 0
   private beingPulled = false
@@ -47,7 +51,11 @@ export class Mimic extends Phaser.Physics.Arcade.Sprite {
     this.scene.time.delayedCall(120, () => { if (this.active) this.clearTint() })
   }
 
+  /** Kills the mimic. Safe to call more than once; emits 'killed' only the first time. */
   die() {
+    if (this.dead) return
+    this.dead = true
+    this.emit('killed', this)
     SoundManager.enemyDeath()
     ;(this.body as Phaser.Physics.Arcade.Body).setEnable(false)
     this.scene.tweens.add({

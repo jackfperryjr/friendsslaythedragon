@@ -40,6 +40,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private attackTimer: number
   private stunTimer = 0
   protected hp = 5
+  private dead = false
+
+  /** True from the moment the enemy is killed, even while its death animation plays. */
+  get isDead() { return this.dead }
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
     const isFlying = ability === AbilityType.Bat || ability === AbilityType.BlackDragon
@@ -135,7 +139,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.scene.time.delayedCall(120, () => { if (this.active) this.clearTint() })
   }
 
+  /** Kills the enemy. Safe to call more than once; emits 'killed' only the first time. */
   die() {
+    if (this.dead) return
+    this.dead = true
+    this.emit('killed', this)
     SoundManager.enemyDeath()
     ;(this.body as Phaser.Physics.Arcade.Body).setEnable(false)
     this.scene.tweens.add({

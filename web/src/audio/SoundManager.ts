@@ -20,6 +20,23 @@ function ac(): AnyAudioContext {
   return _ctx
 }
 
+// ── mute ──────────────────────────────────────────────────────────────────────
+
+let _muted = false
+let _master: GainNode | null = null
+let _phaserSound: Phaser.Sound.BaseSoundManager | null = null
+
+/** Every synthesised sound goes through this node, so muting is one gain change. */
+function out(): AudioNode {
+  const c = ac()
+  if (!_master) {
+    _master = c.createGain()
+    _master.gain.value = _muted ? 0 : 1
+    _master.connect(c.destination)
+  }
+  return _master
+}
+
 // ── waveform helpers ──────────────────────────────────────────────────────────
 
 function tone(
@@ -35,7 +52,7 @@ function tone(
   gain.gain.setValueAtTime(vol, t)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   osc.connect(gain)
-  gain.connect(dest ?? c.destination)
+  gain.connect(dest ?? out())
   osc.start(t)
   osc.stop(t + dur + 0.03)
 }
@@ -57,7 +74,7 @@ function noiseBlip(t: number, dur: number, vol: number, freq: number, q = 3, des
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   src.connect(filter)
   filter.connect(gain)
-  gain.connect(dest ?? c.destination)
+  gain.connect(dest ?? out())
   src.start(t)
   src.stop(t + dur + 0.03)
 }
@@ -104,7 +121,7 @@ function getFanfareOut(): GainNode {
   if (!_fanfareGain) {
     _fanfareGain = c.createGain()
     _fanfareGain.gain.value = 1
-    _fanfareGain.connect(c.destination)
+    _fanfareGain.connect(out())
   }
   return _fanfareGain
 }
@@ -279,6 +296,19 @@ function _startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume
 // ── public API ────────────────────────────────────────────────────────────────
 
 export const SoundManager = {
+
+  /** Mutes or unmutes everything: sound effects, music files and spoken words. */
+  setMuted(muted: boolean, manager?: Phaser.Sound.BaseSoundManager) {
+    _muted = muted
+    if (manager) _phaserSound = manager
+    if (_master) _master.gain.value = muted ? 0 : 1
+    if (_phaserSound) _phaserSound.mute = muted
+    if (muted) window.speechSynthesis?.cancel()
+  },
+
+  isMuted() {
+    return _muted
+  },
 
   /**
    * Call from every user-gesture handler.
@@ -470,6 +500,8 @@ export const SoundManager = {
   // ── music tracks (MP3 files) ──────────────────────────────────────────────
 
   startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume = 0.75) {
+    _phaserSound = manager
+    manager.mute = _muted
     if (_track && _track.key === key && (_track as Phaser.Sound.WebAudioSound).isPlaying) return
     clearFadeTimer()
 
@@ -520,7 +552,7 @@ export const SoundManager = {
   // ── word-menu speech (Web Speech API) ────────────────────────────────────
 
   speakWord(word: string) {
-    if (!window.speechSynthesis) return
+    if (!window.speechSynthesis || _muted) return
     const w   = word.toLowerCase()
     const msg = new SpeechSynthesisUtterance(`The word is ${w}. Can you spell ${w}?`)
     msg.rate   = 0.88

@@ -2,11 +2,11 @@ import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
 import type { RoomConfig } from '../levels'
+import { resetRunState } from '../game/runState'
+import { setSoundMuted, loadSettings, formatDuration } from '../game/settings'
+import { MenuNav, MenuItem } from '../ui/MenuNav'
 
 type Screen = 'main' | 'controls' | 'devMenu'
-
-const _wsUrl: string = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WS_URL ?? 'ws://localhost:3001'
-const SERVER_URL = _wsUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://')
 
 const FONT = '"Press Start 2P", monospace'
 const CLR_TITLE  = '#ffe066'
@@ -14,31 +14,24 @@ const CLR_SELECT = '#ffffff'
 const CLR_DIM    = '#7799aa'
 const CLR_BODY   = '#aaccdd'
 
-interface MenuItem { text: Phaser.GameObjects.Text; action: () => void }
-
 export class MenuScene extends Phaser.Scene {
   private mainGroup!: Phaser.GameObjects.Container
   private controlsGroup!: Phaser.GameObjects.Container
   private devMenuGroup!: Phaser.GameObjects.Container
 
-  private gpCursor!: Phaser.GameObjects.Text
+  private nav!: MenuNav
   private padStatus!: Phaser.GameObjects.Text
-  private activeItems: MenuItem[] = []
-  private focusIdx = 0
 
   constructor() { super({ key: 'MenuScene' }) }
 
   create() {
-    this.activeItems = []
     SoundManager.stopTrack()
     const { width, height } = this.scale
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
     this.add.image(width / 2, height / 2, 'logo').setDisplaySize(width, height)
 
-    this.gpCursor = this.add.text(0, 0, '►', {
-      fontSize: '14px', fontFamily: FONT, color: CLR_TITLE,
-    }).setOrigin(1, 0.5).setDepth(20).setVisible(false)
+    this.nav = new MenuNav(this, { colors: { normal: CLR_SELECT, focus: CLR_TITLE } })
 
     this.padStatus = this.add.text(width / 2, height - 10, '', {
       fontSize: '8px', fontFamily: FONT, color: '#44cc88',
@@ -48,11 +41,8 @@ export class MenuScene extends Phaser.Scene {
     this.buildControls()
     this.buildDevMenu()
     this.showScreen('main')
-    this.setupGamepad()
     this.setupControllerStatus()
-
-    // Dev shortcut: press 4 to jump directly to Level 4 (outside world)
-    this.input.keyboard?.once('keydown-FOUR', () => this.startLevel4())
+    this.input.keyboard?.on('keydown-ESC', () => this.showScreen('main'))
 
     SoundManager.whenUnlocked(() => {
       SoundManager.playIntroTheme()
@@ -80,62 +70,27 @@ export class MenuScene extends Phaser.Scene {
     this.time.addEvent({ delay: 2000, loop: true, callback: refresh })
   }
 
-  private setupGamepad() {
-    this.input.gamepad?.on(
-      Phaser.Input.Gamepad.Events.BUTTON_DOWN,
-      (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
-        if (button.index === 12) this.moveFocus(-1)          // d-pad up
-        if (button.index === 13) this.moveFocus(1)           // d-pad down
-        if (button.index === 0 || button.index === 9) this.activateFocus()  // A or Start
-      },
-    )
-  }
-
-  private moveFocus(dir: number) {
-    const len = this.activeItems.length
-    if (!len) return
-    this.focusIdx = (this.focusIdx + dir + len) % len
-    this.placeCursor()
-  }
-
-  private activateFocus() {
-    this.activeItems[this.focusIdx]?.action()
-  }
-
-  private placeCursor() {
-    const item = this.activeItems[this.focusIdx]
-    if (!item) return
-    this.activeItems.forEach(it => it.text.setColor(CLR_SELECT))
-    item.text.setColor(CLR_TITLE)
-    const b = item.text.getBounds()
-    this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true)
-  }
-
-  private setActiveItems(items: MenuItem[]) {
-    this.activeItems.forEach(it => it.text.setColor(CLR_SELECT))
-    this.activeItems = items
-    this.focusIdx = 0
-    this.gpCursor.setVisible(false)
-  }
-
   private buildMain() {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    const btn1P  = this.menuButton(width / 2, height * 0.79, '1  PLAYER')
-    const btn24P = this.menuButton(width / 2, height * 0.84, '2-4  PLAYERS')
-    btn24P.setVisible(false).disableInteractive()
+    const btn1P  = this.menuButton(width / 2, height * 0.79, 'PLAY')
+    const best   = loadSettings().bestTimeSec
+    const bestTx = this.add.text(width / 2, height * 0.74, best !== null ? `BEST TIME TO THE DRAGON: ${formatDuration(best)}` : '', {
+      fontSize: '9px', fontFamily: FONT, color: CLR_TITLE, stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5)
     const btnCt  = this.menuButton(width / 2, height * 0.84, 'CONTROLS')
+    const btnSnd = this.menuButton(width / 2, height * 0.89, '')
+    const refreshSound = () => btnSnd.setText(SoundManager.isMuted() ? 'SOUND: OFF' : 'SOUND: ON')
+    const toggleSound  = () => { setSoundMuted(!SoundManager.isMuted()); refreshSound() }
+    refreshSound()
+    btnSnd.on('pointerdown', toggleSound)
+    this.input.keyboard?.on('keydown-M', refreshSound)  // M toggles sound globally (main.ts)
 
-    const startGame = () => this.startGame(1)
-    const goLobby   = () => {
-      this.cameras.main.fadeOut(300, 0, 0, 0)
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('LobbyScene'))
-    }
+    const startGame = () => this.startGame()
     const goControls = () => this.showScreen('controls')
 
     btn1P.on('pointerdown',  startGame)
-    btn24P.on('pointerdown', goLobby)
     btnCt.on('pointerdown',  goControls)
 
     const tip = this.add.text(width / 2, height - 28, '♦  Bluetooth controllers supported  ♦', {
@@ -146,13 +101,14 @@ export class MenuScene extends Phaser.Scene {
     const gpItems: MenuItem[] = [
       { text: btn1P,  action: startGame  },
       { text: btnCt,  action: goControls },
+      { text: btnSnd, action: toggleSound },
     ]
 
-    items.push(btn1P, btn24P, btnCt, tip)
+    items.push(bestTx, btn1P, btnCt, btnSnd, tip)
 
     if (isLocalhost) {
       const goDevMenu = () => this.showScreen('devMenu')
-      const btnDev = this.add.text(width / 2, height * 0.95, 'DEV', {
+      const btnDev = this.add.text(width - 40, 24, 'DEV', {
         fontSize: '10px', fontFamily: FONT, color: '#ff4444',
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setInteractive({ useHandCursor: true })
@@ -210,17 +166,19 @@ export class MenuScene extends Phaser.Scene {
     }
 
     const rows = [
-      ...row('MOVE',    'A / D',   'Left Stick'),
-      ...row('JUMP',    'W',       'Cross  /  A'),
-      ...row('FLOAT',   'Hold W',  'Hold Cross'),
+      ...row('MOVE',    'A D  /  ← →', 'Left Stick'),
+      ...row('JUMP',    'W  /  ↑  /  SPACE', 'Cross  /  A'),
+      ...row('FLOAT',   'Hold jump', 'Hold Cross'),
       ...row('SHIELD',  'C',       'Triangle  /  Y'),
       ...row('ABILITY', 'X',       'Circle  /  B'),
       ...row('MELEE',   'Z',       'Square  /  X'),
+      ...row('DOORS',   'Jump',    'D-pad ↑'),
+      ...row('TALK',    'X',       'Square  /  X'),
       ...row('PAUSE',   'ESC',     'Start'),
     ]
     y += 10
 
-    const note = this.add.text(cx, y, '2 players: keyboard  OR  2 Bluetooth controllers', {
+    const note = this.add.text(cx, y, 'Play with a keyboard, touch screen, or Bluetooth controller', {
       fontSize: '8px', fontFamily: FONT, color: CLR_DIM, align: 'center',
     }).setOrigin(0.5, 0)
 
@@ -238,7 +196,7 @@ export class MenuScene extends Phaser.Scene {
     this.controlsGroup.setVisible(s === 'controls')
     this.devMenuGroup.setVisible(s === 'devMenu')
     const group = s === 'main' ? this.mainGroup : s === 'controls' ? this.controlsGroup : this.devMenuGroup
-    this.setActiveItems(group.getData('gpItems') as MenuItem[])
+    this.nav.setItems(group.getData('gpItems') as MenuItem[])
   }
 
   private menuButton(x: number, y: number, label: string) {
@@ -250,19 +208,6 @@ export class MenuScene extends Phaser.Scene {
     btn.on('pointerover', () => btn.setColor(CLR_TITLE))
     btn.on('pointerout',  () => btn.setColor(CLR_SELECT))
     return btn
-  }
-
-  private startLevel4() {
-    SoundManager.unlock()
-    const rooms = generateRun()
-    this.registry.set('runRooms',    rooms)
-    this.registry.set('runIndex',    8)       // LEVEL4_WORLD_ROOM is index 8
-    this.registry.set('entryDir',    null)    // null → no left exit added, spawns at safe center
-    this.registry.set('playerCount', 1)
-    this.registry.set('lives',       3)
-    this.registry.set('score',       0)
-    this.cameras.main.fadeOut(400, 0, 0, 0)
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
   }
 
   private buildDevMenu() {
@@ -308,25 +253,17 @@ export class MenuScene extends Phaser.Scene {
 
   private startAtLevel(index: number, rooms?: RoomConfig[]) {
     SoundManager.unlock()
-    const r = rooms ?? generateRun()
-    this.registry.set('runRooms',    r)
+    resetRunState(this.registry)
+    this.registry.set('runRooms',    rooms ?? generateRun())
     this.registry.set('runIndex',    index)
     this.registry.set('entryDir',    null)
-    this.registry.set('playerCount', 1)
-    this.registry.set('lives',       3)
-    this.registry.set('score',       0)
     this.cameras.main.fadeOut(400, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
   }
 
-  private startGame(playerCount: number) {
-    fetch(`${SERVER_URL}/ping`).catch(() => {})
+  private startGame() {
     SoundManager.unlock()
-    this.registry.set('playerCount',   playerCount)
-    this.registry.set('currentLevel',  1)
-    this.registry.set('currentRoom',   1)
-    this.registry.set('lives',         3)
-    this.registry.set('score',         0)
+    resetRunState(this.registry)
     this.cameras.main.fadeOut(400, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
   }
