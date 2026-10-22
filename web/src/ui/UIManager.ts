@@ -14,6 +14,7 @@ export class UIManager {
   private invulnerabilityIcon!: Phaser.GameObjects.Image
   private letterSlots: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
   private coinCountText: Phaser.GameObjects.Text | null = null
+  private livesText!: Phaser.GameObjects.Text
 
   constructor(
     scene: Phaser.Scene,
@@ -80,6 +81,12 @@ export class UIManager {
         .setScrollFactor(0).setDepth(21)
     }
 
+    // Lives remaining, in the corner of the portrait
+    this.livesText = scene.add.text(HEAD_CX + 20, rowY + 20, '', {
+      fontSize: '10px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(22)
+
     for (let h = 0; h < 5; h++) {
       const icon = scene.add.image(16 + SHIFT + h * 22 + 8, rowY, 'item-heart')
         .setScale(0.48).setScrollFactor(0).setDepth(20)
@@ -141,6 +148,16 @@ export class UIManager {
     this.letterSlots.forEach((slot, i) => {
       slot.text.setText(letters[i] ?? '')
     })
+  }
+
+  updateLives(n: number) {
+    const text = `x${Math.max(0, n)}`
+    if (this.livesText.text === text) return
+    const changed = this.livesText.text !== ''
+    this.livesText.setText(text).setColor(n <= 1 ? '#ff6666' : '#ffffff')
+    if (changed) {
+      this.scene.tweens.add({ targets: this.livesText, scale: { from: 1.8, to: 1 }, duration: 350, ease: 'Back.Out' })
+    }
   }
 
   updateCoinCount(n: number) {

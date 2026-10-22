@@ -8,7 +8,8 @@ import { Mimic } from '../game/Mimic'
 import { ConradArmyTruck } from '../game/ConradArmyTruck'
 import { ConradWhiteVehicle, WhiteVehicleType } from '../game/ConradWhiteVehicle'
 import { GameManager } from '../game/GameManager'
-import { resetRunState } from '../game/runState'
+import { resetRunState, STARTING_LIVES } from '../game/runState'
+import { saveRun, clearSavedRun } from '../game/savedRun'
 import { setSoundMuted } from '../game/settings'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
@@ -242,6 +243,7 @@ export class GameScene extends Phaser.Scene {
     this.restorePlayerState()
     this.ui.updateLetters(this.registry.get('collectedLetters') ?? [])
     this.ui.updateCoinCount(this.registry.get('goldCoins') ?? 0)
+    this.ui.updateLives(this.registry.get('lives') ?? STARTING_LIVES)
     this.buildNPCs()
     drawTorches(this, this.cfg, (x, y) => this.isInsideWall(x, y))
     this.buildPauseMenu()
@@ -255,6 +257,9 @@ export class GameScene extends Phaser.Scene {
       ? (this.cfg.bossMusicKey ?? 'music-boss')
       : (this.cfg.musicKey    ?? 'music-gameplay')
     SoundManager.startTrack(this.sound, trackKey)
+
+    // Entering a room is a save point: CONTINUE on the main menu resumes here
+    saveRun(this.registry, this.cfg.name)
   }
 
   // ── background ──────────────────────────────────────────────────────────────
@@ -399,6 +404,7 @@ export class GameScene extends Phaser.Scene {
     } else if (item.type === 'life') {
       const lives: number = (this.registry.get('lives') ?? 1) + 1
       this.registry.set('lives', lives)
+      this.ui.updateLives(lives)
       this.showPopup(item.x, item.y, '1-UP!', '#ffe066')
       SoundManager.collectLife()
     } else if (item.type === 'mystery') {
@@ -1396,6 +1402,9 @@ export class GameScene extends Phaser.Scene {
           }
           if (dk) this.registry.set(dk, true)
           this.ui.hideBossBar()
+          // Save the win right away so quitting now doesn't mean fighting the boss again
+          this.persistPlayerState()
+          saveRun(this.registry, this.cfg.name)
 
           const coinReward = Phaser.Math.Between(100, 300)
           const totalCoins = (this.registry.get('goldCoins') ?? 0) + coinReward
@@ -3741,6 +3750,8 @@ export class GameScene extends Phaser.Scene {
     let lives: number = this.registry.get('lives') ?? 1
     lives--
     this.registry.set('lives', lives)
+    this.ui.updateLives(lives)
+    if (lives > 0) this.showPopup(p.x, p.y - 40, lives === 1 ? 'LAST LIFE!' : `${lives} LIVES LEFT`, '#ff6666')
 
     if (lives <= 0) {
       this.time.delayedCall(800, () => this.gameOver())
@@ -3763,6 +3774,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private gameOver() {
+    clearSavedRun()
     resetRunState(this.registry)
     SoundManager.stopTrack()
     this.cameras.main.fadeOut(800, 80, 0, 0)
