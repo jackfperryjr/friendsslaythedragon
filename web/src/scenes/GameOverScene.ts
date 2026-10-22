@@ -1,13 +1,11 @@
 import Phaser from 'phaser'
+import { MenuNav } from '../ui/MenuNav'
+import { resetRunState } from '../game/runState'
 
 const FONT = '"Press Start 2P", monospace'
 
 export class GameOverScene extends Phaser.Scene {
-  private gpCursor!: Phaser.GameObjects.Text
-  private menuItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
-  private focusIdx = 0
-  private _navStickHeld = false
-  private _prevBtns: boolean[] = []
+  private nav!: MenuNav
 
   constructor() { super({ key: 'GameOverScene' }) }
 
@@ -18,45 +16,10 @@ export class GameOverScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#050004')
     this.cameras.main.fadeIn(600, 0, 0, 0)
 
-    this.gpCursor = this.add.text(0, 0, '►', {
-      fontSize: '14px', fontFamily: FONT, color: '#ff6666',
-    }).setOrigin(1, 0.5).setDepth(20).setVisible(false)
+    this.nav = new MenuNav(this, { colors: null, cursorColor: '#ff6666' })
 
     this.spawnStars(width, height)
     this.buildUI(cx, cy)
-  }
-
-  update() {
-    const pad = this.input.gamepad?.getPad(0)
-    if (!pad?.connected) return
-
-    const just = (i: number) => {
-      const cur = pad.buttons[i]?.pressed ?? false
-      const was = this._prevBtns[i] ?? false
-      this._prevBtns[i] = cur
-      return cur && !was
-    }
-
-    if (just(12) || just(14)) this.moveFocus(-1)
-    if (just(13) || just(15)) this.moveFocus(1)
-
-    const ly = pad.leftStick.y
-    if (!this._navStickHeld) {
-      if (ly < -0.5)     { this._navStickHeld = true; this.moveFocus(-1) }
-      else if (ly > 0.5) { this._navStickHeld = true; this.moveFocus(1) }
-    } else if (Math.abs(ly) < 0.25) {
-      this._navStickHeld = false
-    }
-
-    if (just(0) || just(9)) this.menuItems[this.focusIdx]?.action()
-  }
-
-  private moveFocus(dir: number) {
-    const len = this.menuItems.length
-    if (!len) return
-    this.focusIdx = (this.focusIdx + dir + len) % len
-    const b = this.menuItems[this.focusIdx].text.getBounds()
-    this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true)
   }
 
   private spawnStars(width: number, height: number) {
@@ -85,27 +48,24 @@ export class GameOverScene extends Phaser.Scene {
     const btnAgain = this.menuButton(cx - 165, cy + 115, 'TRY AGAIN').setAlpha(0)
     const btnMenu  = this.menuButton(cx + 165, cy + 115, 'MAIN MENU').setAlpha(0)
 
+    // Only the first choice counts (a double press would start two scenes)
+    let leaving = false
     const resetAndPlay = () => {
+      if (leaving) return
+      leaving = true
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.registry.set('runRooms',           null)
-        this.registry.set('runIndex',           0)
-        this.registry.set('entryDir',           null)
-        this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts',    null)
-        this.registry.set('lives',              3)
+        resetRunState(this.registry)
         this.scene.start('GameScene')
       })
     }
 
     const goMenu = () => {
+      if (leaving) return
+      leaving = true
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.registry.set('runRooms',           null)
-        this.registry.set('runIndex',           0)
-        this.registry.set('entryDir',           null)
-        this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts',    null)
+        resetRunState(this.registry)
         this.scene.start('MenuScene')
       })
     }
@@ -113,10 +73,10 @@ export class GameOverScene extends Phaser.Scene {
     btnAgain.on('pointerdown', resetAndPlay)
     btnMenu.on('pointerdown',  goMenu)
 
-    this.menuItems = [
+    this.nav.setItems([
       { text: btnAgain, action: () => btnAgain.emit('pointerdown') },
       { text: btnMenu,  action: () => btnMenu.emit('pointerdown')  },
-    ]
+    ])
 
     // Animation sequence
     this.tweens.add({

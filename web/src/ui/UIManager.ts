@@ -5,20 +5,18 @@ const FONT = '"Press Start 2P", monospace'
 
 export class UIManager {
   private scene: Phaser.Scene
-  private heartIcons: Phaser.GameObjects.Image[][] = []
-  private rowYs: number[] = []
+  private heartIcons: Phaser.GameObjects.Image[] = []
   private bossBarFill: Phaser.GameObjects.Rectangle | null = null
   private bossBarFill2: Phaser.GameObjects.Rectangle | null = null
   private bossHudObjects: Phaser.GameObjects.GameObject[] = []
-  private speedBoostIcons: Phaser.GameObjects.Image[] = []
-  private strengthBoostIcons: Phaser.GameObjects.Image[] = []
-  private invulnerabilityIcons: Phaser.GameObjects.Image[] = []
+  private speedBoostIcon!: Phaser.GameObjects.Image
+  private strengthBoostIcon!: Phaser.GameObjects.Image
+  private invulnerabilityIcon!: Phaser.GameObjects.Image
   private letterSlots: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
   private coinCountText: Phaser.GameObjects.Text | null = null
 
   constructor(
     scene: Phaser.Scene,
-    playerCount: number,
     _worldName = '',
     isBossRoom = false,
     bossMaxHp = 0,
@@ -66,63 +64,47 @@ export class UIManager {
     // Super-ability icons shifted right to leave room for coin counter between hearts and boosts
     const SUPER_X  = 196 + SHIFT   // first super-ability icon center-x
     const COIN_HUD_X = 172         // coin counter sits between last heart (~152) and first boost icon
-    const FALLBACK_COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
+    const rowY     = 22
 
-    const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
+    scene.add.rectangle(160, rowY, 320, ROW_H, 0x000000, 0.82)
+      .setScrollFactor(0).setDepth(19)
 
-    for (let i = 0; i < playerCount; i++) {
-      const rowY = 22 + i * ROW_H
-      this.rowYs.push(rowY)
-
-      scene.add.rectangle(160, rowY, 320, ROW_H, 0x000000, 0.82)
-        .setScrollFactor(0).setDepth(19)
-
-      const charKey   = selectedChars?.[i]
-      const headKey   = charKey ? `head-${charKey}` : ''
-      const hasHead   = headKey !== '' && scene.textures.exists(headKey)
-      if (hasHead) {
-        scene.add.image(HEAD_CX, rowY, headKey)
-          .setDisplaySize(HEAD_SZ, HEAD_SZ)
-          .setScrollFactor(0).setDepth(21)
-      } else {
-        scene.add.rectangle(HEAD_CX, rowY, HEAD_SZ, HEAD_SZ, FALLBACK_COLORS[i] ?? 0x888888, 0.6)
-          .setScrollFactor(0).setDepth(21)
-      }
-
-      const hearts: Phaser.GameObjects.Image[] = []
-      for (let h = 0; h < 5; h++) {
-        const icon = scene.add.image(16 + SHIFT + h * 22 + 8, rowY, 'item-heart')
-          .setScale(0.48).setScrollFactor(0).setDepth(20)
-        hearts.push(icon)
-      }
-      this.heartIcons.push(hearts)
-
-      // Speed, strength, invulnerability icons (super abilities)
-      const speedIcon = scene.add.image(SUPER_X, rowY, 'speed_boost_icon')
-        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
-      const strengthIcon = scene.add.image(SUPER_X + 30, rowY, 'strength_boost_icon')
-        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
-      const invulnIcon = scene.add.image(SUPER_X + 60, rowY, 'invulnerability_icon')
-        .setDisplaySize(20, 20).setAlpha(0.25).setScrollFactor(0).setDepth(21)
-
-      this.speedBoostIcons.push(speedIcon)
-      this.strengthBoostIcons.push(strengthIcon)
-      this.invulnerabilityIcons.push(invulnIcon)
-
-      // Coin counter between hearts and boost icons — only on first player row
-      if (i === 0) {
-        const coinGfx = scene.add.graphics().setScrollFactor(0).setDepth(20)
-        coinGfx.fillStyle(0xffd700, 1);   coinGfx.fillCircle(COIN_HUD_X, rowY, 6)
-        coinGfx.fillStyle(0xffff99, 0.6); coinGfx.fillCircle(COIN_HUD_X - 2, rowY - 2, 2)
-        this.coinCountText = scene.add.text(COIN_HUD_X + 10, rowY + 1, '0', {
-          fontSize: '9px', fontFamily: FONT, color: '#ffd700',
-          stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(21)
-      }
+    const charKey: string | undefined = scene.registry.get('selectedChars')?.[0]
+    const headKey = charKey ? `head-${charKey}` : ''
+    if (headKey && scene.textures.exists(headKey)) {
+      scene.add.image(HEAD_CX, rowY, headKey)
+        .setDisplaySize(HEAD_SZ, HEAD_SZ)
+        .setScrollFactor(0).setDepth(21)
+    } else {
+      scene.add.rectangle(HEAD_CX, rowY, HEAD_SZ, HEAD_SZ, 0xffe066, 0.6)
+        .setScrollFactor(0).setDepth(21)
     }
 
+    for (let h = 0; h < 5; h++) {
+      const icon = scene.add.image(16 + SHIFT + h * 22 + 8, rowY, 'item-heart')
+        .setScale(0.48).setScrollFactor(0).setDepth(20)
+      this.heartIcons.push(icon)
+    }
+
+    // Speed, strength, invulnerability icons (super abilities)
+    this.speedBoostIcon = scene.add.image(SUPER_X, rowY, 'speed_boost_icon')
+      .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+    this.strengthBoostIcon = scene.add.image(SUPER_X + 30, rowY, 'strength_boost_icon')
+      .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+    this.invulnerabilityIcon = scene.add.image(SUPER_X + 60, rowY, 'invulnerability_icon')
+      .setDisplaySize(20, 20).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+
+    // Coin counter between hearts and boost icons
+    const coinGfx = scene.add.graphics().setScrollFactor(0).setDepth(20)
+    coinGfx.fillStyle(0xffd700, 1);   coinGfx.fillCircle(COIN_HUD_X, rowY, 6)
+    coinGfx.fillStyle(0xffff99, 0.6); coinGfx.fillCircle(COIN_HUD_X - 2, rowY - 2, 2)
+    this.coinCountText = scene.add.text(COIN_HUD_X + 10, rowY + 1, '0', {
+      fontSize: '9px', fontFamily: FONT, color: '#ffd700',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(21)
+
     // Letter bug tray — up to 7 collected-letter slots, below the player HUD rows
-    const LETTER_Y = 22 + playerCount * ROW_H + 8
+    const LETTER_Y = rowY + ROW_H + 8
     const LETTER_START_X = 20  // left-aligned under the HUD
     for (let i = 0; i < 7; i++) {
       const slotX = LETTER_START_X + i * 36
@@ -136,13 +118,11 @@ export class UIManager {
     }
   }
 
-  update(players: Player[]) {
-    players.forEach((p, i) => {
-      this.heartIcons[i]?.forEach((icon, h) => icon.setAlpha(h < p.hearts ? 1 : 0.2))
-      this.speedBoostIcons[i]?.setAlpha(p.speedBoostActive ? 1 : 0.25)
-      this.strengthBoostIcons[i]?.setAlpha(p.strengthBoostActive ? 1 : 0.25)
-      this.invulnerabilityIcons[i]?.setAlpha(p.invulnerabilityActive ? 1 : 0.25)
-    })
+  update(player: Player) {
+    this.heartIcons.forEach((icon, h) => icon.setAlpha(h < player.hearts ? 1 : 0.2))
+    this.speedBoostIcon.setAlpha(player.speedBoostActive ? 1 : 0.25)
+    this.strengthBoostIcon.setAlpha(player.strengthBoostActive ? 1 : 0.25)
+    this.invulnerabilityIcon.setAlpha(player.invulnerabilityActive ? 1 : 0.25)
   }
 
   updateBossBar(current: number, max: number) {

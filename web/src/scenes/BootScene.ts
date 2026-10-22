@@ -97,12 +97,8 @@ const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?
 }
 
 // Which sheet each player uses (falls back to generated texture if file is missing)
-const PLAYER_SHEETS: Record<number, string> = {
-  0: 'conrad',
-  1: 'carter',
-  2: 'callum',
-  3: 'abby',
-}
+// Character used when the selected one has no sprite sheet loaded
+const DEFAULT_CHAR = 'conrad'
 
 // 4×4 grid layout (frames 0-15, 64×64 each):
 //  Row 0 (0–3)  — idle / walk cycle
@@ -464,19 +460,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   // Expose config for Player to read
-  static getSheetKey(playerId: number): string | null {
-    const slot = PLAYER_SHEETS[playerId as keyof typeof PLAYER_SHEETS]
-    return slot ? `sheet-${slot}` : null
+  static getDefaultSheetKey(): string {
+    return `sheet-${DEFAULT_CHAR}`
   }
 
-  static getAnimPrefix(playerId: number): string | null {
-    const slot = PLAYER_SHEETS[playerId as keyof typeof PLAYER_SHEETS]
-    return slot ? `char-${slot}` : null
+  static getDefaultAnimPrefix(): string {
+    return `char-${DEFAULT_CHAR}`
   }
 
   // Fallback texture when no sprite sheet is available
-  static getFallbackTexture(playerId: number): string {
-    return ['player', 'player-2', 'player-2', 'player-3'][playerId] ?? 'player'
+  static getFallbackTexture(): string {
+    return 'player'
   }
 
   static getSelectableCharacters(): { key: string; name: string; sheetKey: string; animPrefix: string; previewFrame: number }[] {
@@ -506,19 +500,6 @@ export class BootScene extends Phaser.Scene {
     p1.fillStyle(0x8b0000); p1.fillEllipse(16, 22, 8, 5)      // mouth
     p1.fillStyle(0xffa0c0); p1.fillEllipse(16, 6, 10, 6)      // top highlight
     p1.generateTexture('player', 32, 32); p1.destroy()
-
-    // Player 2 — blue variant
-    const p2 = this.g()
-    p2.fillStyle(0x82b4ff); p2.fillCircle(16, 17, 14)
-    p2.fillStyle(0x5090ee, 0.7); p2.fillCircle(9, 20, 5)
-    p2.fillStyle(0x5090ee, 0.7); p2.fillCircle(23, 20, 5)
-    p2.fillStyle(0x001f54); p2.fillEllipse(10, 14, 7, 9)
-    p2.fillStyle(0x001f54); p2.fillEllipse(22, 14, 7, 9)
-    p2.fillStyle(0xffffff); p2.fillCircle(8, 12, 2)
-    p2.fillStyle(0xffffff); p2.fillCircle(20, 12, 2)
-    p2.fillStyle(0x8b0000); p2.fillEllipse(16, 22, 8, 5)
-    p2.fillStyle(0xa0c8ff); p2.fillEllipse(16, 6, 10, 6)
-    p2.generateTexture('player-2', 32, 32); p2.destroy()
 
     // Enemy — purple blob (None ability)
     const en = this.g()
@@ -680,16 +661,6 @@ export class BootScene extends Phaser.Scene {
     // Faint glow aura
     fw.lineStyle(3, 0x90caf9, 0.25); fw.strokeEllipse(19, 20, 34, 42)
     fw.generateTexture('enemy-wraith', 38, 48); fw.destroy()
-
-    // Player 3 fallback (orange — if no 4th sprite sheet)
-    const p3 = this.g()
-    p3.fillStyle(0xff8c00); p3.fillCircle(16, 17, 14)
-    p3.fillStyle(0xff6d00, 0.7); p3.fillCircle(9, 20, 5); p3.fillCircle(23, 20, 5)
-    p3.fillStyle(0x001f54); p3.fillEllipse(10, 14, 7, 9); p3.fillEllipse(22, 14, 7, 9)
-    p3.fillStyle(0xffffff); p3.fillCircle(8, 12, 2); p3.fillCircle(20, 12, 2)
-    p3.fillStyle(0x8b0000); p3.fillEllipse(16, 22, 8, 5)
-    p3.fillStyle(0xffcc80); p3.fillEllipse(16, 6, 10, 6)
-    p3.generateTexture('player-3', 32, 32); p3.destroy()
   }
 
   // ── tiles ───────────────────────────────────────────────────────────────────

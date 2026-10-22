@@ -1,7 +1,6 @@
 import Phaser from 'phaser'
 import { AbilityType } from '../types'
 import { Enemy } from './Enemy'
-import { Player } from './Player'
 
 type BossState = 'patrol' | 'stagger'
 
@@ -13,12 +12,12 @@ export class Boss extends Enemy {
   private staggerTimer = 0
   private bossWalkDir = 1
   private invincible = false
+  private defeated = false
   private bossAttackTimer: number
   private bossFlying = false
   private bossStationary = false
   private attackRate: number
   private spawnY = 0
-  players: Player[] = []
 
   constructor(
     scene: Phaser.Scene,
@@ -106,7 +105,7 @@ export class Boss extends Enemy {
   }
 
   hit() {
-    if (this.invincible || !this.active) return
+    if (this.invincible || !this.active || this.defeated) return
     this.hp = Math.max(0, this.hp - 1)
     this.emit('hpChanged', this.hp, this.maxHp)
     if (this.hp <= 0) {
@@ -121,7 +120,11 @@ export class Boss extends Enemy {
 
   die() { this.hit() }
 
+  /** Kills the boss. Safe to call more than once; emits 'bossDead' only the first time. */
   bossDie() {
+    if (this.defeated) return
+    this.defeated = true
+    this.emit('hpChanged', 0, this.maxHp)
     ;(this.body as Phaser.Physics.Arcade.Body).setEnable(false)
     this.emit('bossDead')
     this.scene.tweens.add({

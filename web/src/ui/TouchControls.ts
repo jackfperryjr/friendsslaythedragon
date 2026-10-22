@@ -1,5 +1,16 @@
 import Phaser from 'phaser'
-import { Player } from '../game/Player'
+
+/** Touch state for one frame. "Pressed" flags are consumed when read. */
+export interface TouchFrame {
+  left: boolean
+  right: boolean
+  jump: boolean
+  shield: boolean
+  shieldPressed: boolean
+  abilityPressed: boolean
+  meleePressed: boolean
+  interactPressed: boolean
+}
 
 export class TouchControls {
   private dpadLeft  = false
@@ -51,18 +62,6 @@ export class TouchControls {
       b.circle.setPosition(bx + b.dx, by + b.dy)
       b.label.setPosition(bx + b.dx, by + b.dy)
     }
-  }
-
-  get interactJust(): boolean {
-    const v = this._interactJust
-    this._interactJust = false
-    return v
-  }
-
-  consumeShieldJust(): boolean {
-    const v = this.shieldJust
-    this.shieldJust = false
-    return v
   }
 
   setEnabled(v: boolean) {
@@ -174,20 +173,18 @@ export class TouchControls {
     if (onUp) { circle.on('pointerup', onUp); circle.on('pointerout', onUp) }
   }
 
-  apply(player: Player) {
-    if (!this._enabled || !player.isAlive) return
-
-    if (this.dpadLeft) player.moveLeft()
-    else if (this.dpadRight) player.moveRight()
-    else player.stopHorizontal()
-
-    if (this.jumpHeld) player.jump()
-    else player.jumpReleased()
-
-    if (!(player.charKey === 'conrad' && player.isConradTransformed))
-      player.setShielding(this.shieldHeld)
-    if (this.abilityJust) { player.useCharacterAbility(); this.abilityJust = false }
-    if (this.meleeJust)   { player.swingMelee(); this.meleeJust = false }
+  read(): TouchFrame {
+    const frame: TouchFrame = {
+      left: this.dpadLeft, right: this.dpadRight, jump: this.jumpHeld, shield: this.shieldHeld,
+      shieldPressed: this.shieldJust, abilityPressed: this.abilityJust,
+      meleePressed: this.meleeJust, interactPressed: this._interactJust,
+    }
+    this.shieldJust = false
+    this.abilityJust = false
+    this.meleeJust = false
+    this._interactJust = false
+    if (!this._enabled) return { ...frame, left: false, right: false, jump: false, shield: false }
+    return frame
   }
 
   destroy() {

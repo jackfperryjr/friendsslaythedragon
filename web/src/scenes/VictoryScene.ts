@@ -1,15 +1,13 @@
 import Phaser from 'phaser'
+import { MenuNav } from '../ui/MenuNav'
 import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
+import { resetRunState, STARTING_LIVES } from '../game/runState'
 
 const FONT = '"Press Start 2P", monospace'
 
 export class VictoryScene extends Phaser.Scene {
-  private gpCursor!: Phaser.GameObjects.Text
-  private menuItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
-  private focusIdx = 0
-  private _navStickHeld = false
-  private _prevBtns: boolean[] = []
+  private nav!: MenuNav
 
   constructor() { super({ key: 'VictoryScene' }) }
 
@@ -20,9 +18,7 @@ export class VictoryScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#000000')
     this.cameras.main.fadeIn(700, 0, 0, 0)
 
-    this.gpCursor = this.add.text(0, 0, '►', {
-      fontSize: '14px', fontFamily: FONT, color: '#ffe066',
-    }).setOrigin(1, 0.5).setDepth(20).setVisible(false)
+    this.nav = new MenuNav(this, { colors: null, cursorColor: '#ffe066' })
 
     this.spawnStars(width, height)
     this.buildUI(cx, cy)
@@ -30,43 +26,6 @@ export class VictoryScene extends Phaser.Scene {
     SoundManager.stopTrack()
     SoundManager.startVictoryMusic()
     this.events.once('shutdown', () => SoundManager.stopVictoryMusic())
-  }
-
-  update() {
-    const pad = this.input.gamepad?.getPad(0)
-    if (!pad?.connected) return
-
-    // Manual just-pressed: compare current vs previous frame
-    const just = (i: number) => {
-      const cur = pad.buttons[i]?.pressed ?? false
-      const was = this._prevBtns[i] ?? false
-      this._prevBtns[i] = cur
-      return cur && !was
-    }
-
-    // D-pad: 12=up, 13=down, 14=left, 15=right
-    if (just(12) || just(14)) this.moveFocus(-1)
-    if (just(13) || just(15)) this.moveFocus(1)
-
-    // Left stick vertical — fallback for D-pad-as-axes on some platforms
-    const ly = pad.leftStick.y
-    if (!this._navStickHeld) {
-      if (ly < -0.5)     { this._navStickHeld = true; this.moveFocus(-1) }
-      else if (ly > 0.5) { this._navStickHeld = true; this.moveFocus(1) }
-    } else if (Math.abs(ly) < 0.25) {
-      this._navStickHeld = false
-    }
-
-    // Confirm: Cross (button 0) or Options/Start (button 9)
-    if (just(0) || just(9)) this.menuItems[this.focusIdx]?.action()
-  }
-
-  private moveFocus(dir: number) {
-    const len = this.menuItems.length
-    if (!len) return
-    this.focusIdx = (this.focusIdx + dir + len) % len
-    const b = this.menuItems[this.focusIdx].text.getBounds()
-    this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true)
   }
 
   private spawnStars(width: number, height: number) {
@@ -127,81 +86,45 @@ export class VictoryScene extends Phaser.Scene {
     const btnContinue = this.menuButton(cx, height - 130, 'CONTINUE EXPLORING').setAlpha(0)
     const btnMenu     = this.menuButton(cx, height -  70, 'MAIN MENU').setAlpha(0)
 
+    // Only the first choice counts (a double press would start two scenes)
+    let leaving = false
     btnMenu.on('pointerdown', () => {
+      if (leaving) return
+      leaving = true
       btnMenu.disableInteractive(); btnContinue.disableInteractive()
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.time.delayedCall(450, () => {
-        this.registry.set('runRooms',              null)
-        this.registry.set('runIndex',              0)
-        this.registry.set('entryDir',              null)
-        this.registry.set('persistedAbilities',    null)
-        this.registry.set('persistedHearts',       null)
-        this.registry.set('persistedBoosts',       null)
-        this.registry.set('score',                 0)
-        this.registry.set('skeletonKingDefeated',  false)
-        this.registry.set('zombieKingDefeated',    false)
-        this.registry.set('celeryManDefeated',     false)
-        this.registry.set('dadSaved',              false)
-        this.registry.set('momSaved',              false)
-        this.registry.set('wormCount',             0)
-        this.registry.set('rolyPolyCount',         0)
-        this.registry.set('pizzasCollected',       0)
-        this.registry.set('furnitureDestroyed',    0)
-        this.registry.set('goldCoins',             0)
-        this.registry.set('level4Problem1', null)
-        this.registry.set('level4Problem2', null)
-        this.registry.set('level4Problem3', null)
-        this.registry.set('level4Problem1Solved', null)
-        this.registry.set('level4Problem2Solved', null)
-        this.registry.set('level4Problem3Solved', null)
-        ;[0, 1, 2, 3].forEach(pid => this.registry.set(`level4DuckBoost_${pid}`, null))
-        this.registry.set('level5Word', null)
-        this.registry.set('level5BugLetters', null)
-        this.registry.set('level5BugPositions', null)
-        this.registry.set('level5CollectedLetters', null)
-        this.registry.set('level5WordSolved', null)
-        this.registry.set('level6Word', null)
-        this.registry.set('level6BugLetters', null)
-        this.registry.set('level6BugPositions', null)
-        this.registry.set('level6CollectedLetters', null)
-        this.registry.set('level6WordSolved', null)
-        this.registry.set('level7Word', null)
-        this.registry.set('level7BugLetters', null)
-        this.registry.set('level7BugPositions', null)
-        this.registry.set('level7CollectedLetters', null)
-        this.registry.set('level7WordSolved', null)
+        resetRunState(this.registry)
         this.scene.start('MenuScene')
       })
     })
 
     btnContinue.on('pointerdown', () => {
+      if (leaving) return
+      leaving = true
       btnMenu.disableInteractive(); btnContinue.disableInteractive()
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.time.delayedCall(450, () => {
-        const rooms = generateRun()
-        this.registry.set('runRooms',         rooms)
-        this.registry.set('runIndex',         5)   // BOSS_THREE_ROOM = Celery Man's Lair
-        this.registry.set('entryDir',         'left')
-        this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts',  null)
-        this.registry.set('lives',            3)
-        this.registry.set('score',            0)
+        // Drop back into the castle after the Celery Man fight; everything won so far is kept
+        this.registry.set('runRooms',             generateRun())
+        this.registry.set('runIndex',             5)   // BOSS_THREE_ROOM = Celery Man's Lair
+        this.registry.set('entryDir',             'left')
         this.registry.set('skeletonKingDefeated', true)
         this.registry.set('zombieKingDefeated',   true)
         this.registry.set('celeryManDefeated',    true)
         this.registry.set('dadSaved',             true)
         this.registry.set('momSaved',             true)
-        this.registry.set('wormCount',            0)
-        this.registry.set('rolyPolyCount',        0)
+        this.registry.set('persistedHearts',      null)
+        this.registry.set('lives',                STARTING_LIVES)
         this.scene.start('GameScene')
       })
     })
 
     // Register buttons for gamepad navigation — Continue is index 0 (default focus)
-    this.menuItems = [
+    this.nav.setItems([
       { text: btnContinue, action: () => btnContinue.emit('pointerdown') },
       { text: btnMenu,     action: () => btnMenu.emit('pointerdown')     },
-    ]
+    ])
 
     // Animation sequence
     this.tweens.add({

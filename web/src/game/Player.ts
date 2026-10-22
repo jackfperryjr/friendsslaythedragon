@@ -8,7 +8,6 @@ const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  readonly playerId: number
   readonly charKey:  string
 
   hearts        = 5
@@ -38,24 +37,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private animPrefix: string | null = null
   private rainbowTimer: Phaser.Time.TimerEvent | null = null
 
-  constructor(scene: Phaser.Scene, x: number, y: number, id: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
     const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
-    const charKey = selectedChars?.[id]
+    const charKey = selectedChars?.[0]
     let resolvedSheet: string | null = null
     let resolvedPrefix: string | null = null
     if (charKey && scene.textures.exists(`sheet-${charKey}`)) {
       resolvedSheet = `sheet-${charKey}`
       resolvedPrefix = `char-${charKey}`
     } else {
-      const defaultSheet = BootScene.getSheetKey(id)
-      if (defaultSheet && scene.textures.exists(defaultSheet)) {
+      const defaultSheet = BootScene.getDefaultSheetKey()
+      if (scene.textures.exists(defaultSheet)) {
         resolvedSheet  = defaultSheet
-        resolvedPrefix = BootScene.getAnimPrefix(id)
+        resolvedPrefix = BootScene.getDefaultAnimPrefix()
       }
     }
-    const textureKey = resolvedSheet ?? BootScene.getFallbackTexture(id)
+    const textureKey = resolvedSheet ?? BootScene.getFallbackTexture()
     super(scene, x, y, textureKey)
-    this.playerId = id
     this.charKey  = charKey ?? ''
     this.animPrefix = resolvedPrefix
 

@@ -1,11 +1,10 @@
 import Phaser from 'phaser'
 import { BootScene } from './BootScene'
-import { NetworkManager } from '../network/NetworkManager'
 import { SoundManager } from '../audio/SoundManager'
+import { loadSettings, updateSettings } from '../game/settings'
 
 const FONT = '"Press Start 2P", monospace'
-const PLAYER_COLORS    = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
-const PLAYER_COLOR_STR = ['#ffe066', '#00ccff', '#44ff88', '#ff8c00']
+const CURSOR_COLOR = 0xffe066
 
 type CharInfo = { key: string; name: string; sheetKey: string; animPrefix: string; previewFrame: number }
 
@@ -16,14 +15,8 @@ const GAP     = 16
 
 export class CharacterSelectScene extends Phaser.Scene {
   private chars: CharInfo[] = []
-  private playerCount = 1
-  private localPlayerId = 0
-  private isMultiplayer = false
-  private selections: number[] = []
-  private confirmed: boolean[] = []
-  private cursors: Phaser.GameObjects.Rectangle[] = []
-  private confirmMarks: Phaser.GameObjects.Text[] = []
-  private playerLabels: Phaser.GameObjects.Text[] = []
+  private selection = 0
+  private cursor!: Phaser.GameObjects.Rectangle
   private cards: { x: number; y: number }[] = []
   private startText!: Phaser.GameObjects.Text
   private backBtn!: Phaser.GameObjects.Text
@@ -37,13 +30,12 @@ export class CharacterSelectScene extends Phaser.Scene {
     SoundManager.whenUnlocked(() => SoundManager.startTrack(this.sound, 'music-title'))
 
     const { width, height } = this.scale
-    this.started       = false
-    this.playerCount   = this.registry.get('playerCount') ?? 1
-    this.localPlayerId = this.registry.get('localPlayerId') ?? 0
-    this.isMultiplayer = this.registry.get('networkManager') != null
-    this.chars         = BootScene.getSelectableCharacters()
-    this.selections    = Array(this.playerCount).fill(0)
-    this.confirmed     = Array(this.playerCount).fill(false)
+    this.started     = false
+    this.backFocused = false
+    this.chars       = BootScene.getSelectableCharacters()
+    // Start on the character picked last time, if it still exists
+    const lastKey: string | null = this.registry.get('selectedChars')?.[0] ?? loadSettings().lastCharacter
+    this.selection   = Math.max(0, this.chars.findIndex(c => c.key === lastKey))
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x080818)
     this.add.rectangle(width / 2, height / 2, width, height, 0x0a0030, 0.45)
@@ -74,17 +66,8 @@ export class CharacterSelectScene extends Phaser.Scene {
         const zone = this.add.zone(cx, rowY, CARD_W, CARD_H).setInteractive().setDepth(8)
         zone.on('pointerdown', () => {
           if (this.started) return
-          // In multiplayer each device only controls its own slot
-          const p = this.isMultiplayer
-            ? this.localPlayerId
-            : this.confirmed.indexOf(false)
-          if (p < 0 || this.confirmed[p]) return
-          if (this.selections[p] === ci) {
-            this.confirm(p)
-          } else {
-            this.selections[p] = ci
-            this.updateCursorPos(p)
-          }
+          if (this.selection === ci) this.confirm()
+          else this.select(ci)
         })
       }
     }
@@ -92,37 +75,15 @@ export class CharacterSelectScene extends Phaser.Scene {
     buildRow(0,         row0Count, row0Y)
     if (row1Count > 0) buildRow(row0Count, row1Count, row1Y)
 
-    // Per-player cursors, labels, confirm marks
-    this.cursors      = []
-    this.confirmMarks = []
-    this.playerLabels = []
-    for (let p = 0; p < this.playerCount; p++) {
-      const cursor = this.add.rectangle(0, 0, CARD_W + 10, CARD_H + 10, 0, 0)
-        .setStrokeStyle(3, PLAYER_COLORS[p])
-        .setDepth(5)
-      this.cursors.push(cursor)
+    this.cursor = this.add.rectangle(0, 0, CARD_W + 10, CARD_H + 10, 0, 0)
+      .setStrokeStyle(3, CURSOR_COLOR)
+      .setDepth(5)
+    this.updateCursorPos()
 
-      const label = this.add.text(0, 0, `P${p + 1}`, {
-        fontSize: '8px', fontFamily: FONT, color: PLAYER_COLOR_STR[p],
-        backgroundColor: '#00000099', padding: { x: 4, y: 2 },
-      }).setOrigin(0.5, 1).setDepth(6)
-      this.playerLabels.push(label)
-
-      const mark = this.add.text(0, 0, '✓', {
-        fontSize: '13px', fontFamily: FONT, color: PLAYER_COLOR_STR[p],
-        stroke: '#000', strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(7).setVisible(false)
-      this.confirmMarks.push(mark)
-
-      this.updateCursorPos(p)
-    }
-
-    // Status text
-    this.startText = this.add.text(width / 2, height - 72, '', {
+    this.startText = this.add.text(width / 2, height - 72, 'TAP A CHARACTER TO CONFIRM', {
       fontSize: '10px', fontFamily: FONT, color: '#556677',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5)
-    this.updateStartText()
 
     this.backBtn = this.add.text(width / 2, height - 38, '< BACK', {
       fontSize: '10px', fontFamily: FONT, color: '#7799aa',
@@ -137,81 +98,32 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.backBtn.on('pointerout',  () => this.backBtn.setStyle({ color: this.backFocused ? '#ffffff' : '#7799aa' }))
     this.backBtn.on('pointerdown', () => this.goBack())
 
-    // Multiplayer: sync confirmations through server
-    const nm: NetworkManager | null = this.registry.get('networkManager') ?? null
-    if (nm && this.isMultiplayer) {
-      nm.onRemoteCharConfirm = (pid, charIdx) => {
-        if (pid < 0 || pid >= this.playerCount) return
-        this.selections[pid] = charIdx
-        this.confirmed[pid] = true
-        this.confirmMarks[pid]?.setVisible(true)
-        this.updateCursorPos(pid)
-        this.updateStartText()
-      }
-      nm.onAllCharsConfirmed = (charIdxs) => {
-        if (this.started) return
-        this.started = true
-        const selectedChars = charIdxs.map(idx => this.chars[idx]?.key ?? this.chars[0].key)
-        this.registry.set('selectedChars', selectedChars)
-        this.cameras.main.fadeOut(400, 0, 0, 0)
-        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
-      }
-    }
-
-    // Keyboard input
+    // Keyboard — WASD and arrow keys both work
     const kb = this.input.keyboard!
-    if (this.isMultiplayer) {
-      // In multiplayer every key controls localPlayerId
-      const lp = this.localPlayerId
-      kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(lp, -1) })
-      kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(lp,  1) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(lp, -1) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(lp,  1) })
-      kb.addKey('W').on('down', () => { if (this.backFocused) this.focusBack(false); else this.confirm(lp) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => { if (this.backFocused) this.focusBack(false); else this.confirm(lp) })
-      kb.addKey('S').on('down', () => this.focusBack(true))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => { if (this.backFocused) this.goBack(); else this.confirm(lp) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
-    } else {
-      kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(0, -1) })
-      kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(0,  1) })
-      kb.addKey('W').on('down', () => {
-        if (this.backFocused) this.focusBack(false)
-        else this.confirm(0)
-      })
-      kb.addKey('S').on('down', () => this.focusBack(true))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => {
-        if (this.backFocused) this.goBack()
-        else this.tryStart()
-      })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
-      if (this.playerCount > 1) {
-        kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(1, -1) })
-        kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(1,  1) })
-        kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => {
-          if (this.backFocused) this.focusBack(false)
-          else this.confirm(1)
-        })
-      }
-    }
+    const onKey = (key: string | number, fn: () => void) => kb.addKey(key).on('down', fn)
+    const left  = () => { if (!this.backFocused) this.move(-1) }
+    const right = () => { if (!this.backFocused) this.move(1) }
+    const up    = () => { if (this.backFocused) this.focusBack(false); else this.confirm() }
+    const down  = () => this.focusBack(true)
+    const enter = () => { if (this.backFocused) this.goBack(); else this.confirm() }
+    onKey('A', left);  onKey(Phaser.Input.Keyboard.KeyCodes.LEFT,  left)
+    onKey('D', right); onKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, right)
+    onKey('W', up);    onKey(Phaser.Input.Keyboard.KeyCodes.UP,    up)
+    onKey('S', down);  onKey(Phaser.Input.Keyboard.KeyCodes.DOWN,  down)
+    onKey(Phaser.Input.Keyboard.KeyCodes.ENTER, enter)
+    onKey(Phaser.Input.Keyboard.KeyCodes.SPACE, enter)
+    onKey(Phaser.Input.Keyboard.KeyCodes.ESC,   () => this.goBack())
 
-    // Gamepad input
+    // Gamepad — any connected controller drives the selection
     this.input.gamepad?.on(
       Phaser.Input.Gamepad.Events.BUTTON_DOWN,
-      (pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
-        const activePads = this.input.gamepad!.gamepads.filter(Boolean)
-        const padIdx = activePads.indexOf(pad)
-        if (padIdx < 0) return
-        const p = this.isMultiplayer ? this.localPlayerId : Math.min(padIdx, this.playerCount - 1)
+      (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
         if (button.index === 13) { this.focusBack(true);  return }
         if (button.index === 12) { if (this.backFocused) this.focusBack(false); return }
-        if (button.index === 14) { if (!this.backFocused) this.move(p, -1) }
-        if (button.index === 15) { if (!this.backFocused) this.move(p,  1) }
-        if (button.index === 0)  { if (this.backFocused) this.goBack(); else this.confirm(p) }
+        if (button.index === 14) left()
+        if (button.index === 15) right()
+        if (button.index === 0 || button.index === 9) enter()
         if (button.index === 1)  this.goBack()
-        if (button.index === 9)  this.tryStart()
       },
     )
   }
@@ -230,81 +142,30 @@ export class CharacterSelectScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(2)
   }
 
-  private move(player: number, dir: number) {
-    if (this.confirmed[player]) return
-    this.selections[player] = (this.selections[player] + dir + this.chars.length) % this.chars.length
-    this.updateCursorPos(player)
-  }
-
-  private confirm(player: number) {
-    if (this.confirmed[player]) {
-      // In multiplayer, once confirmed you can't take it back (server already received it)
-      if (!this.isMultiplayer) {
-        this.confirmed[player] = false
-        this.confirmMarks[player].setVisible(false)
-        this.updateStartText()
-      }
-      return
-    }
-    this.confirmed[player] = true
-    this.confirmMarks[player].setVisible(true)
-    this.updateCursorPos(player)
-    this.updateStartText()
-    if (this.isMultiplayer) {
-      const nm: NetworkManager | null = this.registry.get('networkManager') ?? null
-      nm?.sendCharConfirm(this.selections[this.localPlayerId])
-    } else {
-      if (this.confirmed.every(Boolean)) this.startScene()
-    }
-  }
-
-  private updateCursorPos(player: number) {
-    const card = this.cards[this.selections[player]]
-    if (!card) return
-    this.cursors[player].setPosition(card.x, card.y)
-    this.playerLabels[player].setPosition(card.x, card.y - CARD_H / 2 - 4)
-    this.confirmMarks[player].setPosition(card.x + CARD_W / 2 - 8, card.y - CARD_H / 2 + 8)
-  }
-
-  private updateStartText() {
-    if (this.isMultiplayer) {
-      if (this.confirmed[this.localPlayerId]) {
-        this.startText.setText('CONFIRMED! STARTING...').setColor('#ffe066')
-      } else {
-        this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
-      }
-    } else {
-      if (this.confirmed.every(Boolean)) {
-        this.startText.setText('ALL READY!').setColor('#ffe066')
-      } else if (this.confirmed.some(Boolean)) {
-        this.startText.setText('WAITING FOR ALL PLAYERS...').setColor('#aaccdd')
-      } else {
-        this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
-      }
-    }
-  }
-
-  private tryStart() {
+  private select(idx: number) {
     if (this.started) return
-    if (this.isMultiplayer) {
-      if (!this.confirmed[this.localPlayerId]) this.confirm(this.localPlayerId)
-      return
-    }
-    if (this.playerCount === 1 && !this.confirmed[0]) {
-      this.confirmed[0] = true
-      this.startScene()
-      return
-    }
-    if (this.confirmed.every(Boolean)) this.startScene()
+    this.selection = idx
+    this.updateCursorPos()
   }
 
-  private startScene() {
+  private move(dir: number) {
+    this.select((this.selection + dir + this.chars.length) % this.chars.length)
+  }
+
+  private confirm() {
     if (this.started) return
     this.started = true
-    const selectedChars = this.selections.map(idx => this.chars[idx].key)
-    this.registry.set('selectedChars', selectedChars)
+    this.startText.setText('READY!').setColor('#ffe066')
+    const key = this.chars[this.selection].key
+    this.registry.set('selectedChars', [key])
+    updateSettings({ lastCharacter: key })
     this.cameras.main.fadeOut(400, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+  }
+
+  private updateCursorPos() {
+    const card = this.cards[this.selection]
+    if (card) this.cursor.setPosition(card.x, card.y)
   }
 
   private focusBack(on: boolean) {
@@ -319,9 +180,8 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private goBack() {
     if (this.started) return
-    const nm = this.registry.get('networkManager')
+    this.started = true
     this.cameras.main.fadeOut(300, 0, 0, 0)
-    this.cameras.main.once('camerafadeoutcomplete', () =>
-      this.scene.start(nm ? 'LobbyScene' : 'MenuScene'))
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'))
   }
 }
