@@ -6,6 +6,7 @@ import { resetRunState } from '../game/runState'
 import { setSoundMuted, loadSettings, formatDuration, formatScore } from '../game/settings'
 import { savedRunRoomName, loadSavedRun } from '../game/savedRun'
 import { MenuNav, MenuItem } from '../ui/MenuNav'
+import { onKeyPress } from '../input/keys'
 
 type Screen = 'main' | 'controls' | 'devMenu'
 
@@ -43,7 +44,7 @@ export class MenuScene extends Phaser.Scene {
     this.buildDevMenu()
     this.showScreen('main')
     this.setupControllerStatus()
-    this.input.keyboard?.on('keydown-ESC', () => this.showScreen('main'))
+    onKeyPress(this, e => { if (e.code === 'Escape') this.showScreen('main') })
 
     SoundManager.whenUnlocked(() => {
       SoundManager.playIntroTheme()
@@ -97,7 +98,7 @@ export class MenuScene extends Phaser.Scene {
     const toggleSound  = () => { setSoundMuted(!SoundManager.isMuted()); refreshSound() }
     refreshSound()
     btnSnd.on('pointerdown', toggleSound)
-    this.input.keyboard?.on('keydown-M', refreshSound)  // M toggles sound globally (main.ts)
+    onKeyPress(this, e => { if (e.code === 'KeyM') refreshSound() })  // M toggles sound globally (main.ts)
 
     const startGame = () => this.startGame()
     const continueGame = () => this.continueGame()

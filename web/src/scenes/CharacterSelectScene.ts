@@ -2,6 +2,8 @@ import Phaser from 'phaser'
 import { BootScene } from './BootScene'
 import { SoundManager } from '../audio/SoundManager'
 import { loadSettings, updateSettings } from '../game/settings'
+import { CHARACTER_ABILITIES } from '../game/characters'
+import { onKeyPress } from '../input/keys'
 
 const FONT = '"Press Start 2P", monospace'
 const CURSOR_COLOR = 0xffe066
@@ -19,6 +21,7 @@ export class CharacterSelectScene extends Phaser.Scene {
   private cursor!: Phaser.GameObjects.Rectangle
   private cards: { x: number; y: number }[] = []
   private startText!: Phaser.GameObjects.Text
+  private abilityText!: Phaser.GameObjects.Text
   private backBtn!: Phaser.GameObjects.Text
   private backCursor!: Phaser.GameObjects.Text
   private backFocused = false
@@ -78,6 +81,12 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.cursor = this.add.rectangle(0, 0, CARD_W + 10, CARD_H + 10, 0, 0)
       .setStrokeStyle(3, CURSOR_COLOR)
       .setDepth(5)
+
+    // What the highlighted character's ability does
+    const gridBottom = (row1Count > 0 ? row1Y : row0Y) + CARD_H / 2
+    this.abilityText = this.add.text(width / 2, gridBottom + 14, '', {
+      fontSize: '8px', fontFamily: FONT, color: '#aaccdd', align: 'center', lineSpacing: 6,
+    }).setOrigin(0.5, 0)
     this.updateCursorPos()
 
     this.startText = this.add.text(width / 2, height - 72, 'TAP A CHARACTER TO CONFIRM', {
@@ -99,20 +108,20 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.backBtn.on('pointerdown', () => this.goBack())
 
     // Keyboard — WASD and arrow keys both work
-    const kb = this.input.keyboard!
-    const onKey = (key: string | number, fn: () => void) => kb.addKey(key).on('down', fn)
     const left  = () => { if (!this.backFocused) this.move(-1) }
     const right = () => { if (!this.backFocused) this.move(1) }
     const up    = () => { if (this.backFocused) this.focusBack(false); else this.confirm() }
     const down  = () => this.focusBack(true)
     const enter = () => { if (this.backFocused) this.goBack(); else this.confirm() }
-    onKey('A', left);  onKey(Phaser.Input.Keyboard.KeyCodes.LEFT,  left)
-    onKey('D', right); onKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, right)
-    onKey('W', up);    onKey(Phaser.Input.Keyboard.KeyCodes.UP,    up)
-    onKey('S', down);  onKey(Phaser.Input.Keyboard.KeyCodes.DOWN,  down)
-    onKey(Phaser.Input.Keyboard.KeyCodes.ENTER, enter)
-    onKey(Phaser.Input.Keyboard.KeyCodes.SPACE, enter)
-    onKey(Phaser.Input.Keyboard.KeyCodes.ESC,   () => this.goBack())
+    const keyActions: Record<string, () => void> = {
+      KeyA: left,  ArrowLeft: left,
+      KeyD: right, ArrowRight: right,
+      KeyW: up,    ArrowUp: up,
+      KeyS: down,  ArrowDown: down,
+      Enter: enter, NumpadEnter: enter, Space: enter,
+      Escape: () => this.goBack(),
+    }
+    onKeyPress(this, e => keyActions[e.code]?.())
 
     // Gamepad — any connected controller drives the selection
     this.input.gamepad?.on(
@@ -166,6 +175,8 @@ export class CharacterSelectScene extends Phaser.Scene {
   private updateCursorPos() {
     const card = this.cards[this.selection]
     if (card) this.cursor.setPosition(card.x, card.y)
+    const char = this.chars[this.selection]
+    this.abilityText?.setText((CHARACTER_ABILITIES[char?.key] ?? []).join('\n'))
   }
 
   private focusBack(on: boolean) {

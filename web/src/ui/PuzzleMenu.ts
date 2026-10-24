@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
+import { onKeyPress } from '../input/keys'
 
 const FONT = '"Press Start 2P", monospace'
 
@@ -32,11 +33,26 @@ export class PuzzleMenu {
     return this.objects.length > 0
   }
 
-  private close(keyListeners: KeyListener[]) {
+  private offKeys: (() => void) | null = null
+
+  /** Listens for the menu's keys ('keydown-LEFT' style names) until close(). */
+  private listen(keyListeners: KeyListener[]) {
+    const codeFor = (name: string) => {
+      const k = name.replace('keydown-', '')
+      const named: Record<string, string> = { LEFT: 'ArrowLeft', RIGHT: 'ArrowRight', UP: 'ArrowUp', DOWN: 'ArrowDown', ENTER: 'Enter', SPACE: 'Space' }
+      return named[k] ?? `Key${k}`
+    }
+    const byCode = new Map(keyListeners.map(({ key, fn }) => [codeFor(key), fn]))
+    this.offKeys?.()
+    this.offKeys = onKeyPress(this.scene, e => byCode.get(e.code)?.())
+  }
+
+  private close(_keyListeners: KeyListener[]) {
     this.objects.forEach(o => { if (o.active) o.destroy() })
     this.objects = []
     this.nav = null
-    keyListeners.forEach(({ key, fn }) => this.scene.input.keyboard?.off(key, fn))
+    this.offKeys?.()
+    this.offKeys = null
     this.hooks.resume()
   }
 
@@ -212,7 +228,7 @@ export class PuzzleMenu {
       { key: 'keydown-ENTER', fn: onEnter },
       { key: 'keydown-SPACE', fn: onEnter },
     )
-    keyListeners.forEach(({ key, fn }) => this.scene.input.keyboard?.on(key, fn))
+    this.listen(keyListeners)
 
     this.nav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
   }
@@ -359,7 +375,7 @@ export class PuzzleMenu {
       { key: 'keydown-ENTER', fn: onEnter },
       { key: 'keydown-SPACE', fn: onEnter },
     )
-    keyListeners.forEach(({ key, fn }) => this.scene.input.keyboard?.on(key, fn))
+    this.listen(keyListeners)
     this.nav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
   }
 }

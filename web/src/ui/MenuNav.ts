@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { onKeyPress } from '../input/keys'
 
 const FONT = '"Press Start 2P", monospace'
 
@@ -41,11 +42,10 @@ export class MenuNav {
       fontSize: `${opts.cursorSize ?? 14}px`, fontFamily: FONT, color: opts.cursorColor ?? '#ffe066',
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(opts.depth ?? 1000).setVisible(false)
 
-    scene.input.keyboard?.on('keydown', this.onKey)
+    onKeyPress(scene, this.onKey)
     scene.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPad)
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.pollStick)
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      scene.input.keyboard?.off('keydown', this.onKey)
       scene.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPad)
       scene.events.off(Phaser.Scenes.Events.UPDATE, this.pollStick)
     })
@@ -87,7 +87,7 @@ export class MenuNav {
   }
 
   private onKey = (e: KeyboardEvent) => {
-    if (!this.canUse() || e.repeat) return
+    if (!this.canUse()) return
     switch (e.code) {
       case 'ArrowUp': case 'ArrowLeft': case 'KeyW': case 'KeyA': this.move(-1); break
       case 'ArrowDown': case 'ArrowRight': case 'KeyS': case 'KeyD': this.move(1); break
