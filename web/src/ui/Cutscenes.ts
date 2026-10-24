@@ -3,7 +3,7 @@ import { SoundManager } from '../audio/SoundManager'
 import { resetRunState } from '../game/runState'
 import { MenuNav } from './MenuNav'
 import { clearSavedRun } from '../game/savedRun'
-import { loadSettings, recordRunTime, formatDuration } from '../game/settings'
+import { loadSettings, recordRunTime, recordScore, formatDuration, formatScore } from '../game/settings'
 
 // Full-screen story moments shown by GameScene: boss cutscenes and the end-of-boss / end-of-game screens.
 
@@ -255,6 +255,8 @@ export function showCongratulatoryOverlay(scene: Phaser.Scene) {
 
   const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
   const isNewBest  = recordRunTime(elapsedSec)
+  const score: number = scene.registry.get('score') ?? 0
+  const isHighScore = recordScore(score)
   clearSavedRun()  // the run is finished
   const bestSec    = loadSettings().bestTimeSec ?? elapsedSec
   const timeStr    = formatDuration(elapsedSec) + (isNewBest ? '  NEW BEST!' : '')
@@ -269,6 +271,7 @@ export function showCongratulatoryOverlay(scene: Phaser.Scene) {
     { label: 'Times hit',            value: `${hitsTaken}`               },
     { label: 'Time to Silly Dragon', value: timeStr                      },
     { label: 'Best time',            value: formatDuration(bestSec)      },
+    { label: 'Score',                value: formatScore(score) + (isHighScore ? '  HIGH SCORE!' : '') },
   ]
   stats.forEach(({ label, value }, i) => {
     const y = cy - 100 + i * 26

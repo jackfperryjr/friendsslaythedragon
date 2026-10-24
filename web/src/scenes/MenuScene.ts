@@ -3,7 +3,7 @@ import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
 import type { RoomConfig } from '../levels'
 import { resetRunState } from '../game/runState'
-import { setSoundMuted, loadSettings, formatDuration } from '../game/settings'
+import { setSoundMuted, loadSettings, formatDuration, formatScore } from '../game/settings'
 import { savedRunRoomName, loadSavedRun } from '../game/savedRun'
 import { MenuNav, MenuItem } from '../ui/MenuNav'
 
@@ -84,8 +84,13 @@ export class MenuScene extends Phaser.Scene {
     const btn1P  = this.menuButton(width / 2, height * y, savedRoom ? 'NEW GAME' : 'PLAY')
     const btnCt  = this.menuButton(width / 2, height * (y + ROW), 'CONTROLS')
     const btnSnd = this.menuButton(width / 2, height * (y + ROW * 2), '')
-    const best   = loadSettings().bestTimeSec
-    const bestTx = this.add.text(16, 16, best !== null ? `BEST TIME: ${formatDuration(best)}` : '', {
+    const { bestTimeSec, bestScore } = loadSettings()
+    const records = [
+      bestScore !== null ? `HIGH SCORE: ${formatScore(bestScore)}` : '',
+      bestTimeSec !== null ? `BEST TIME: ${formatDuration(bestTimeSec)}` : '',
+    ].filter(Boolean).join('\n')
+    const bestTx = this.add.text(16, 16, records, {
+      lineSpacing: 6,
       fontSize: '9px', fontFamily: FONT, color: CLR_TITLE, stroke: '#000', strokeThickness: 3,
     }).setOrigin(0, 0)
     const refreshSound = () => btnSnd.setText(SoundManager.isMuted() ? 'SOUND: OFF' : 'SOUND: ON')

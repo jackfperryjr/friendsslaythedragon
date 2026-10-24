@@ -1,13 +1,22 @@
 import Phaser from 'phaser'
 import { MenuNav } from '../ui/MenuNav'
 import { resetRunState } from '../game/runState'
+import { loadSettings, formatScore } from '../game/settings'
 
 const FONT = '"Press Start 2P", monospace'
 
 export class GameOverScene extends Phaser.Scene {
   private nav!: MenuNav
 
+  private score = 0
+  private isNewBest = false
+
   constructor() { super({ key: 'GameOverScene' }) }
+
+  init(data: { score?: number; isNewBest?: boolean }) {
+    this.score = data?.score ?? 0
+    this.isNewBest = !!data?.isNewBest
+  }
 
   create() {
     const { width, height } = this.scale
@@ -44,6 +53,14 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0)
 
     const sep = this.add.rectangle(cx, cy + 20, 400, 1, 0x551122, 0).setOrigin(0.5)
+
+    const best = loadSettings().bestScore ?? 0
+    const scoreTx = this.add.text(cx, cy - 60, `SCORE  ${formatScore(this.score)}`, {
+      fontSize: '16px', fontFamily: FONT, color: '#ffffff', stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setAlpha(0)
+    const bestTx = this.add.text(cx, cy - 25, this.isNewBest ? 'NEW HIGH SCORE!' : `HIGH SCORE  ${formatScore(best)}`, {
+      fontSize: '10px', fontFamily: FONT, color: this.isNewBest ? '#ffe066' : '#aa8899', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setAlpha(0)
 
     const btnAgain = this.menuButton(cx - 165, cy + 115, 'TRY AGAIN').setAlpha(0)
     const btnMenu  = this.menuButton(cx + 165, cy + 115, 'MAIN MENU').setAlpha(0)
@@ -92,6 +109,7 @@ export class GameOverScene extends Phaser.Scene {
           targets: sep, alpha: 0.55, duration: 400, delay: 350,
           onComplete: () => {
             this.tweens.add({ targets: [btnAgain, btnMenu], alpha: 1, duration: 400, delay: 150 })
+            this.tweens.add({ targets: [scoreTx, bestTx], alpha: 1, duration: 400 })
           },
         })
       },

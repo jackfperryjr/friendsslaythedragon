@@ -4,6 +4,8 @@ import { BootScene } from '../scenes/BootScene'
 import { SoundManager } from '../audio/SoundManager'
 
 const MOVE_SPEED        = 350
+type Boost = 'speed' | 'strength' | 'invuln'
+
 const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
 
@@ -95,28 +97,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   jumpReleased() { this.isFloating = false }
 
-  applySpeedBoost(permanent: boolean) {
+  /** Default length of a timed boost (mystery boxes, the shop). */
+  static readonly BOOST_MS = 30000
+
+  // Play time left on each boost, in ms: 0 = inactive, Infinity = permanent.
+  // Counted down in update(), which only runs while the game isn't paused.
+  private boostLeft: Record<Boost, number> = { speed: 0, strength: 0, invuln: 0 }
+
+  /**
+   * `duration`: true = permanent, false = the default 30 s, or a number of ms.
+   * Re-applying a timed boost extends it rather than stacking timers.
+   */
+  applySpeedBoost(duration: boolean | number) {
     this.speedMultiplier = 3.0
     this.speedBoostActive = true
-    if (!permanent) {
-      this.scene.time.delayedCall(30000, () => {
-        if (this.active) { this.speedMultiplier = 1.0; this.speedBoostActive = false }
-      })
-    }
+    this.extendBoost('speed', duration)
   }
 
-  applyStrengthBoost(permanent: boolean) {
+  applyStrengthBoost(duration: boolean | number) {
     this.strengthBoostActive = true
-    if (!permanent) {
-      this.scene.time.delayedCall(30000, () => {
-        if (this.active) this.strengthBoostActive = false
-      })
-    }
+    this.extendBoost('strength', duration)
   }
 
-  applyInvulnerability(permanent: boolean) {
+  applyInvulnerability(duration: boolean | number) {
     this.invulnerabilityActive = true
-    this.rainbowTimer?.remove()
+    this.extendBoost('invuln', duration)
+    if (this.rainbowTimer) return
     let hueIdx = 0
     const rainbow = [0xff6666, 0xff9955, 0xffff55, 0x55ff88, 0x55aaff, 0xcc55ff]
     this.rainbowTimer = this.scene.time.addEvent({
@@ -127,16 +133,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         hueIdx++
       },
     })
-    if (!permanent) {
-      this.scene.time.delayedCall(30000, () => {
-        if (this.active) {
-          this.invulnerabilityActive = false
-          this.rainbowTimer?.remove()
-          this.rainbowTimer = null
-          this.clearTint()
-          this.setAlpha(1)
-        }
-      })
+  }
+
+  /** Ms left on a boost: 0 if inactive, Infinity if permanent. Used to carry boosts between rooms. */
+  boostTimeLeft(boost: Boost): number {
+    return this.boostLeft[boost]
+  }
+
+  private extendBoost(boost: Boost, duration: boolean | number) {
+    const ms = duration === true ? Infinity : duration === false ? Player.BOOST_MS : duration
+    this.boostLeft[boost] = Math.max(this.boostLeft[boost], ms)
+  }
+
+  /** Counts timed boosts down and ends the ones that run out (called every frame from update). */
+  private expireBoosts() {
+    const dt = this.scene.game.loop.delta
+    const done = (b: Boost) => {
+      const left = this.boostLeft[b]
+      if (left <= 0 || left === Infinity) return false
+      this.boostLeft[b] = Math.max(0, left - dt)
+      return this.boostLeft[b] === 0
+    }
+    if (done('speed')) {
+      this.speedBoostActive = false
+      if (this.speedMultiplier === 3.0) this.speedMultiplier = 1.0  // leave transformation speeds alone
+    }
+    if (done('strength')) {
+      this.strengthBoostActive = false
+    }
+    if (done('invuln')) {
+      this.invulnerabilityActive = false
+      this.rainbowTimer?.remove()
+      this.rainbowTimer = null
+      this.clearTint()
+      this.setAlpha(1)
     }
   }
 
@@ -154,6 +184,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update() {
+    this.expireBoosts()
     if (!this.isAlive) return
     const body = this.body as Phaser.Physics.Arcade.Body
     if (this.isConradTransformed) {

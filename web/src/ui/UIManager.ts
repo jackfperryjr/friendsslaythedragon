@@ -15,6 +15,7 @@ export class UIManager {
   private letterSlots: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
   private coinCountText: Phaser.GameObjects.Text | null = null
   private livesText!: Phaser.GameObjects.Text
+  private scoreText!: Phaser.GameObjects.Text
 
   constructor(
     scene: Phaser.Scene,
@@ -123,6 +124,15 @@ export class UIManager {
       }).setOrigin(0.5).setScrollFactor(0).setDepth(21)
       this.letterSlots.push({ bg, text })
     }
+
+    this.scoreText = scene.add.text(LETTER_START_X - 15, LETTER_Y + 26, '', {
+      fontSize: '9px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(21)
+  }
+
+  updateScore(n: number) {
+    this.scoreText.setText(`SCORE ${n.toLocaleString('en-US')}`)
   }
 
   update(player: Player) {
