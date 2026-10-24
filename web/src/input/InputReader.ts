@@ -46,6 +46,7 @@ type Held = Record<'left' | 'right' | 'down' | 'jump' | 'shield' | 'ability' | '
 export class InputReader {
   private keys: Record<Action, Phaser.Input.Keyboard.Key[]>
   private prev: Held | null = null
+  private lastReadAt = performance.now()
 
   constructor(private scene: Phaser.Scene, private touch: TouchControls | null) {
     const kb = scene.input.keyboard
@@ -59,6 +60,11 @@ export class InputReader {
 
   read(): InputFrame {
     const kb = (a: Action) => this.keys[a].some(k => k.isDown)
+    // A tap shorter than one frame is down and up again before we look, so also
+    // count any key that went down since the last read (Key.timeDown is the event time).
+    const since = this.lastReadAt
+    this.lastReadAt = performance.now()
+    const tapped = (a: Action) => this.prev !== null && this.keys[a].some(k => k.timeDown > since)
     const pads = (this.scene.input.gamepad?.gamepads ?? []).filter(p => p?.connected)
     const btn = (i: number) => pads.some(p => !!p.buttons[i]?.pressed)
     const t = this.touch?.read()
@@ -84,12 +90,12 @@ export class InputReader {
     return {
       left: held.left, right: held.right, down: held.down,
       jump: held.jump, shield: held.shield, ability: held.ability,
-      jumpPressed:     edge('jump'),
-      shieldPressed:   edge('shield')  || !!t?.shieldPressed,
-      abilityPressed:  edge('ability') || !!t?.abilityPressed,
-      meleePressed:    edge('melee')   || !!t?.meleePressed,
-      interactPressed: edge('interact') || !!t?.interactPressed,
-      talkPressed:     edge('talk')     || !!t?.interactPressed,
+      jumpPressed:     edge('jump')     || tapped('jump'),
+      shieldPressed:   edge('shield')   || tapped('shield')  || !!t?.shieldPressed,
+      abilityPressed:  edge('ability')  || tapped('ability') || !!t?.abilityPressed,
+      meleePressed:    edge('melee')    || tapped('melee')   || !!t?.meleePressed,
+      interactPressed: edge('interact') || tapped('jump')    || !!t?.interactPressed,
+      talkPressed:     edge('talk')     || tapped('ability') || !!t?.interactPressed,
     }
   }
 }
