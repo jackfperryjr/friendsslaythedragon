@@ -11,10 +11,12 @@ export interface Settings {
   lastCharacter: string | null
   /** Fastest run to the Silly Dragon, in seconds. */
   bestTimeSec: number | null
+  /** Highest score reached in any run (game over or finished). */
+  bestScore: number | null
 }
 
 const STORAGE_KEY = 'friendsslay.settings.v1'
-const DEFAULTS: Settings = { muted: false, lastCharacter: null, bestTimeSec: null }
+const DEFAULTS: Settings = { muted: false, lastCharacter: null, bestTimeSec: null, bestScore: null }
 
 let cache: Settings | null = null
 
@@ -42,6 +44,18 @@ export function recordRunTime(seconds: number): boolean {
   if (best !== null && seconds >= best) return false
   updateSettings({ bestTimeSec: seconds })
   return true
+}
+
+/** Records a run's final score. Returns true if it's a new high score. */
+export function recordScore(score: number): boolean {
+  const best = loadSettings().bestScore
+  if (score <= 0 || (best !== null && score <= best)) return false
+  updateSettings({ bestScore: score })
+  return true
+}
+
+export function formatScore(n: number): string {
+  return n.toLocaleString('en-US')
 }
 
 export function formatDuration(totalSec: number): string {

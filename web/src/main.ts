@@ -42,6 +42,8 @@ document.addEventListener('pointerdown', unlockOnGesture, { passive: true })
 document.addEventListener('keydown',    unlockOnGesture)
 
 const game = new Phaser.Game(config)
+// Dev server only: lets browser tests and the console reach the game (window.__game)
+if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game
 SoundManager.setMuted(loadSettings().muted, game.sound)
 
 // M mutes / unmutes on any screen

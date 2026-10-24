@@ -10,12 +10,13 @@ import { ConradWhiteVehicle, WhiteVehicleType } from '../game/ConradWhiteVehicle
 import { GameManager } from '../game/GameManager'
 import { resetRunState, STARTING_LIVES } from '../game/runState'
 import { saveRun, clearSavedRun } from '../game/savedRun'
-import { setSoundMuted } from '../game/settings'
+import { setSoundMuted, recordScore } from '../game/settings'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
 import { InputReader, InputFrame } from '../input/InputReader'
 import { PuzzleMenu } from '../ui/PuzzleMenu'
 import { MenuNav } from '../ui/MenuNav'
+import { ShopMenu, ShopItem } from '../ui/ShopMenu'
 import { showBossCutscene, showPlaceholderCutscene, showBossDefeatedOverlay, showCongratulatoryOverlay } from '../ui/Cutscenes'
 import { drawOutdoorSky, drawTorches, drawTileDepthShadows, paintOutdoorTiles, drawCastleDoor } from '../game/scenery'
 import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3, WORD_LIST_L4, WORD_LIST_L5 } from '../levels'
@@ -30,9 +31,14 @@ const SCORE_DESTRUCT = 100
 
 /** Player state carried between rooms (see persistPlayerState). */
 interface PersistedBoosts {
-  speedBoostActive: boolean
-  strengthBoostActive: boolean
-  invulnerabilityActive: boolean
+  /** Boost time left in ms: 0 = none, -1 = permanent (JSON can't store Infinity) */
+  speedMs: number
+  strengthMs: number
+  invulnMs: number
+  /** @deprecated pre-feature-set-44 saves stored on/off flags; read as permanent */
+  speedBoostActive?: boolean
+  strengthBoostActive?: boolean
+  invulnerabilityActive?: boolean
   isTruck: boolean
   isTrex: boolean
   hasShadow: boolean
@@ -99,6 +105,7 @@ export class GameScene extends Phaser.Scene {
   private backPortalLbl:    Phaser.GameObjects.Text | null = null
   private hiddenPortalPos:  { x: number; y: number } | null = null
   private pauseNav!: MenuNav
+  private shopMenu!: ShopMenu
   private puzzleMenu!: PuzzleMenu
 
   private collectibleSprites: (Phaser.GameObjects.Image | Phaser.GameObjects.Container)[] = []
@@ -244,6 +251,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.updateLetters(this.registry.get('collectedLetters') ?? [])
     this.ui.updateCoinCount(this.registry.get('goldCoins') ?? 0)
     this.ui.updateLives(this.registry.get('lives') ?? STARTING_LIVES)
+    this.ui.updateScore(this.score)
     this.buildNPCs()
     drawTorches(this, this.cfg, (x, y) => this.isInsideWall(x, y))
     this.buildPauseMenu()
@@ -2006,11 +2014,11 @@ export class GameScene extends Phaser.Scene {
     const p = this.player
     this.registry.set('score', this.score)
     this.registry.set('persistedHearts', p.hearts)
+    const msLeft = (b: 'speed' | 'strength' | 'invuln') => { const t = p.boostTimeLeft(b); return t === Infinity ? -1 : Math.round(t) }
     const boosts: PersistedBoosts = {
-      speedBoostActive:    p.speedBoostActive,
-      strengthBoostActive: p.strengthBoostActive,
-      // Carter's force field toggles invulnerability on and off, so don't carry it over
-      invulnerabilityActive: p.charKey === 'carter' ? false : p.invulnerabilityActive,
+      speedMs:    msLeft('speed'),
+      strengthMs: msLeft('strength'),
+      invulnMs:   msLeft('invuln'),  // only real boosts — Carter's force field pulses aren't tracked here
       isTruck: p.isTruck, isTrex: p.isTrex, hasShadow: p.isShadowForm, isDinoForm: p.isDinoForm,
       carterAbility: p.carterAbility, conradAbility: p.conradAbility, isConradTransformed: p.isConradTransformed,
     }
@@ -2085,14 +2093,19 @@ export class GameScene extends Phaser.Scene {
     // Boosts from level 3 do not carry into level 4 (transformations do)
     if ((this.registry.get('runIndex') ?? 0) === 6) {
       const prev = this.registry.get('persistedBoosts') as PersistedBoosts | null
-      if (prev) this.registry.set('persistedBoosts', { ...prev, speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false })
+      if (prev) this.registry.set('persistedBoosts', { ...prev, speedMs: 0, strengthMs: 0, invulnMs: 0, speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false })
     }
 
     const pb = this.registry.get('persistedBoosts') as PersistedBoosts | null
     if (!pb) return
-    if (pb.speedBoostActive)      p.applySpeedBoost(true)
-    if (pb.strengthBoostActive)   p.applyStrengthBoost(true)
-    if (pb.invulnerabilityActive) p.applyInvulnerability(true)
+    const duration = (ms: number | undefined, legacyFlag: boolean | undefined): boolean | number | null =>
+      ms === -1 || (ms === undefined && legacyFlag) ? true : ms && ms > 0 ? ms : null
+    const speed = duration(pb.speedMs, pb.speedBoostActive)
+    const strength = duration(pb.strengthMs, pb.strengthBoostActive)
+    const invuln = duration(pb.invulnMs, pb.invulnerabilityActive)
+    if (speed !== null)    p.applySpeedBoost(speed)
+    if (strength !== null) p.applyStrengthBoost(strength)
+    if (invuln !== null)   p.applyInvulnerability(invuln)
     if (pb.isTruck && p.charKey === 'eric') {
       p.isTruck = true
       p.setTexture('sheet-eric-transformer', 12)
@@ -3416,12 +3429,12 @@ export class GameScene extends Phaser.Scene {
       if (!p.active || !p.isAlive) return
       p.setData('carterFF', true)
       p.setData('carterFFStart', this.time.now)
-      const wasInvulnerable = p.invulnerabilityActive
       p.invulnerabilityActive = true
       this.time.delayedCall(2000, () => {
         if (!p.active) return
         p.setData('carterFF', false)
-        if (!wasInvulnerable) p.invulnerabilityActive = false
+        // Stay invulnerable if a real invincibility boost is running
+        if (p.boostTimeLeft('invuln') === 0) p.invulnerabilityActive = false
       })
     }
     // First pulse fires immediately on spawn; subsequent pulses every 5 s
@@ -3744,6 +3757,7 @@ export class GameScene extends Phaser.Scene {
   private addScore(pts: number) {
     this.score += pts
     this.registry.set('score', this.score)
+    this.ui?.updateScore(this.score)
   }
 
   private onPlayerDied(p: Player) {
@@ -3774,12 +3788,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private gameOver() {
+    const score = this.score
+    const isNewBest = recordScore(score)
     clearSavedRun()
     resetRunState(this.registry)
     SoundManager.stopTrack()
     this.cameras.main.fadeOut(800, 80, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('GameOverScene')
+      this.scene.start('GameOverScene', { score, isNewBest })
     })
   }
 
@@ -3886,10 +3902,11 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5).setScrollFactor(0)
 
-    const resume  = this.pauseBtn(width / 2, height * 0.50, '▶  RESUME')
-    const sound   = this.pauseBtn(width / 2, height * 0.61, '')
-    const toMenu  = this.pauseBtn(width / 2, height * 0.72, '⌂  MAIN MENU')
-    const escHint = this.add.text(width / 2, height * 0.83, 'ESC / Start to resume  ·  M to mute', {
+    const resume  = this.pauseBtn(width / 2, height * 0.47, '▶  RESUME')
+    const shop    = this.pauseBtn(width / 2, height * 0.56, '$  SHOP')
+    const sound   = this.pauseBtn(width / 2, height * 0.65, '')
+    const toMenu  = this.pauseBtn(width / 2, height * 0.74, '⌂  MAIN MENU')
+    const escHint = this.add.text(width / 2, height * 0.84, 'ESC / Start to resume  ·  M to mute', {
       fontSize: '9px', fontFamily: FONT, color: '#556677',
     }).setOrigin(0.5).setScrollFactor(0)
 
@@ -3906,21 +3923,65 @@ export class GameScene extends Phaser.Scene {
     refreshSound()
     this.input.keyboard?.on('keydown-M', refreshSound)  // M toggles sound globally (main.ts)
 
+    const shopAction = () => {
+      this.pauseNav.enabled = false
+      this.pauseNav.hideCursor()
+      this.pauseContainer.setVisible(false)
+      this.shopMenu.open(this.shopItems(), () => {
+        this.pauseContainer.setVisible(true)
+        this.pauseNav.enabled = true
+      })
+    }
+
     resume.on('pointerdown', resumeAction)
+    shop.on('pointerdown',   shopAction)
     sound.on('pointerdown',  soundAction)
     toMenu.on('pointerdown', menuAction)
 
-    this.pauseContainer = this.add.container(0, 0, [overlay, title, resume, sound, toMenu, escHint])
+    this.pauseContainer = this.add.container(0, 0, [overlay, title, resume, shop, sound, toMenu, escHint])
       .setDepth(100).setVisible(false)
 
     // Keyboard / gamepad navigation, active only while paused. Start toggles pause, so only A activates.
     this.pauseNav = new MenuNav(this, { colors: null, cursorSize: 16, depth: 200, activateButtons: [0] })
     this.pauseNav.setItems([
       { text: resume, action: resumeAction },
+      { text: shop,   action: shopAction   },
       { text: sound,  action: soundAction  },
       { text: toMenu, action: menuAction   },
     ])
     this.pauseNav.enabled = false
+
+    this.shopMenu = new ShopMenu(this, {
+      get:   () => this.registry.get('goldCoins') ?? 0,
+      spend: (n) => {
+        const left = (this.registry.get('goldCoins') ?? 0) - n
+        this.registry.set('goldCoins', left)
+        this.ui.updateCoinCount(left)
+      },
+    })
+  }
+
+  /** What the coin shop sells. Boosts last 30 s of play time (they pause while the game is paused). */
+  private shopItems(): ShopItem[] {
+    const p = this.player
+    const secs = Player.BOOST_MS / 1000
+    return [
+      { name: 'PIZZA', desc: 'Restores one heart', price: 100,
+        unavailable: () => p.hearts >= 5 ? 'HEARTS ALREADY FULL' : null,
+        buy: () => { p.hearts = Math.min(5, p.hearts + 1) } },
+      { name: 'SPEED BOOST', desc: `Run 3x faster for ${secs} s`, price: 150,
+        buy: () => p.applySpeedBoost(Player.BOOST_MS) },
+      { name: 'POWER BOOST', desc: `Defeat enemies in one hit for ${secs} s`, price: 300,
+        buy: () => p.applyStrengthBoost(Player.BOOST_MS) },
+      { name: 'INVINCIBILITY', desc: `Take no damage for ${secs} s`, price: 300,
+        buy: () => p.applyInvulnerability(Player.BOOST_MS) },
+      { name: 'EXTRA LIFE', desc: 'One more try', price: 500,
+        buy: () => {
+          const lives = (this.registry.get('lives') ?? STARTING_LIVES) + 1
+          this.registry.set('lives', lives)
+          this.ui.updateLives(lives)
+        } },
+    ]
   }
 
   private pauseBtn(x: number, y: number, label: string): Phaser.GameObjects.Text {
@@ -3936,6 +3997,7 @@ export class GameScene extends Phaser.Scene {
 
   private togglePause() {
     if (this.puzzleMenu.nav) return  // word menu is modal — ESC/Start cannot interrupt it
+    if (this.shopMenu.isOpen) { this.shopMenu.close(); return }  // ESC/Start backs out of the shop first
     const nowPaused = this.gm.isPlaying()
     if (nowPaused) { this.gm.pause(); SoundManager.pauseTrack() }
     else           { this.gm.resume(); SoundManager.resumeTrack() }
