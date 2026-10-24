@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { generateRun } from '../levels'
 
 // ── SPRITE SHEET CONFIG ───────────────────────────────────────────────────────
 // Step 1: Drop your PNGs into  web/public/assets/
@@ -197,70 +198,16 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('sheet-abby-transformer',       'assets/players/abby_transform.png',         { frameWidth: 64, frameHeight: 64 })
     this.load.image('logo', 'assets/app_icons/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
-    this.load.tilemapTiledJSON('world-map', 'maps/intro_one/map.json')
-    this.load.image('tileset', 'maps/intro_one/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-one',   'maps/boss_intro_one/map.json')
-    this.load.image('boss-tileset-one',          'maps/boss_intro_one/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-two',   'maps/boss_intro_two/map.json')
-    this.load.image('boss-tileset-two',          'maps/boss_intro_two/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-three', 'maps/boss_intro_three/map.json')
-    this.load.image('boss-tileset-three',        'maps/boss_intro_three/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-two',   'maps/intro_two/map.json')
-    this.load.image('tileset-two',               'maps/intro_two/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-three', 'maps/intro_three/map.json')
-    this.load.image('tileset-three',             'maps/intro_three/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-four',  'maps/final_one/map.json')
-    this.load.image('tileset-four',               'maps/final_one/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-five',  'maps/final_two/map.json')
-    this.load.image('tileset-five',               'maps/final_two/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-six',   'maps/final_three/map.json')
-    this.load.image('tileset-six',                'maps/final_three/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-seven',     'maps/final_four/map.json')
-    this.load.image('tileset-seven',                  'maps/final_four/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-level-one', 'maps/level_one/map.json')
-    this.load.image('tileset-level-one',              'maps/level_one/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-level-two',   'maps/level_two/map.json')
-    this.load.image('tileset-level-two',                'maps/level_two/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-level-three', 'maps/level_three/map.json')
-    this.load.image('tileset-level-three',              'maps/level_three/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-level-four',  'maps/level_four/map.json')
-    this.load.image('tileset-level-four',               'maps/level_four/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-level-five',  'maps/level_five/map.json')
-    this.load.image('tileset-level-five',               'maps/level_five/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-final',        'maps/boss_final/map.json')
-    this.load.image('boss-tileset-final',               'maps/boss_final/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-final-final',  'maps/boss_final_final/map.json')
-    this.load.image('boss-tileset-final-final',         'maps/boss_final_final/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-level-one',   'maps/boss_level_one/map.json')
-    this.load.image('boss-tileset-level-one',          'maps/boss_level_one/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-level-two',   'maps/boss_level_two/map.json')
-    this.load.image('boss-tileset-level-two',          'maps/boss_level_two/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-level-four',  'maps/boss_level_four/map.json')
-    this.load.image('boss-tileset-level-four',         'maps/boss_level_four/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map-level-five',  'maps/boss_level_five/map.json')
-    this.load.image('boss-tileset-level-five',         'maps/boss_level_five/spritesheet.png')
-    this.load.audio('music-title',              'assets/music/title_menu.mp3')
-    this.load.audio('music-gameplay',           'assets/music/gameplay_loop.mp3')
-    this.load.audio('music-boss',               'assets/music/boss.mp3')
-    this.load.audio('music-level4',             'assets/music/gameplay_loop1_5.mp3')
-    this.load.audio('music-level5-7',           'assets/music/gameplay_loop2.mp3')
-    this.load.audio('music-boss2',              'assets/music/boss2.mp3')
-    this.load.audio('music-boss3',              'assets/music/boss3.mp3')
-    this.load.audio('music-boss-victory',       'assets/music/boss_victory.mp3')
-    this.load.audio('music-final-boss-victory', 'assets/music/game_victory.mp3')
-    this.load.audio('music-end-game',           'assets/music/end_game.mp3')
-    this.load.image('cutscene-celery-man-down', 'assets/players/celery_man_down.png')
-    this.load.image('cutscene-victory',         'assets/players/victory.png')
-    // Boss victory cutscene images — {char}_{boss}.jpg and {char}01.png in assets/players/
-    const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
-    for (const char of CUTSCENE_CHARS) {
-      // scarlett's skeleton king filename has a typo
-      const skelFile = char === 'scarlett' ? `${char}_skeletong_king.jpg` : `${char}_skeleton_king.jpg`
-      this.load.image(`cutscene-${char}-skeleton_king`, `assets/players/${skelFile}`)
-      this.load.image(`cutscene-${char}-zombie_king`,   `assets/players/${char}_zombie_king.jpg`)
-      // Generic victory pose for new boss rooms
-      this.load.image(`cutscene-${char}-01`, `assets/players/${char}01.png`)
+    // Level maps load when their room is entered (GameScene.preload), except the
+    // first room's, which is tiny and needed right after character select
+    const firstMap = generateRun()[0].worldMap
+    if (firstMap) {
+      this.load.tilemapTiledJSON(firstMap.key, `maps/${firstMap.folder}/map.json`)
+      this.load.image(firstMap.tileKey, `maps/${firstMap.folder}/spritesheet.png`)
     }
+    this.load.audio('music-title',              'assets/music/title_menu.mp3')
+    // The other music tracks and the boss cutscene images load in the background
+    // after startup (BackgroundLoaderScene), so the first screen appears sooner.
   }
 
   create() {

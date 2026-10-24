@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { resetRunState } from '../game/runState'
 import { MenuNav } from './MenuNav'
+import { whenAssetLoaded } from '../scenes/BackgroundLoaderScene'
 import { clearSavedRun } from '../game/savedRun'
 import { loadSettings, recordRunTime, recordScore, formatDuration, formatScore } from '../game/settings'
 
@@ -45,17 +46,20 @@ export function showBossCutscene(scene: Phaser.Scene, suffix: string, onComplete
   const count = chars.length
   chars.forEach((charKey, idx) => {
     const imgKey = `cutscene-${charKey}-${suffix}`
-    if (!scene.textures.exists(imgKey)) return
-    const slotW = width / count
-    const slotX = slotW * (idx + 0.5)
-    const img = scene.add.image(slotX, cy, imgKey)
-      .setScrollFactor(0).setDepth(201).setAlpha(0)
-    const maxH = compact ? height * 0.55 : height
-    const maxW = compact ? slotW * 0.55 : slotW
-    const scale = Math.min(maxW / img.width, maxH / img.height)
-    img.setScale(scale)
-    elements.push(img)
-    scene.tweens.add({ targets: img, alpha: 1, duration: 350, delay: 150 })
+    // Cutscene images load in the background; on a slow connection this appears when it arrives
+    whenAssetLoaded(scene.game, imgKey, () => {
+      if (!bg.active) return
+      const slotW = width / count
+      const slotX = slotW * (idx + 0.5)
+      const img = scene.add.image(slotX, cy, imgKey)
+        .setScrollFactor(0).setDepth(201).setAlpha(0)
+      const maxH = compact ? height * 0.55 : height
+      const maxW = compact ? slotW * 0.55 : slotW
+      const scale = Math.min(maxW / img.width, maxH / img.height)
+      img.setScale(scale)
+      elements.push(img)
+      scene.tweens.add({ targets: img, alpha: 1, duration: 350, delay: 150 })
+    })
   })
 
   // After 3 s, show "press any button" prompt at the top
@@ -92,14 +96,15 @@ export function showPlaceholderCutscene(scene: Phaser.Scene, message: string, on
 
   const elements: Phaser.GameObjects.GameObject[] = [bg]
 
-  if (imageKey && scene.textures.exists(imageKey)) {
+  if (imageKey) whenAssetLoaded(scene.game, imageKey, () => {
+    if (!bg.active) return
     const img = scene.add.image(cx, height / 2, imageKey)
       .setScrollFactor(0).setDepth(201).setAlpha(0)
     const scale = Math.min(width / img.width, height / img.height)
     img.setScale(scale)
     scene.tweens.add({ targets: img, alpha: 1, duration: 300, delay: 100 })
     elements.push(img)
-  }
+  })
 
   const title = scene.add.text(cx, 44, message, {
     fontSize: '16px', fontFamily: FONT, color: '#ffe066',
@@ -139,13 +144,14 @@ export function showBossDefeatedOverlay(scene: Phaser.Scene) {
   scene.tweens.add({ targets: bg, alpha: 1, duration: 250 })
 
   let vImg: Phaser.GameObjects.Image | null = null
-  if (scene.textures.exists('cutscene-victory')) {
-    vImg = scene.add.image(cx, cy, 'cutscene-victory')
+  whenAssetLoaded(scene.game, 'cutscene-victory', () => {
+    if (!bg.active) return
+    const img = scene.add.image(cx, cy, 'cutscene-victory')
       .setScrollFactor(0).setDepth(91).setAlpha(0)
-    const scale = Math.min(width / vImg.width, height / vImg.height)
-    vImg.setScale(scale)
-    scene.tweens.add({ targets: vImg, alpha: 1, duration: 350, delay: 150 })
-  }
+    img.setScale(Math.min(width / img.width, height / img.height))
+    scene.tweens.add({ targets: img, alpha: 1, duration: 350, delay: 150 })
+    vImg = img
+  })
 
   const title = scene.add.text(cx, cy - 110, 'BOSS DEFEATED!', {
     fontSize: '28px', fontFamily: FONT, color: '#ffe066',

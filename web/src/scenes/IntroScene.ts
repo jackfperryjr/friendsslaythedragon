@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { startBackgroundLoading } from './BackgroundLoaderScene'
 
 const FONT    = '"Press Start 2P", monospace'
 const FADE_MS = 600
@@ -19,6 +20,7 @@ export class IntroScene extends Phaser.Scene {
   }
 
   create() {
+    startBackgroundLoading(this)  // music + cutscene images, now that the intro's own images are in
     this.cameras.main.setBackgroundColor('#000000')
     this.cameras.main.fadeIn(500, 0, 0, 0)
     this.skipped = false

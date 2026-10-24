@@ -94,7 +94,11 @@ export interface RoomConfig {
   starOrb?: { x: number; y: number }  // explicit star-burst orb position (overrides starOrbSide)
   roomImage?: string
   worldHeight?: number
-  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
+  worldMap?: {
+    key: string; tileKey: string; tilesetName: string
+    /** Folder under public/maps/ holding map.json and spritesheet.png (loaded when the room is entered) */
+    folder: string
+    section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
   rightExitX?: number             // trigger right exit at this X instead of worldWidth
   rightExitAdvance?: number       // how many run steps the right exit advances (default 1); use 2 to skip an interleaved boss room
   rightExitYRange?: { min: number; max: number }  // optional Y bounds for rightExitX trigger
@@ -132,27 +136,27 @@ export interface RoomConfig {
 
 const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
 const SANCTUM = { tileset: 'tile-castle', bgFar: 'bg-sanctum',     bgMid: 'bg-sanctum-glow' }
-const MAP       = { key: 'world-map',      tileKey: 'tileset',           tilesetName: 'spritefusion' } as const
-const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tilesetName: 'spritefusion' } as const
-const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
-const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
-const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
-const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion' } as const
-const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',        tilesetName: 'spritefusion' } as const
-const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion' } as const
-const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_ONE  = { key: 'world-map-level-one', tileKey: 'tileset-level-one', tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_TWO   = { key: 'world-map-level-two',   tileKey: 'tileset-level-two',   tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_THREE = { key: 'world-map-level-three', tileKey: 'tileset-level-three', tilesetName: 'spritefusion' } as const
-const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion' } as const
-const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion' } as const
-const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_FOUR  = { key: 'world-map-level-four',  tileKey: 'tileset-level-four',  tilesetName: 'spritefusion' } as const
-const MAP_LEVEL_FIVE  = { key: 'world-map-level-five',  tileKey: 'tileset-level-five',  tilesetName: 'spritefusion' } as const
-const BOSS_MAP_LEVEL_ONE  = { key: 'boss-map-level-one',  tileKey: 'boss-tileset-level-one',  tilesetName: 'spritefusion' } as const
-const BOSS_MAP_LEVEL_TWO  = { key: 'boss-map-level-two',  tileKey: 'boss-tileset-level-two',  tilesetName: 'spritefusion' } as const
-const BOSS_MAP_LEVEL_FOUR = { key: 'boss-map-level-four', tileKey: 'boss-tileset-level-four', tilesetName: 'spritefusion' } as const
-const BOSS_MAP_LEVEL_FIVE = { key: 'boss-map-level-five', tileKey: 'boss-tileset-level-five', tilesetName: 'spritefusion' } as const
+const MAP       = { key: 'world-map',      tileKey: 'tileset',           tilesetName: 'spritefusion', folder: 'intro_one' } as const
+const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tilesetName: 'spritefusion', folder: 'boss_intro_one' } as const
+const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion', folder: 'intro_two' } as const
+const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion', folder: 'boss_intro_two' } as const
+const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion', folder: 'intro_three' } as const
+const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion', folder: 'final_one' } as const
+const MAP_FIVE       = { key: 'world-map-five',  tileKey: 'tileset-five',        tilesetName: 'spritefusion', folder: 'final_two' } as const
+const MAP_SIX        = { key: 'world-map-six',   tileKey: 'tileset-six',         tilesetName: 'spritefusion', folder: 'final_three' } as const
+const MAP_SEVEN      = { key: 'world-map-seven', tileKey: 'tileset-seven',       tilesetName: 'spritefusion', folder: 'final_four' } as const
+const MAP_LEVEL_ONE  = { key: 'world-map-level-one', tileKey: 'tileset-level-one', tilesetName: 'spritefusion', folder: 'level_one' } as const
+const MAP_LEVEL_TWO   = { key: 'world-map-level-two',   tileKey: 'tileset-level-two',   tilesetName: 'spritefusion', folder: 'level_two' } as const
+const MAP_LEVEL_THREE = { key: 'world-map-level-three', tileKey: 'tileset-level-three', tilesetName: 'spritefusion', folder: 'level_three' } as const
+const BOSS_MAP_FINAL = { key: 'boss-map-final',  tileKey: 'boss-tileset-final',  tilesetName: 'spritefusion', folder: 'boss_final' } as const
+const BOSS_MAP_THREE      = { key: 'boss-map-three',       tileKey: 'boss-tileset-three',       tilesetName: 'spritefusion', folder: 'boss_intro_three' } as const
+const BOSS_MAP_FINAL_FINAL = { key: 'boss-map-final-final', tileKey: 'boss-tileset-final-final', tilesetName: 'spritefusion', folder: 'boss_final_final' } as const
+const MAP_LEVEL_FOUR  = { key: 'world-map-level-four',  tileKey: 'tileset-level-four',  tilesetName: 'spritefusion', folder: 'level_four' } as const
+const MAP_LEVEL_FIVE  = { key: 'world-map-level-five',  tileKey: 'tileset-level-five',  tilesetName: 'spritefusion', folder: 'level_five' } as const
+const BOSS_MAP_LEVEL_ONE  = { key: 'boss-map-level-one',  tileKey: 'boss-tileset-level-one',  tilesetName: 'spritefusion', folder: 'boss_level_one' } as const
+const BOSS_MAP_LEVEL_TWO  = { key: 'boss-map-level-two',  tileKey: 'boss-tileset-level-two',  tilesetName: 'spritefusion', folder: 'boss_level_two' } as const
+const BOSS_MAP_LEVEL_FOUR = { key: 'boss-map-level-four', tileKey: 'boss-tileset-level-four', tilesetName: 'spritefusion', folder: 'boss_level_four' } as const
+const BOSS_MAP_LEVEL_FIVE = { key: 'boss-map-level-five', tileKey: 'boss-tileset-level-five', tilesetName: 'spritefusion', folder: 'boss_level_five' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: maps/intro_one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
