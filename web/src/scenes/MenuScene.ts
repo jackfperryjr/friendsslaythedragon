@@ -4,6 +4,7 @@ import { generateRun } from '../levels'
 import type { RoomConfig } from '../levels'
 import { resetRunState } from '../game/runState'
 import { setSoundMuted, loadSettings, formatDuration } from '../game/settings'
+import { savedRunRoomName, loadSavedRun } from '../game/savedRun'
 import { MenuNav, MenuItem } from '../ui/MenuNav'
 
 type Screen = 'main' | 'controls' | 'devMenu'
@@ -74,13 +75,19 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    const btn1P  = this.menuButton(width / 2, height * 0.79, 'PLAY')
+    // CONTINUE only appears when a run is saved; the other buttons shift down to make room
+    const savedRoom = savedRunRoomName()
+    const ROW = 0.045
+    let y = savedRoom ? 0.775 : 0.79
+    const btnCont = savedRoom ? this.menuButton(width / 2, height * y, `CONTINUE · ${savedRoom.toUpperCase()}`) : null
+    if (btnCont) y += ROW
+    const btn1P  = this.menuButton(width / 2, height * y, savedRoom ? 'NEW GAME' : 'PLAY')
+    const btnCt  = this.menuButton(width / 2, height * (y + ROW), 'CONTROLS')
+    const btnSnd = this.menuButton(width / 2, height * (y + ROW * 2), '')
     const best   = loadSettings().bestTimeSec
-    const bestTx = this.add.text(width / 2, height * 0.74, best !== null ? `BEST TIME TO THE DRAGON: ${formatDuration(best)}` : '', {
+    const bestTx = this.add.text(16, 16, best !== null ? `BEST TIME: ${formatDuration(best)}` : '', {
       fontSize: '9px', fontFamily: FONT, color: CLR_TITLE, stroke: '#000', strokeThickness: 3,
-    }).setOrigin(0.5)
-    const btnCt  = this.menuButton(width / 2, height * 0.84, 'CONTROLS')
-    const btnSnd = this.menuButton(width / 2, height * 0.89, '')
+    }).setOrigin(0, 0)
     const refreshSound = () => btnSnd.setText(SoundManager.isMuted() ? 'SOUND: OFF' : 'SOUND: ON')
     const toggleSound  = () => { setSoundMuted(!SoundManager.isMuted()); refreshSound() }
     refreshSound()
@@ -88,8 +95,10 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-M', refreshSound)  // M toggles sound globally (main.ts)
 
     const startGame = () => this.startGame()
+    const continueGame = () => this.continueGame()
     const goControls = () => this.showScreen('controls')
 
+    btnCont?.on('pointerdown', continueGame)
     btn1P.on('pointerdown',  startGame)
     btnCt.on('pointerdown',  goControls)
 
@@ -99,12 +108,14 @@ export class MenuScene extends Phaser.Scene {
 
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     const gpItems: MenuItem[] = [
+      ...(btnCont ? [{ text: btnCont, action: continueGame }] : []),
       { text: btn1P,  action: startGame  },
       { text: btnCt,  action: goControls },
       { text: btnSnd, action: toggleSound },
     ]
 
     items.push(bestTx, btn1P, btnCt, btnSnd, tip)
+    if (btnCont) items.push(btnCont)
 
     if (isLocalhost) {
       const goDevMenu = () => this.showScreen('devMenu')
@@ -259,6 +270,14 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('entryDir',    null)
     this.cameras.main.fadeOut(400, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
+  }
+
+  /** Resumes the run saved in the browser, at the start of the room the player last entered. */
+  private continueGame() {
+    SoundManager.unlock()
+    if (!loadSavedRun(this.registry)) { this.scene.restart(); return }
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
   }
 
   private startGame() {

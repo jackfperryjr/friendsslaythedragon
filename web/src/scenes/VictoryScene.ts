@@ -3,6 +3,7 @@ import { MenuNav } from '../ui/MenuNav'
 import { SoundManager } from '../audio/SoundManager'
 import { generateRun } from '../levels'
 import { resetRunState, STARTING_LIVES } from '../game/runState'
+import { clearSavedRun } from '../game/savedRun'
 
 const FONT = '"Press Start 2P", monospace'
 
@@ -23,6 +24,7 @@ export class VictoryScene extends Phaser.Scene {
     this.spawnStars(width, height)
     this.buildUI(cx, cy)
 
+    clearSavedRun()  // the run is won; "Continue Exploring" starts a new save on its first room
     SoundManager.stopTrack()
     SoundManager.startVictoryMusic()
     this.events.once('shutdown', () => SoundManager.stopVictoryMusic())

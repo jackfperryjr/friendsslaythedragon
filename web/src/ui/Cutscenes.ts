@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { resetRunState } from '../game/runState'
 import { MenuNav } from './MenuNav'
+import { clearSavedRun } from '../game/savedRun'
 import { loadSettings, recordRunTime, formatDuration } from '../game/settings'
 
 // Full-screen story moments shown by GameScene: boss cutscenes and the end-of-boss / end-of-game screens.
@@ -254,6 +255,7 @@ export function showCongratulatoryOverlay(scene: Phaser.Scene) {
 
   const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
   const isNewBest  = recordRunTime(elapsedSec)
+  clearSavedRun()  // the run is finished
   const bestSec    = loadSettings().bestTimeSec ?? elapsedSec
   const timeStr    = formatDuration(elapsedSec) + (isNewBest ? '  NEW BEST!' : '')
 
