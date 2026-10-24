@@ -6,6 +6,7 @@ import { Destructible } from '../game/Destructible'
 import { Mimic } from '../game/Mimic'
 import { GameManager } from '../game/GameManager'
 import { resetRunState, STARTING_LIVES } from '../game/runState'
+import { canSpellWord, assignLetterBugLetters, makeMathProblem } from '../game/puzzles'
 import { saveRun, clearSavedRun } from '../game/savedRun'
 import { setSoundMuted, recordScore } from '../game/settings'
 import { UIManager } from '../ui/UIManager'
@@ -745,7 +746,7 @@ export class GameScene extends Phaser.Scene {
     const duck = this.duckNpcSprite
     const word: string = this.registry.get(`level${level}Word`) ?? ''
     const collected: string[] = this.registry.get(`level${level}CollectedLetters`) ?? []
-    const ready = !!(word && this.canSpellWord(word, collected))
+    const ready = !!(word && canSpellWord(word, collected))
 
     // Swap the bubble text when the player gathers the last letter
     if (this.duckBubble?.active) {
@@ -1081,25 +1082,6 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private canSpellWord(word: string, collected: string[]): boolean {
-    const pool = [...collected]
-    for (const letter of word.split('')) {
-      const idx = pool.indexOf(letter)
-      if (idx === -1) return false
-      pool.splice(idx, 1)
-    }
-    return true
-  }
-
-  private assignLetterBugLetters(word: string, numBugs: number): string[] {
-    const wordLetters = word.split('')
-    const usedSet = new Set(wordLetters)
-    const distPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(l => !usedSet.has(l))
-    Phaser.Utils.Array.Shuffle(distPool)
-    const extras = distPool.slice(0, Math.max(0, numBugs - wordLetters.length))
-    return Phaser.Utils.Array.Shuffle([...wordLetters, ...extras]) as string[]
-  }
-
   /** Picks a word (and scatters its bugs) for the level this room hosts, and generates math problems. */
   private initLevelWords() {
     if (this.cfg.isBossRoom) return
@@ -1116,7 +1098,7 @@ export class GameScene extends Phaser.Scene {
       // Levels 1-3: 3, 4 and 5-letter words, TOTAL_LETTER_BUGS bugs
       const word = pick([WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3][kl - 1])
       reg.set(`level${kl}Word`, word)
-      reg.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      reg.set(`level${kl}BugLetters`, assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
       scatterBugs(kl, TOTAL_LETTER_BUGS)
     }
     if (kl !== undefined && kl >= 5 && !reg.get(`level${kl}WordSolved`)) {
@@ -1125,7 +1107,7 @@ export class GameScene extends Phaser.Scene {
       if (!reg.get(`level${kl}Word`) || !existingLetters || existingLetters.length !== 7) {
         const word = pick(WORD_LIST_L5)
         reg.set(`level${kl}Word`, word)
-        reg.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 7))
+        reg.set(`level${kl}BugLetters`, assignLetterBugLetters(word, 7))
         reg.set(`level${kl}CollectedLetters`, null)
         scatterBugs(kl, 7)
       }
@@ -1133,11 +1115,7 @@ export class GameScene extends Phaser.Scene {
 
     const math = this.cfg.mathDucks
     if (math && !reg.get(`${math.prefix}1`)) {
-      const genAdd = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
-      const genSub = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
-      const genMul = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
-      const gens = [genAdd, genSub, genMul]
-      for (let i = 1; i <= math.count; i++) reg.set(`${math.prefix}${i}`, gens[(i - 1) % gens.length]())
+      for (let i = 1; i <= math.count; i++) reg.set(`${math.prefix}${i}`, makeMathProblem(i))
     }
 
     // Disconnected levels (halls): 6-letter words, 6 bugs
@@ -1146,7 +1124,7 @@ export class GameScene extends Phaser.Scene {
           this.cfg.items.some(i => i.type === 'letter-bug' && i.keyLevel === kl)) {
         const word = WORD_LIST_L4[Math.floor(Math.random() * WORD_LIST_L4.length)]
         this.registry.set(`level${kl}Word`, word)
-        this.registry.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 6))
+        this.registry.set(`level${kl}BugLetters`, assignLetterBugLetters(word, 6))
         if (this.cfg.letterBugPool) {
           const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, 6)
           this.registry.set(`level${kl}BugPositions`, positions)
@@ -1814,7 +1792,7 @@ export class GameScene extends Phaser.Scene {
       const targetWord: string = this.registry.get(`level${keyLevel}Word`) ?? ''
       const collected: string[] = this.registry.get(this.collectedLettersKey(keyLevel)) ?? []
 
-      if (!targetWord || !this.canSpellWord(targetWord, collected)) {
+      if (!targetWord || !canSpellWord(targetWord, collected)) {
         this.showPopup(x, y, 'Need letter bugs!', '#ff8888')
       } else {
         this.showWordMenu(x, y, keyLevel, () => {
@@ -1851,7 +1829,7 @@ export class GameScene extends Phaser.Scene {
       if (!container.active) return
       const collected: string[] = this.registry.get(this.collectedLettersKey(keyLevel)) ?? []
       const word: string        = this.registry.get(`level${keyLevel}Word`) ?? ''
-      txt.setText(word && this.canSpellWord(word, collected)
+      txt.setText(word && canSpellWord(word, collected)
         ? 'Break the jar!\nThat opens the\nmenu to select\nthe word.'
         : 'Find all of the\ncorrect letters\nto break the jar!')
     }

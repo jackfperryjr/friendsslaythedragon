@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
 import { onKeyPress } from '../input/keys'
+import { makeDistractors } from '../game/puzzles'
 
 const FONT = '"Press Start 2P", monospace'
 
@@ -233,22 +234,6 @@ export class PuzzleMenu {
     this.nav = { up: onLeft, down: onRight, left: onLeft, right: onRight, confirm: onEnter }
   }
 
-  private makeDistractors(correct: number, count: number): number[] {
-    const used = new Set<number>([correct])
-    const dists: number[] = []
-    let offset = 1
-    while (dists.length < count && offset < 30) {
-      if (correct - offset > 0 && !used.has(correct - offset)) {
-        dists.push(correct - offset); used.add(correct - offset)
-      }
-      if (dists.length < count && !used.has(correct + offset)) {
-        dists.push(correct + offset); used.add(correct + offset)
-      }
-      offset++
-    }
-    return dists
-  }
-
   /** Math challenge: pick the right answer to `question` from four choices. */
   showArithmetic(question: string, correct: number, onCorrect: () => void) {
     if (this.isOpen) return
@@ -258,7 +243,7 @@ export class PuzzleMenu {
     const TILE = 64
     const GAP  = 16
 
-    const distractors = this.makeDistractors(correct, 3)
+    const distractors = makeDistractors(correct, 3)
     const choices = Phaser.Utils.Array.Shuffle([correct, ...distractors]) as number[]
     const correctIdx = choices.indexOf(correct)
 

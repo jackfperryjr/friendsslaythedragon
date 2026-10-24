@@ -1,0 +1,7 @@
+{
+  // Tests run under Node (Vitest), so they get Node's types; the game code doesn't.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node", "vite/client"] },
+  "include": ["src", "vitest.config.ts"],
+  "exclude": []
+}
