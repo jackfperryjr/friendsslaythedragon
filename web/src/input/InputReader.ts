@@ -1,4 +1,4 @@
-import Phaser from 'phaser'
+import type Phaser from 'phaser'
 import type { TouchControls } from '../ui/TouchControls'
 
 /**
@@ -64,7 +64,8 @@ export class InputReader {
     // count any key that went down since the last read (Key.timeDown is the event time).
     const since = this.lastReadAt
     this.lastReadAt = performance.now()
-    const tapped = (a: Action) => this.prev !== null && this.keys[a].some(k => k.timeDown > since)
+    const firstRead = this.prev === null
+    const tapped = (a: Action) => !firstRead && this.keys[a].some(k => k.timeDown > since)
     const pads = (this.scene.input.gamepad?.gamepads ?? []).filter(p => p?.connected)
     const btn = (i: number) => pads.some(p => !!p.buttons[i]?.pressed)
     const t = this.touch?.read()

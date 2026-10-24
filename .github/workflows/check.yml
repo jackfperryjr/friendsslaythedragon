@@ -1,7 +1,7 @@
 name: Check
 
-# Typecheck and build every pull request so broken code is caught before it
-# reaches main (deploy.yml only runs after merging).
+# Typecheck, test and build every pull request so broken code is caught before
+# it reaches main (deploy.yml only runs after merging).
 on:
   pull_request:
 
@@ -21,6 +21,14 @@ jobs:
         run: npm ci
         working-directory: web
 
-      - name: Typecheck and build
+      - name: Typecheck (game and tests)
+        run: npm run typecheck
+        working-directory: web
+
+      - name: Unit tests
+        run: npm test
+        working-directory: web
+
+      - name: Build
         run: npm run build
         working-directory: web
