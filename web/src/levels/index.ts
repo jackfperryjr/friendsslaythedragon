@@ -1,15 +1,9 @@
-import { AbilityType, DamageType } from '../types'
+import { AbilityType } from '../types'
 
 export type ExitDir = 'left' | 'right' | 'top' | 'bottom'
 
 export interface Platform    { x: number; y: number; w: number; h: number }
-export interface SlopeConfig { x1: number; y1: number; x2: number; y2: number }
 export interface EnemySpawn  { x: number; y: number; ability: AbilityType }
-export interface DestructibleSpawn {
-  x: number; y: number; w: number; h: number; health: number
-  resistances?: Partial<Record<DamageType, number>>; ability: AbilityType
-  furnitureType?: 'bookcase' | 'table' | 'chest'
-}
 export interface CrateSpawn  { x: number; y: number }
 
 export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'letter-bug' | 'invulnerability' | 'key-jar' | 'key' | 'gold-coin'
@@ -43,18 +37,33 @@ export interface SpikeBallSpawn {
   count?: number      // number of balls to spawn at this position (default 1)
 }
 
+/** Story NPCs and puzzle ducks a room hosts (built by GameScene.buildNPCs). */
+export type RoomNpcs = 'castle-intro' | 'level2-intro' | 'level3' | 'level4' | 'level5' | 'level6' | 'level7'
+
+/** A registry flag that must be set before something opens, and the hint shown until then. */
+export interface Requirement { flag: string; hint: string }
+
 export interface RoomConfig {
   name: string
+
+  // ── Level rules (keep these here, not keyed off the room's position in the run) ──
+  npcs?: RoomNpcs
+  /** Hosts this level's letter-bug word: picks the word and scatters the bugs on first entry */
+  wordLevel?: number
+  /** Math ducks: problems are generated on first entry, stored as `${prefix}1` .. `${prefix}${count}` */
+  mathDucks?: { prefix: string; count: number }
+  /** The boss portal stays shut until this is solved */
+  portalRequires?: Requirement
+  /** The right-hand exit stays shut until this is solved */
+  rightExitRequires?: Requirement
+  /** Speed / power / invincibility boosts end on entering this room (transformations stay) */
+  resetsBoosts?: boolean
+
   worldWidth: number
-  tileset: string
-  bgFar: string
-  bgMid: string
   exits: ExitDir[]
   exitPositions?: Partial<Record<ExitDir, number>>
   barrierExit?: { x: number; y: number }
   barrierVisual?: { x: number; y: number; w: number; h: number }
-  isTutorial?: boolean
-  isThrone?: boolean
   isBossRoom?: boolean
   bossHp?: number
   bossName?: string
@@ -92,7 +101,6 @@ export interface RoomConfig {
   defaultSpawn?: { x: number; y: number }  // spawn position when entryDir is null
   starOrbSide?: 'left' | 'right'  // which corner the star-burst orb appears in
   starOrb?: { x: number; y: number }  // explicit star-burst orb position (overrides starOrbSide)
-  roomImage?: string
   worldHeight?: number
   worldMap?: {
     key: string; tileKey: string; tilesetName: string
@@ -122,9 +130,7 @@ export interface RoomConfig {
     overlay?: string[]    // decorative top layers (depth 3+)
   }
   platforms: Platform[]
-  slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
-  destructibles: DestructibleSpawn[]
   furnitureSpawns?: FurnitureSpawn[]
   spikeFloors?: SpikeFloorSpawn[]
   spikeBalls?: SpikeBallSpawn[]
@@ -134,8 +140,6 @@ export interface RoomConfig {
   mimicSpawns?:   Array<{x: number, y: number}>
 }
 
-const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
-const SANCTUM = { tileset: 'tile-castle', bgFar: 'bg-sanctum',     bgMid: 'bg-sanctum-glow' }
 const MAP       = { key: 'world-map',      tileKey: 'tileset',           tilesetName: 'spritefusion', folder: 'intro_one' } as const
 const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tilesetName: 'spritefusion', folder: 'boss_intro_one' } as const
 const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion', folder: 'intro_two' } as const
@@ -163,7 +167,8 @@ const BOSS_MAP_LEVEL_FIVE = { key: 'boss-map-level-five', tileKey: 'boss-tileset
 
 const WORLD_ROOM: RoomConfig = {
   name: 'The Castle',
-  ...HALL,
+  npcs: 'castle-intro',
+  wordLevel: 1,
   worldWidth:  174 * 32,   // 5568
   worldHeight: 117 * 32,   // 3744
   worldMap: { ...MAP },
@@ -219,7 +224,6 @@ const WORLD_ROOM: RoomConfig = {
     { x: 2791, y: 2031, ability: AbilityType.Bat },
     { x: 2855, y: 2031, ability: AbilityType.Bat },
   ],
-  destructibles: [],
   furnitureSpawns: [
     // tables and chests shifted +5 y to sit on floor; floating table at x=2742 removed
     { type: 'table',    x:  336, y: 1290 },
@@ -287,7 +291,6 @@ const WORLD_ROOM: RoomConfig = {
 
 const BOSS_TILEMAP_ROOM: RoomConfig = {
   name: 'Skeleton King\'s Lair',
-  ...SANCTUM,
   worldWidth:  50 * 32,   // 1600
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP },
@@ -309,7 +312,6 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
     { x: 800,  y: 1584, w: 1600, h: 32 },  // bottom seal
   ],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'bookcase', x: 200, scanFromY: 1280 },
     { type: 'table',    x: 350, scanFromY: 1280 },
@@ -332,7 +334,8 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
 
 const LEVEL2_WORLD_ROOM: RoomConfig = {
   name: 'The Forsaken Realm',
-  ...HALL,
+  npcs: 'level2-intro',
+  wordLevel: 2,
   worldWidth:  174 * 32,   // 5568
   worldHeight: 117 * 32,   // 3744
   worldMap: { ...MAP_TWO },
@@ -364,7 +367,6 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { x: 5044, y:  860, ability: AbilityType.Bat },
     { x: 5100, y:  860, ability: AbilityType.Bat },
   ],
-  destructibles: [],
   furnitureSpawns: [
     // Bottom floor
     { type: 'table',    x:  481, y: 3580 },
@@ -421,7 +423,6 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
 
 const LEVEL2_BOSS_ROOM: RoomConfig = {
   name: "Zombie King's Lair",
-  ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
   worldMap: { ...BOSS_MAP_TWO },
@@ -443,7 +444,6 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   starOrb: { x: 226, y: 174 },
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -457,7 +457,9 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
 
 const LEVEL3_WORLD_ROOM: RoomConfig = {
   name: 'The Abyss',
-  ...HALL,
+  npcs: 'level3',
+  wordLevel: 3,
+  portalRequires: { flag: 'level3WordSolved', hint: 'SOLVE THE DUCK PUZZLE!' },
   worldWidth:  174 * 32,  // 5568
   worldHeight: 183 * 32,  // 5856
   worldMap: { ...MAP_THREE },
@@ -472,7 +474,6 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
     { x: 5556, y: 2928, w: 24, h: 5856 }, // right-edge wall prevents falling off world boundary
   ],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest', x: 680, y: 686, pizzaDrop: true },
   ],
@@ -516,7 +517,6 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
 
 const BOSS_THREE_ROOM: RoomConfig = {
   name: "Celery Man's Lair",
-  ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
   worldMap: { ...BOSS_MAP_THREE },
@@ -543,7 +543,6 @@ const BOSS_THREE_ROOM: RoomConfig = {
     { x: 16, y: 640, w: 32, h: 130 },   // seal left exit
   ],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -555,7 +554,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
 
 const LEVEL_ONE_ROOM: RoomConfig = {
   name: 'The Red Halls',
-  ...HALL,
+  resetsBoosts: true,  // boosts from level 3 don't carry into the halls
   worldWidth:  407 * 32,  // 13024
   worldHeight: 156 * 32,  // 4992
   worldMap: MAP_LEVEL_ONE,
@@ -598,7 +597,6 @@ const LEVEL_ONE_ROOM: RoomConfig = {
     { x:  9500, y: 3100, ability: AbilityType.Fire },
     { x: 10400, y: 3100, ability: AbilityType.Lightning },
   ],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest',    x:  349,  y: 956, itemDrop: 'invulnerability' },
     { type: 'bookcase', x:  900,  scanFromY: 200 },
@@ -637,7 +635,6 @@ const LEVEL_ONE_ROOM: RoomConfig = {
 
 const LEVEL_TWO_ROOM: RoomConfig = {
   name: 'The Orange Halls',
-  ...HALL,
   worldWidth:  169 * 32,  // 5408
   worldHeight: 263 * 32,  // 8416
   worldMap: MAP_LEVEL_TWO,
@@ -672,7 +669,6 @@ const LEVEL_TWO_ROOM: RoomConfig = {
     { x: 2900, y: 7900, ability: AbilityType.Ice },
     { x: 4100, y: 8000, ability: AbilityType.Fire },
   ],
-  destructibles:   [],
   furnitureSpawns: [],
   crates:          [],
   items: [
@@ -700,9 +696,7 @@ const LEVEL_TWO_ROOM: RoomConfig = {
 
 const LEVEL_THREE_ROOM: RoomConfig = {
   name: 'The Sunset Fields',
-  tileset: 'tile-castle',
-  bgFar:   'bg-stars',
-  bgMid:   'bg-stars',
+  mathDucks: { prefix: 'sunsetProblem', count: 5 },
   worldWidth:  409 * 32,  // 13088
   worldHeight:  69 * 32,  // 2208
   worldMap: MAP_LEVEL_THREE,
@@ -722,7 +716,6 @@ const LEVEL_THREE_ROOM: RoomConfig = {
     { x: 13076, y: 1104, w: 24, h: 2208 },  // invisible right barrier
   ],
   enemies: [],
-  destructibles:   [],
   furnitureSpawns: [],
   crates:          [],
   items:           [],
@@ -735,9 +728,8 @@ const LEVEL_THREE_ROOM: RoomConfig = {
 
 const LEVEL4_WORLD_ROOM: RoomConfig = {
   name: 'The Outside',
-  tileset: 'tile-castle',    // unused (worldMap renders tiles), satisfies type
-  bgFar:   'bg-stars',       // unused (worldMap handles background)
-  bgMid:   'bg-stars',       // unused
+  npcs: 'level4',
+  mathDucks: { prefix: 'level4Problem', count: 3 },
   worldWidth:  284 * 32,     // 9088
   worldHeight:  55 * 32,     // 1760
   worldMap: { ...MAP_FOUR },
@@ -754,7 +746,6 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
   rightExitX: 9018,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [
@@ -770,7 +761,9 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
 
 const LEVEL5_WORLD_ROOM: RoomConfig = {
   name: 'The Forgotten Keep',
-  ...HALL,
+  npcs: 'level5',
+  wordLevel: 5,
+  rightExitRequires: { flag: 'level5WordSolved', hint: 'SOLVE THE DUCK PUZZLE!' },
   worldWidth:  100 * 32,  // 3200
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_FIVE },
@@ -800,7 +793,6 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
     { x: 1920, y:  700, ability: AbilityType.BlackDragon },
     { x: 2040, y:  400, ability: AbilityType.BlackDragon },
   ],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 0, pizzaDrop: true },
   ],
@@ -831,7 +823,9 @@ const LEVEL5_WORLD_ROOM: RoomConfig = {
 
 const LEVEL6_WORLD_ROOM: RoomConfig = {
   name: 'The Shadow Halls',
-  ...HALL,
+  npcs: 'level6',
+  wordLevel: 6,
+  rightExitRequires: { flag: 'level6WordSolved', hint: 'SOLVE THE DUCK PUZZLE!' },
   worldWidth:  100 * 32,  // 3200
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_SIX },
@@ -860,7 +854,6 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
     { x: 1950, y: 1200, ability: AbilityType.BlackDragon },
     { x: 2070, y:  700, ability: AbilityType.BlackDragon },
   ],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
@@ -888,7 +881,9 @@ const LEVEL6_WORLD_ROOM: RoomConfig = {
 
 const LEVEL7_WORLD_ROOM: RoomConfig = {
   name: 'The Dragon\'s Approach',
-  ...HALL,
+  npcs: 'level7',
+  wordLevel: 7,
+  portalRequires: { flag: 'level7WordSolved', hint: 'SOLVE THE DUCK PUZZLE!' },
   worldWidth:  100 * 32,  // 3200
   worldHeight:  58 * 32,  // 1856
   worldMap: { ...MAP_SEVEN },
@@ -917,7 +912,6 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
     { x: 2440, y: 1100, ability: AbilityType.BlackDragon },
     { x: 2680, y:  950, ability: AbilityType.BlackDragon },
   ],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest', x: 380, scanFromY: 1600, pizzaDrop: true },
   ],
@@ -948,7 +942,6 @@ const LEVEL7_WORLD_ROOM: RoomConfig = {
 
 const BOSS_FINAL_ROOM: RoomConfig = {
   name: "The Dragon's Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_FINAL },
@@ -973,7 +966,6 @@ const BOSS_FINAL_ROOM: RoomConfig = {
   bossRightBarrierX: 1200,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -986,7 +978,6 @@ const BOSS_FINAL_ROOM: RoomConfig = {
 
 const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
   name: "The True Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_FINAL_FINAL },
@@ -1012,7 +1003,6 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
   bossRightBarrierX: 1200,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -1024,7 +1014,6 @@ const BOSS_FINAL_FINAL_ROOM: RoomConfig = {
 
 const BOSS_LEVEL_ONE_ROOM: RoomConfig = {
   name: "Pac-Dude's Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_LEVEL_ONE },
@@ -1052,7 +1041,6 @@ const BOSS_LEVEL_ONE_ROOM: RoomConfig = {
   bossScale: 2.0,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -1064,7 +1052,6 @@ const BOSS_LEVEL_ONE_ROOM: RoomConfig = {
 
 const BOSS_LEVEL_TWO_ROOM: RoomConfig = {
   name: "Fowser's Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_LEVEL_TWO },
@@ -1093,7 +1080,6 @@ const BOSS_LEVEL_TWO_ROOM: RoomConfig = {
   bossScale: 2.0,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -1105,7 +1091,6 @@ const BOSS_LEVEL_TWO_ROOM: RoomConfig = {
 
 const BOSS_LEVEL_FOUR_ROOM: RoomConfig = {
   name: "Mushroom Man's Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_LEVEL_FOUR },
@@ -1135,7 +1120,6 @@ const BOSS_LEVEL_FOUR_ROOM: RoomConfig = {
   bossScale: 2.0,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -1147,7 +1131,6 @@ const BOSS_LEVEL_FOUR_ROOM: RoomConfig = {
 
 const BOSS_LEVEL_FIVE_ROOM: RoomConfig = {
   name: "The Duo's Lair",
-  ...SANCTUM,
   worldWidth:  40 * 32,   // 1280
   worldHeight: 50 * 32,   // 1600
   worldMap: { ...BOSS_MAP_LEVEL_FIVE },
@@ -1182,7 +1165,6 @@ const BOSS_LEVEL_FIVE_ROOM: RoomConfig = {
   boss2Scale: 1.83,
   platforms: [],
   enemies: [],
-  destructibles: [],
   furnitureSpawns: [],
   crates: [],
   items: [],
@@ -1210,16 +1192,16 @@ export function generateRun(): RoomConfig[] {
     LEVEL_ONE_ROOM,        //  6 — The Red Halls
     BOSS_LEVEL_ONE_ROOM,   //  7 — Boss 4: Pac-Dude
     LEVEL_TWO_ROOM,        //  8 — The Orange Halls
-    BOSS_LEVEL_TWO_ROOM,   //  9 — Boss 5: Mushroom Man
+    BOSS_LEVEL_TWO_ROOM,   //  9 — Boss 5: Fowser
     LEVEL_THREE_ROOM,      // 10 — The Sunset Fields
     LEVEL_FOUR_ROOM,       // 11 — The Green Halls
-    BOSS_LEVEL_FOUR_ROOM,  // 12 — Boss 6: Fowser
+    BOSS_LEVEL_FOUR_ROOM,  // 12 — Boss 6: Mushroom Man
     LEVEL_FIVE_ROOM,       // 13 — The Blue Halls
     BOSS_LEVEL_FIVE_ROOM,  // 14 — Boss 7: Standing Man + Moving Man
     LEVEL4_WORLD_ROOM,     // 15 — Outside (nighttime)
     LEVEL5_WORLD_ROOM,     // 16 — Level 5
     LEVEL6_WORLD_ROOM,     // 17 — Level 6
-    LEVEL7_WORLD_ROOM,     // 18 — Level 7 (boss portal TBD)
+    LEVEL7_WORLD_ROOM,     // 18 — Level 7
     BOSS_FINAL_ROOM,       // 19 — Final Boss: The Dragon
     BOSS_FINAL_FINAL_ROOM, // 20 — Secret: The True Dragon (hidden portal only)
   ]
@@ -1232,7 +1214,7 @@ export function generateRun(): RoomConfig[] {
 
 const LEVEL_FOUR_ROOM: RoomConfig = {
   name: 'The Green Halls',
-  ...HALL,
+  portalRequires: { flag: 'hasLevel4Key', hint: 'SOLVE THE MAGIC JAR!' },
   worldWidth:  254 * 32,   // 8128
   worldHeight: 231 * 32,   // 7392
   worldMap: MAP_LEVEL_FOUR,
@@ -1291,7 +1273,6 @@ const LEVEL_FOUR_ROOM: RoomConfig = {
     { x: 3900, y: 3700, ability: AbilityType.Bat },
     { x: 4200, y: 3100, ability: AbilityType.BlackDragon },
   ],
-  destructibles: [],
   furnitureSpawns: [
     { type: 'chest',    x: 4600, scanFromY: 100,  itemDrop: 'pizza' },
     { type: 'bookcase', x: 6000, scanFromY: 100 },
@@ -1331,7 +1312,7 @@ const LEVEL_FOUR_ROOM: RoomConfig = {
 
 const LEVEL_FIVE_ROOM: RoomConfig = {
   name: 'The Blue Halls',
-  ...HALL,
+  portalRequires: { flag: 'hasLevel8Key', hint: 'SOLVE THE MAGIC JAR!' },
   worldWidth:  550 * 32,  // 17600
   worldHeight:  92 * 32,  // 2944
   worldMap: MAP_LEVEL_FIVE,
@@ -1386,7 +1367,6 @@ const LEVEL_FIVE_ROOM: RoomConfig = {
     { x: 14200, y: 2684, ability: AbilityType.BlackDragon },
     { x: 16200, y: 2684, ability: AbilityType.Fire },
   ],
-  destructibles: [],
   furnitureSpawns: [
     // scanFromY: 2600 so furniture lands on the main floor, not upper platforms
     { type: 'chest',    x:   350, scanFromY: 2600, itemDrop: 'pizza' },
@@ -1424,15 +1404,3 @@ const LEVEL_FIVE_ROOM: RoomConfig = {
     { x: 14000, y: 2684 },
   ],
 }
-
-// Legacy aliases
-export const BOSS_ROOM: RoomConfig = BOSS_TILEMAP_ROOM
-export const TUTORIAL_ROOM: RoomConfig = { ...WORLD_ROOM, isTutorial: true }
-export const THRONE_ROOM:  RoomConfig  = { ...WORLD_ROOM, isThrone: true  }
-// New levels — not yet in the main run; exported for future connection
-export { LEVEL_ONE_ROOM, LEVEL_TWO_ROOM, LEVEL_THREE_ROOM, LEVEL_FOUR_ROOM, LEVEL_FIVE_ROOM }
-export const WORLD_NAMES = ['THE CASTLE', 'THE DARK SANCTUM']
-export const ROOMS_PER_RUN = 2
-export const LEVEL_POOLS: RoomConfig[][] = [[WORLD_ROOM]]
-export type LevelConfig = RoomConfig & { roomNum: number; subtitle: string; levelNum: number; goalX: number }
-export function generateRoomSequence(_level: number): number[] { return [0] }

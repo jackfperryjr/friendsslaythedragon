@@ -20,7 +20,7 @@ import { MenuNav } from '../ui/MenuNav'
 import { ShopMenu, ShopItem } from '../ui/ShopMenu'
 import { showBossCutscene, showPlaceholderCutscene, showBossDefeatedOverlay, showCongratulatoryOverlay } from '../ui/Cutscenes'
 import { drawOutdoorSky, drawTorches, drawTileDepthShadows, paintOutdoorTiles, drawCastleDoor } from '../game/scenery'
-import { RoomConfig, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3, WORD_LIST_L4, WORD_LIST_L5 } from '../levels'
+import { RoomConfig, RoomNpcs, ExitDir, generateRun, TOTAL_LETTER_BUGS, WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3, WORD_LIST_L4, WORD_LIST_L5 } from '../levels'
 import { AbilityType, DamageType } from '../types'
 import { ItemSpawn, ItemType } from '../levels'
 import { SoundManager } from '../audio/SoundManager'
@@ -654,15 +654,18 @@ export class GameScene extends Phaser.Scene {
   // ── NPC spawn system ─────────────────────────────────────────────────────────
 
   private buildNPCs() {
-    const runIndex: number = this.registry.get('runIndex') ?? 0
     const dk = this.cfg.bossDefeatedKey
-    if (runIndex === 0 && !this.cfg.isBossRoom) this.buildWorldOneNPCs()
-    else if (runIndex === 2 && !this.cfg.isBossRoom) this.buildLevel2IntroDuck()
-    else if (runIndex === 4 && !this.cfg.isBossRoom) this.buildLevel3Duck()
-    else if (runIndex === 15 && !this.cfg.isBossRoom) this.buildLevel4NPCs()
-    else if (runIndex === 16 && !this.cfg.isBossRoom) this.buildLevel5NPCs()
-    else if (runIndex === 17 && !this.cfg.isBossRoom) this.buildLevel6NPCs()
-    else if (runIndex === 18 && !this.cfg.isBossRoom) this.buildLevel7NPCs()
+    // Story NPCs for this room come from its config (RoomConfig.npcs)
+    const byConfig: Record<RoomNpcs, () => void> = {
+      'castle-intro': () => this.buildWorldOneNPCs(),
+      'level2-intro': () => this.buildLevel2IntroDuck(),
+      'level3':       () => this.buildLevel3Duck(),
+      'level4':       () => this.buildLevel4NPCs(),
+      'level5':       () => this.buildLevel5NPCs(),
+      'level6':       () => this.buildLevel6NPCs(),
+      'level7':       () => this.buildLevel7NPCs(),
+    }
+    if (this.cfg.npcs && !this.cfg.isBossRoom) byConfig[this.cfg.npcs]()
     else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
     else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
     else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
@@ -1107,69 +1110,46 @@ export class GameScene extends Phaser.Scene {
     return Phaser.Utils.Array.Shuffle([...wordLetters, ...extras]) as string[]
   }
 
+  /** Picks a word (and scatters its bugs) for the level this room hosts, and generates math problems. */
   private initLevelWords() {
-    const runIndex: number = this.registry.get('runIndex') ?? 0
-    if (runIndex === 0 && !this.cfg.isBossRoom && !this.registry.get('level1Word')) {
-      const word = WORD_LIST_L1[Math.floor(Math.random() * WORD_LIST_L1.length)]
-      this.registry.set('level1Word', word)
-      this.registry.set('level1BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level1BugPositions', positions)
+    if (this.cfg.isBossRoom) return
+    const reg = this.registry
+    const scatterBugs = (kl: number, count: number) => {
+      if (!this.cfg.letterBugPool) return
+      const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{ x: number; y: number }>).slice(0, count)
+      reg.set(`level${kl}BugPositions`, positions)
+    }
+    const pick = (list: readonly string[]) => list[Math.floor(Math.random() * list.length)]
+
+    const kl = this.cfg.wordLevel
+    if (kl !== undefined && kl <= 3 && !reg.get(`level${kl}Word`)) {
+      // Levels 1-3: 3, 4 and 5-letter words, TOTAL_LETTER_BUGS bugs
+      const word = pick([WORD_LIST_L1, WORD_LIST_L2, WORD_LIST_L3][kl - 1])
+      reg.set(`level${kl}Word`, word)
+      reg.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
+      scatterBugs(kl, TOTAL_LETTER_BUGS)
+    }
+    if (kl !== undefined && kl >= 5 && !reg.get(`level${kl}WordSolved`)) {
+      // Levels 5-7: 7-letter words, one bug per letter
+      const existingLetters = reg.get(`level${kl}BugLetters`) as string[] | null
+      if (!reg.get(`level${kl}Word`) || !existingLetters || existingLetters.length !== 7) {
+        const word = pick(WORD_LIST_L5)
+        reg.set(`level${kl}Word`, word)
+        reg.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 7))
+        reg.set(`level${kl}CollectedLetters`, null)
+        scatterBugs(kl, 7)
       }
     }
-    if (runIndex === 2 && !this.cfg.isBossRoom && !this.registry.get('level2Word')) {
-      const word = WORD_LIST_L2[Math.floor(Math.random() * WORD_LIST_L2.length)]
-      this.registry.set('level2Word', word)
-      this.registry.set('level2BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level2BugPositions', positions)
-      }
-    }
-    if (runIndex === 4 && !this.cfg.isBossRoom && !this.registry.get('level3Word')) {
-      const word = WORD_LIST_L3[Math.floor(Math.random() * WORD_LIST_L3.length)]
-      this.registry.set('level3Word', word)
-      this.registry.set('level3BugLetters', this.assignLetterBugLetters(word, TOTAL_LETTER_BUGS))
-      if (this.cfg.letterBugPool) {
-        const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, TOTAL_LETTER_BUGS)
-        this.registry.set('level3BugPositions', positions)
-      }
-    }
-    if (this.cfg.isSunset && !this.cfg.isBossRoom && !this.registry.get('sunsetProblem1')) {
+
+    const math = this.cfg.mathDucks
+    if (math && !reg.get(`${math.prefix}1`)) {
       const genAdd = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
       const genSub = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
       const genMul = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
-      this.registry.set('sunsetProblem1', genAdd())
-      this.registry.set('sunsetProblem2', genSub())
-      this.registry.set('sunsetProblem3', genMul())
-      this.registry.set('sunsetProblem4', genAdd())
-      this.registry.set('sunsetProblem5', genSub())
+      const gens = [genAdd, genSub, genMul]
+      for (let i = 1; i <= math.count; i++) reg.set(`${math.prefix}${i}`, gens[(i - 1) % gens.length]())
     }
-    if (runIndex === 15 && !this.cfg.isBossRoom && !this.registry.get('level4Problem1')) {
-      const genAdd  = () => { const a = Phaser.Math.Between(2, 9), b = Phaser.Math.Between(2, 9); return { q: `${a} + ${b}`, answer: a + b } }
-      const genSub  = () => { const b = Phaser.Math.Between(2, 6), a = b + Phaser.Math.Between(2, 7); return { q: `${a} - ${b}`, answer: a - b } }
-      const genMul  = () => { const a = Phaser.Math.Between(2, 5), b = Phaser.Math.Between(2, 5); return { q: `${a} × ${b}`, answer: a * b } }
-      this.registry.set('level4Problem1', genAdd())
-      this.registry.set('level4Problem2', genSub())
-      this.registry.set('level4Problem3', genMul())
-    }
-    for (const [ri, kl] of [[16, 5], [17, 6], [18, 7]] as const) {
-      if (runIndex === ri && !this.cfg.isBossRoom && !this.registry.get(`level${kl}WordSolved`)) {
-        const existingLetters = this.registry.get(`level${kl}BugLetters`) as string[] | null
-        const needsInit = !this.registry.get(`level${kl}Word`) || !existingLetters || existingLetters.length !== 7
-        if (needsInit) {
-          const word = WORD_LIST_L5[Math.floor(Math.random() * WORD_LIST_L5.length)]
-          this.registry.set(`level${kl}Word`, word)
-          this.registry.set(`level${kl}BugLetters`, this.assignLetterBugLetters(word, 7))
-          this.registry.set(`level${kl}CollectedLetters`, null)
-          if (this.cfg.letterBugPool) {
-            const positions = (Phaser.Utils.Array.Shuffle([...this.cfg.letterBugPool]) as Array<{x: number, y: number}>).slice(0, 7)
-            this.registry.set(`level${kl}BugPositions`, positions)
-          }
-        }
-      }
-    }
+
     // Disconnected levels (halls): 6-letter words, 6 bugs
     for (const kl of [4, 8, 9, 10] as const) {
       if (!this.cfg.isBossRoom && !this.registry.get(`level${kl}BugLetters`) &&
@@ -2110,8 +2090,8 @@ export class GameScene extends Phaser.Scene {
     const persistedHearts: number | null = this.registry.get('persistedHearts')
     if (typeof persistedHearts === 'number') p.hearts = persistedHearts
 
-    // Boosts from level 3 do not carry into level 4 (transformations do)
-    if ((this.registry.get('runIndex') ?? 0) === 6) {
+    // Some rooms end boosts on entry (transformations still carry over)
+    if (this.cfg.resetsBoosts) {
       const prev = this.registry.get('persistedBoosts') as PersistedBoosts | null
       if (prev) this.registry.set('persistedBoosts', { ...prev, speedMs: 0, strengthMs: 0, invulnMs: 0, speedBoostActive: false, strengthBoostActive: false, invulnerabilityActive: false })
     }
@@ -4141,9 +4121,8 @@ export class GameScene extends Phaser.Scene {
       const ep2 = this.cfg.exitPositions ?? {}
       if (p.x < 0   && exits.includes('left')   && Math.abs(p.y - (ep2.left   ?? 640))   < DOOR_H / 2) { this.exitRoom('left');   return }
       const rightTrigX = this.cfg.rightExitX ?? W
-      const runIdx0 = this.registry.get('runIndex') ?? 0
-      const rightPuzzleBlocked = (runIdx0 === 16 && !this.registry.get('level5WordSolved'))
-                              || (runIdx0 === 17 && !this.registry.get('level6WordSolved'))
+      const rightNeeds = this.cfg.rightExitRequires
+      const rightPuzzleBlocked = !!rightNeeds && !this.registry.get(rightNeeds.flag)
       const rightYOk = this.cfg.rightExitYRange
         ? (p.y >= this.cfg.rightExitYRange.min && p.y <= this.cfg.rightExitYRange.max)
         : (this.cfg.rightExitX !== undefined || Math.abs(p.y - (ep2.right ?? 640)) < DOOR_H / 2)
@@ -4151,7 +4130,7 @@ export class GameScene extends Phaser.Scene {
         if (rightPuzzleBlocked) {
           if (this.time.now - this._rightExitPopupLastTime > 2000) {
             this._rightExitPopupLastTime = this.time.now
-            this.showPopup(p.x, p.y - 40, 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+            this.showPopup(p.x, p.y - 40, rightNeeds!.hint, '#ff8888')
           }
           return
         }
@@ -4164,14 +4143,10 @@ export class GameScene extends Phaser.Scene {
     if (this.bossPortalPos && p.isAlive && !this.roomTransitioning) {
       const nearPortal = Phaser.Math.Distance.Between(p.x, p.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
       this.portalLabel?.setVisible(nearPortal)
-      const runIdx: number = this.registry.get('runIndex') ?? 0
-      const portalBlocked = (runIdx === 4  && !this.registry.get('level3WordSolved'))
-                         || (runIdx === 11 && !this.registry.get('hasLevel4Key'))   // Green Halls needs Red key
-                         || (runIdx === 13 && !this.registry.get('hasLevel8Key'))   // Blue Halls needs Orange key
-                         || (runIdx === 18 && !this.registry.get('level7WordSolved'))
+      const needs = this.cfg.portalRequires
+      const portalBlocked = !!needs && !this.registry.get(needs.flag)
       if (nearPortal && portalBlocked) {
-        if (input.interactPressed)
-          this.showPopup(p.x, p.y - 40, (runIdx === 11 || runIdx === 13) ? 'SOLVE THE MAGIC JAR!' : 'SOLVE THE DUCK PUZZLE!', '#ff8888')
+        if (input.interactPressed) this.showPopup(p.x, p.y - 40, needs!.hint, '#ff8888')
       } else if (nearPortal && input.interactPressed) {
         this.enterBossPortal()
       }
