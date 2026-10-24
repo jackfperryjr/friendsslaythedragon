@@ -7,6 +7,7 @@ import { setSoundMuted, loadSettings, formatDuration, formatScore } from '../gam
 import { savedRunRoomName, loadSavedRun } from '../game/savedRun'
 import { MenuNav, MenuItem } from '../ui/MenuNav'
 import { onKeyPress } from '../input/keys'
+import { startBackgroundLoading } from './BackgroundLoaderScene'
 
 type Screen = 'main' | 'controls' | 'devMenu'
 
@@ -28,6 +29,7 @@ export class MenuScene extends Phaser.Scene {
 
   create() {
     SoundManager.stopTrack()
+    startBackgroundLoading(this)  // no-op if the intro already started it
     const { width, height } = this.scale
 
     this.cameras.main.fadeIn(400, 0, 0, 0)

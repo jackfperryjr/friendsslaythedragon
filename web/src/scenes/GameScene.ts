@@ -185,8 +185,25 @@ export class GameScene extends Phaser.Scene {
     this._rightExitPopupLastTime = 0
   }
 
-  create() {
-    // ── Load or generate this run's room sequence ──────────────────────────────
+  /** Works out which room this is and loads its map if it isn't cached yet. */
+  preload() {
+    this.resolveRoom()
+    const wm = this.cfg.worldMap
+    if (!wm) return
+    const needMap = !this.cache.tilemap.exists(wm.key)
+    const needTiles = !this.textures.exists(wm.tileKey)
+    if (!needMap && !needTiles) return
+    if (needMap)   this.load.tilemapTiledJSON(wm.key, `maps/${wm.folder}/map.json`)
+    if (needTiles) this.load.image(wm.tileKey, `maps/${wm.folder}/spritesheet.png`)
+    const { width, height } = this.scale
+    const label = this.add.text(width / 2, height / 2, 'LOADING...', {
+      fontSize: '14px', fontFamily: FONT, color: '#7799aa',
+    }).setOrigin(0.5)
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => label.destroy())
+  }
+
+  /** Picks this run's current room (creating the run if there isn't one). */
+  private resolveRoom() {
     let runRooms: RoomConfig[] = this.registry.get('runRooms')
     if (!runRooms || runRooms.length === 0) {
       runRooms = generateRun()
@@ -203,7 +220,9 @@ export class GameScene extends Phaser.Scene {
     if (entryDir0 && !this.cfg.exits.includes(entryDir0)) {
       this.cfg = { ...this.cfg, exits: [...this.cfg.exits, entryDir0] }
     }
+  }
 
+  create() {
     this.score = this.registry.get('score') ?? 0
     if (!this.registry.get('runStartTime')) this.registry.set('runStartTime', Date.now())
     this.gm = new GameManager()

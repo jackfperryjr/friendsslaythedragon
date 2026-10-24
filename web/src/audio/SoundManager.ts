@@ -3,6 +3,7 @@
  * All sounds are synthesised at runtime from oscillators and noise buffers.
  */
 import Phaser from 'phaser'
+import { whenAssetLoaded } from '../scenes/BackgroundLoaderScene'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAudioContext = AudioContext & { state: AudioContextState }
@@ -275,9 +276,17 @@ function clearFadeTimer() {
   }
 }
 
+// The track the game currently wants playing (it may still be downloading)
+let _wantedKey: string | null = null
+
 function _startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume: number) {
+  _wantedKey = key
   if (!manager.game.cache.audio.has(key)) {
-    console.warn(`[SoundManager] audio key "${key}" not in cache — skipping`)
+    // Most music loads in the background after startup; start it when it arrives,
+    // unless the game has moved on to a different track by then.
+    whenAssetLoaded(manager.game, key, () => {
+      if (_wantedKey === key && !_track) _startTrack(manager, key, volume)
+    })
     return
   }
   _track = manager.add(key, { loop: true, volume: key === 'music-gameplay' ? 0 : volume })
@@ -579,6 +588,7 @@ export const SoundManager = {
   resumeTrack() { if (_track) try { (_track as Phaser.Sound.WebAudioSound).resume() } catch (_e) {} },
 
   stopTrack() {
+    _wantedKey = null  // a track still downloading shouldn't start later
     clearFadeTimer()
     if (!_track) return
     const t = _track

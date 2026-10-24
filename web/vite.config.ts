@@ -37,10 +37,20 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,jpg,svg,ogg,mp3,wav}'],
-        // Raise the precache limit to 5 MiB to accommodate large cutscene images
-        // (victory.png ≈ 2.1 MB, celery_man_down.png ≈ 1.5 MB)
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Pre-download only the app shell. Game art, music and maps (~45 MB) are
+        // cached the first time the game loads them instead of all up front —
+        // precaching them made first-time players download most assets twice.
+        globPatterns: ['**/*.{js,css,html,ico,webmanifest}', 'icons/*.png'],
+        runtimeCaching: [{
+          urlPattern: ({ url }) => /\/(assets|maps)\//.test(url.pathname),
+          // Serve from cache, refresh in the background so updated assets arrive next visit
+          handler: 'StaleWhileRevalidate',
+          options: {
+            cacheName: 'game-assets',
+            expiration: { maxEntries: 400 },
+            cacheableResponse: { statuses: [0, 200] },
+          },
+        }],
       }
     })
   ]

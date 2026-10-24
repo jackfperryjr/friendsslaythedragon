@@ -7,6 +7,7 @@ import { GameScene } from './scenes/GameScene'
 import { VictoryScene } from './scenes/VictoryScene'
 import { GameOverScene } from './scenes/GameOverScene'
 import { CharacterSelectScene } from './scenes/CharacterSelectScene'
+import { BackgroundLoaderScene } from './scenes/BackgroundLoaderScene'
 import { loadSettings, setSoundMuted } from './game/settings'
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -25,7 +26,7 @@ const config: Phaser.Types.Core.GameConfig = {
     gamepad: true,
     activePointers: 4,
   },
-  scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene],
+  scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene, BackgroundLoaderScene],
 }
 
 // iOS/Safari requires a user gesture before the Gamepad API and AudioContext
