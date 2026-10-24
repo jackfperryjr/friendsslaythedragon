@@ -3,10 +3,7 @@ import { Player } from '../game/Player'
 import { Enemy } from '../game/Enemy'
 import { Boss } from '../game/Boss'
 import { Destructible } from '../game/Destructible'
-import { CarterDuplicate } from '../game/CarterDuplicate'
 import { Mimic } from '../game/Mimic'
-import { ConradArmyTruck } from '../game/ConradArmyTruck'
-import { ConradWhiteVehicle, WhiteVehicleType } from '../game/ConradWhiteVehicle'
 import { GameManager } from '../game/GameManager'
 import { resetRunState, STARTING_LIVES } from '../game/runState'
 import { saveRun, clearSavedRun } from '../game/savedRun'
@@ -14,6 +11,7 @@ import { setSoundMuted, recordScore } from '../game/settings'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
 import { InputReader, InputFrame } from '../input/InputReader'
+import { CharacterAbility, createAbility } from '../game/abilities/CharacterAbility'
 import { onKeyPress } from '../input/keys'
 import { PuzzleMenu } from '../ui/PuzzleMenu'
 import { MenuNav } from '../ui/MenuNav'
@@ -77,20 +75,22 @@ export class GameScene extends Phaser.Scene {
   private gm!: GameManager
   private ui!: UIManager
 
-  private player!: Player
-  private enemies: Enemy[] = []
+  player!: Player
+  /** The chosen character's special moves (game/abilities/) */
+  ability!: CharacterAbility
+  enemies: Enemy[] = []
   private mimics:  Mimic[]  = []
-  private boss: Boss | null = null
-  private boss2: Boss | null = null
+  boss: Boss | null = null
+  boss2: Boss | null = null
   private boss2Defeated = false
   private enemyGroup!: Phaser.Physics.Arcade.Group
-  private destructibles: Destructible[] = []
+  destructibles: Destructible[] = []
   private crates: Phaser.Physics.Arcade.Image[] = []
   private projectiles!: Phaser.Physics.Arcade.Group
   private enemyProjectiles!: Phaser.Physics.Arcade.Group
   private bossProjectiles!: Phaser.Physics.Arcade.Group
 
-  private platforms!: Phaser.Physics.Arcade.StaticGroup
+  platforms!: Phaser.Physics.Arcade.StaticGroup
   private spikeBalls: Phaser.Physics.Arcade.Image[] = []
   private spikeFloorTiles: Phaser.Physics.Arcade.Image[] = []
   private cameraTarget!: Phaser.GameObjects.Rectangle
@@ -112,16 +112,8 @@ export class GameScene extends Phaser.Scene {
   private collectibleSprites: (Phaser.GameObjects.Image | Phaser.GameObjects.Container)[] = []
   private celeryNpcX: number | null = null
   private shieldGfx!: Phaser.GameObjects.Graphics
-  private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
-  private carterDuplicates: CarterDuplicate[] = []
-  private conradTrucks: ConradArmyTruck[] = []
-  private conradWhiteVehicles: ConradWhiteVehicle[] = []
-  private cocoSpindashState: 'none' | 'windup' | 'dashing' | 'exit' = 'none'
-  private cocoSpinTween: Phaser.Tweens.Tween | null = null
-  private cocoDashHitDestructibles = new Set<Destructible>()
-  private carterDinoSpinTween:   Phaser.Tweens.Tween | null = null
+  tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
   private minimapDots: Phaser.GameObjects.Graphics | null = null
-  private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
 
   private dadNpcSprite:   Phaser.GameObjects.Image | null = null
   private dadCageGfx:     Phaser.GameObjects.Graphics | null = null
@@ -149,9 +141,7 @@ export class GameScene extends Phaser.Scene {
 
   init() {
     this.enemies = []; this.mimics = []; this.destructibles = []
-    this.crates = []; this.collectibleSprites = []; this.celeryNpcX = null; this.carterDuplicates = []; this.conradTrucks = []; this.conradWhiteVehicles = []; this.callumNumbers = []
-    this.cocoSpindashState = 'none'; this.cocoSpinTween = null; this.cocoDashHitDestructibles = new Set()
-    this.carterDinoSpinTween = null
+    this.crates = []; this.collectibleSprites = []; this.celeryNpcX = null
     this.dadHintBubble = null; this.momHintBubble = null
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.touchControls = null
@@ -1994,11 +1984,11 @@ export class GameScene extends Phaser.Scene {
     this.inputReader = new InputReader(this, this.touchControls)
     this.shieldGfx = this.add.graphics().setDepth(4)
 
-    if (p.charKey === 'carter') this.startCarterForceField(p)
+    this.ability = createAbility(this, p)
 
     p.on('died', () => this.onPlayerDied(p))
     p.on('useMelee', (src: Player) => this.doMeleeSwing(src))
-    p.on('useCharacterAbility', (src: Player) => this.handleCharacterAbility(src))
+    p.on('useCharacterAbility', () => this.ability.use())
     p.on('heartLost', () => {
       this.registry.set('hitsTaken', (this.registry.get('hitsTaken') ?? 0) + 1)
     })
@@ -2187,7 +2177,7 @@ export class GameScene extends Phaser.Scene {
   private setupCollision() {
     const p = this.player
     // Things that can run straight through enemies and bosses
-    const isRamming = () => p.isTruck || p.isTrex || p.isSpindashing || this.cocoIsOnAttackFrame(p) || this.carterDinoIsOnAttackFrame(p)
+    const isRamming = () => p.isTruck || p.isTrex || p.isSpindashing || !!this.ability.isRamming?.()
 
     this.physics.add.collider(p, this.platforms)
 
@@ -2283,9 +2273,9 @@ export class GameScene extends Phaser.Scene {
 
   // ── abilities ───────────────────────────────────────────────────────────────
 
-  private doMeleeSwing(src: Player) {
-    if (src.isDinoForm) { this.fireCarterDinoMeleeLaser(src); return }
-    if (src.charKey === 'conrad' && src.isConradTransformed) { this.fireConradJetLaser(src); return }
+  /** The standard sword swing. Some characters replace it while transformed (CharacterAbility.melee). */
+  doMeleeSwing(src: Player) {
+    if (this.ability.melee?.()) return
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
@@ -2366,19 +2356,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Alive and not already playing its death animation. */
-  private isTargetable(e: Enemy): boolean {
+  isTargetable(e: Enemy): boolean {
     return e.active && !e.isDead
   }
 
   /** One hit on an enemy. With the strength boost, the source player kills it outright. */
-  private hitEnemy(e: Enemy, src?: Player) {
+  hitEnemy(e: Enemy, src?: Player) {
     if (e.isDead) return
     if (src?.strengthBoostActive) e.die()
     else e.hit()
   }
 
   /** Celery Man can't be hurt until Mom and Dad are saved. Every other boss always can. */
-  private bossIsVulnerable(b: Boss): boolean {
+  bossIsVulnerable(b: Boss): boolean {
     if (b !== this.boss || this.cfg.bossDefeatedKey !== 'celeryManDefeated') return true
     return !!this.registry.get('dadSaved') && !!this.registry.get('momSaved')
   }
@@ -2388,7 +2378,7 @@ export class GameScene extends Phaser.Scene {
    * boss dies instantly to a strength-boosted player. Ranged hits pass no player
    * and play the boss-hit sound.
    */
-  private damageBoss(b: Boss | null, src?: Player) {
+  damageBoss(b: Boss | null, src?: Player) {
     if (!b?.active || !this.bossIsVulnerable(b)) return
     if (src) {
       if (src.strengthBoostActive && b === this.boss) b.bossDie()
@@ -2400,14 +2390,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Hits whatever nearestTarget() returned: enemy, boss or breakable. */
-  private hitTarget(t: Enemy | Destructible, src?: Player, enemyHits = 1) {
+  hitTarget(t: Enemy | Destructible, src?: Player, enemyHits = 1) {
     if (t === this.boss || t === this.boss2) this.damageBoss(t as Boss)
     else if (t instanceof Destructible) t.takeDamage(30, DamageType.Physical)
     else for (let i = 0; i < enemyHits; i++) this.hitEnemy(t, src)
   }
 
   /** Closest live enemy or boss (and optionally breakable) within range of (x, y). */
-  private nearestTarget(x: number, y: number, range: number, includeBreakables = false): Enemy | Destructible | null {
+  nearestTarget(x: number, y: number, range: number, includeBreakables = false): Enemy | Destructible | null {
     const candidates: (Enemy | Destructible)[] = [
       ...this.enemies.filter(e => this.isTargetable(e)),
       ...(includeBreakables ? this.destructibles.filter(d => d.active) : []),
@@ -2424,910 +2414,57 @@ export class GameScene extends Phaser.Scene {
 
   // ── Conrad army truck ability ─────────────────────────────────────────────────
 
-  private spawnConradTruck(src: Player) {
-    src.swingMelee()
-    if (!this.textures.exists('sheet-army-truck')) return
-    const truck = new ConradArmyTruck(this, src.x, src.y)
-    truck.setFlipX(src.flipX)
-    truck.setData('patrolDir', src.flipX ? -1 : 1)
-    this.conradTrucks.push(truck)
-    this.physics.add.collider(truck, this.platforms)
-    this.tilemapLayers.forEach(l => this.physics.add.collider(truck, l))
-    truck.on('fireShot',    (t: ConradArmyTruck) => this.fireConradTruckShot(t))
-    truck.on('truckExpired', (t: ConradArmyTruck) => {
-      this.conradTrucks = this.conradTrucks.filter(x => x !== t)
-    })
-  }
 
-  private updateConradTrucks() {
-    const RANGE = ConradArmyTruck.attackRange
-    const SPEED = ConradArmyTruck.moveSpeed
 
-    for (const truck of this.conradTrucks) {
-      if (!truck.active) continue
-      const body = truck.body as Phaser.Physics.Arcade.Body
 
-      const nearTarget = this.nearestTarget(truck.x, truck.y, RANGE)
-
-      const now      = this.time.now
-      const holdUntil: number = truck.getData('shootHold') ?? 0
-
-      if (nearTarget) {
-        // Enemy in range — stop, face them, shoot; lock in shoot state briefly to dampen oscillation
-        body.setVelocityX(0)
-        const wasAlreadyShooting = truck.isShooting
-        truck.isShooting = true
-        truck.setData('shootHold', now + 800)
-        truck.setFlipX(nearTarget.x < truck.x)
-        // Fire immediately the moment the truck stops rather than waiting for the timer
-        if (!wasAlreadyShooting) this.time.delayedCall(180, () => { if (truck.active && truck.isShooting) this.fireConradTruckShot(truck) })
-      } else if (truck.isShooting && now < holdUntil) {
-        // Still within the shoot-hold window — stay put
-        body.setVelocityX(0)
-      } else {
-        // No nearby enemy — patrol back and forth
-        truck.isShooting = false
-        let dir: number = truck.getData('patrolDir') ?? 1
-
-        // Reverse when hitting a wall in the current travel direction
-        if ((dir > 0 && body.blocked.right) || (dir < 0 && body.blocked.left)) {
-          dir = -dir
-          truck.setData('patrolDir', dir)
-        }
-        body.setVelocityX(dir * SPEED)
-        truck.setFlipX(dir < 0)
-      }
-
-      // Animation
-      const moving = Math.abs(body.velocity.x) > 10
-      const animKey = moving ? 'army-truck-move' : 'army-truck-idle'
-      if (truck.anims.currentAnim?.key !== animKey) truck.play(animKey, true)
-    }
-  }
-
-  private fireConradTruckShot(truck: ConradArmyTruck) {
-    if (!truck.active) return
-    this.fireVehicleShot(truck, this.nearestTarget(truck.x, truck.y, ConradArmyTruck.attackRange))
-  }
-
-  /** Shared by Conrad's army truck and white vehicles: fires a random-effect shell at the target. */
-  private fireVehicleShot(vehicle: Phaser.GameObjects.Sprite, target: Enemy | Destructible | null) {
-    type TruckEffect = 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning'
-    const effectType = Phaser.Math.RND.pick(['fire', 'ice', 'explode', 'blackhole', 'lightning'] as TruckEffect[])
-    const frame = effectType === 'fire' ? 1 : effectType === 'ice' ? 2 : effectType === 'explode' ? 3 : effectType === 'blackhole' ? 7 : 9
-    // If no target in range, fire horizontally in the direction the truck faces
-    const angle = target
-      ? Phaser.Math.Angle.Between(vehicle.x, vehicle.y - 10, target.x, target.y)
-      : (vehicle.flipX ? Math.PI : 0)
-    const proj = this.physics.add.image(vehicle.x, vehicle.y - 10, 'sheet-truck-projectiles', frame)
-    proj.setScale(1.8).setRotation(angle)
-    ;(proj.body as Phaser.Physics.Arcade.Body)
-      .setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
-      .setGravityY(-800)
-
-    const onHit = (hx: number, hy: number) => {
-      if (!proj.active) return
-      this.triggerTruckBulletEffect(effectType, hx, hy)
-      proj.destroy()
-    }
-
-    this.enemies.forEach(e => {
-      this.physics.add.overlap(proj, e, () => {
-        if (!proj.active) return
-        this.hitEnemy(e, this.player); onHit(e.x, e.y)
-      })
-    })
-    for (const b of [this.boss, this.boss2]) {
-      if (!b?.active) continue
-      this.physics.add.overlap(proj, b, () => {
-        if (!proj.active) return
-        this.damageBoss(b); onHit(b.x, b.y)
-      })
-    }
-    // Delay surface colliders so the bullet escapes the vehicle's spawn tile first
-    this.time.delayedCall(150, () => {
-      if (!proj.active) return
-      this.physics.add.collider(proj, this.platforms, () => onHit(proj.x, proj.y))
-      this.tilemapLayers.forEach(l => this.physics.add.collider(proj, l, () => onHit(proj.x, proj.y)))
-    })
-    this.time.delayedCall(2200, () => { if (proj.active) onHit(proj.x, proj.y) })
-  }
 
   // ── Conrad transform ability ──────────────────────────────────────────────────
 
-  private transformConrad(player: Player) {
-    if (player.isConradTransformed || player.isTransforming) return
-    player.isTransforming = true
-    player.setTexture('sheet-conrad-transform', 0)
-    player.play('conrad-transform-in', true)
-    player.once('animationcomplete-conrad-transform-in', () => {
-      if (!player.active) return
-      player.isConradTransformed = true
-      player.isTransforming      = false
-      player.speedMultiplier     = 2.0
-      player.setScale(1.8)
-      const fb = player.body as Phaser.Physics.Arcade.Body
-      fb.setOffset(18, 10)
-      fb.setAllowGravity(false)
-      player.play('conrad-form-idle', true)
-    })
-  }
 
-  private untransformConrad(player: Player) {
-    if (!player.isConradTransformed || player.isTransforming) return
-    player.isConradTransformed = false
-    player.isFlyingDown        = false
-    player.speedMultiplier     = 1.0
-    player.setScale(1.3)
-    const ub = player.body as Phaser.Physics.Arcade.Body
-    ub.setOffset(18, 0)
-    ub.setAllowGravity(true)
-    ub.setVelocityY(0)
-    player.isTransforming      = true
-    player.setTexture('sheet-conrad-transform', 6)
-    player.play('conrad-transform-out', true)
-    player.once('animationcomplete-conrad-transform-out', () => {
-      if (!player.active) return
-      player.isTransforming = false
-      player.setTexture(`sheet-${player.charKey}`, 0)
-      player.play(`char-${player.charKey}-idle`, true)
-    })
-  }
 
-  private updateConradTransformAnim() {
-    const p = this.player
-    if (p.charKey !== 'conrad' || !p.isAlive || !p.isConradTransformed || p.isTransforming) return
-    const body = p.body as Phaser.Physics.Arcade.Body
-    const vy   = Math.abs(body.velocity.y)
-    const vx   = Math.abs(body.velocity.x)
-    const key  = vy > 10 ? 'conrad-form-air' : vx > 10 ? 'conrad-form-walk' : 'conrad-form-idle'
-    if (p.anims.currentAnim?.key !== key) {
-      p.setTexture('sheet-conrad-transform')
-      p.play(key, true)
-    }
 
-    // Break furniture and chests on contact
-    const now = this.time.now
-    for (const d of this.destructibles) {
-      if (!d.active) continue
-      if (Phaser.Math.Distance.Between(p.x, p.y, d.x, d.y) > 60) continue
-      const lastHit: number = d.getData('conradJetHit') ?? 0
-      if (now - lastHit < 350) continue
-      d.setData('conradJetHit', now)
-      d.takeDamage(30, DamageType.Physical)
-    }
-  }
 
-  private fireConradJetLaser(src: Player) {
-    const RANGE = 700
-    const target = this.nearestTarget(src.x, src.y, RANGE, true)
 
-    const dir = src.flipX ? -1 : 1
-    const muzzleX = src.x + dir * 32
-    const muzzleY = src.y - 5
-    const tx = target ? target.x : muzzleX + dir * RANGE
-    const ty = target ? (target.y - 10) : muzzleY
 
-    const gfx = this.add.graphics().setDepth(15)
-    gfx.lineStyle(4, 0xff0022, 0.95)
-    gfx.lineBetween(muzzleX, muzzleY, tx, ty)
-    gfx.lineStyle(9, 0xff4444, 0.25)
-    gfx.lineBetween(muzzleX, muzzleY, tx, ty)
-    this.tweens.add({ targets: gfx, alpha: 0, duration: 200, onComplete: () => gfx.destroy() })
 
-    const flash = this.add.circle(tx, ty, 10, 0xff0022, 1).setDepth(16)
-    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.5, scaleY: 2.5, duration: 180, ease: 'Power2', onComplete: () => flash.destroy() })
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2
-      const speed = 40 + Math.random() * 60
-      const spark = this.add.rectangle(tx, ty, 4, 4, 0xff2200, 1).setDepth(16)
-      this.tweens.add({
-        targets: spark,
-        x: tx + Math.cos(angle) * speed,
-        y: ty + Math.sin(angle) * speed,
-        alpha: 0, scaleX: 0.2, scaleY: 0.2,
-        duration: 200 + Math.random() * 100,
-        ease: 'Quad.Out',
-        onComplete: () => spark.destroy(),
-      })
-    }
-
-    if (target) this.hitTarget(target, src, 2)
-  }
-
-  private spawnConradWhiteVehicle(src: Player) {
-    const types: WhiteVehicleType[] = ['truck', 'tank', 'helicopter']
-    const vehicleType = Phaser.Math.RND.pick(types)
-    const sheetKey = vehicleType === 'helicopter' ? 'sheet-white-heli' : vehicleType === 'tank' ? 'sheet-white-tank' : 'sheet-white-truck'
-    if (!this.textures.exists(sheetKey)) return
-    const spawnY = vehicleType === 'helicopter' ? src.y - 90 : src.y
-    const vehicle = new ConradWhiteVehicle(this, src.x, spawnY, vehicleType)
-    vehicle.setFlipX(src.flipX)
-    vehicle.setData('patrolDir', src.flipX ? -1 : 1)
-    this.conradWhiteVehicles.push(vehicle)
-    if (vehicleType !== 'helicopter') {
-      this.physics.add.collider(vehicle, this.platforms)
-      this.tilemapLayers.forEach(l => this.physics.add.collider(vehicle, l))
-    }
-    vehicle.on('fireShot',    (v: ConradWhiteVehicle) => this.fireConradWhiteVehicleShot(v))
-    vehicle.on('vehicleExpired', (v: ConradWhiteVehicle) => {
-      this.conradWhiteVehicles = this.conradWhiteVehicles.filter(x => x !== v)
-    })
-  }
-
-  private updateConradWhiteVehicles() {
-    const RANGE = ConradWhiteVehicle.attackRange
-    const SPEED = ConradWhiteVehicle.moveSpeed
-
-    for (const vehicle of this.conradWhiteVehicles) {
-      if (!vehicle.active) continue
-      const body = vehicle.body as Phaser.Physics.Arcade.Body
-
-      const nearTarget = this.nearestTarget(vehicle.x, vehicle.y, RANGE)
-
-      const now = this.time.now
-      const holdUntil: number = vehicle.getData('shootHold') ?? 0
-
-      if (nearTarget) {
-        body.setVelocityX(0)
-        const wasAlreadyShooting = vehicle.isShooting
-        vehicle.isShooting = true
-        vehicle.setData('shootHold', now + 800)
-        vehicle.setFlipX(nearTarget.x < vehicle.x)
-        if (!wasAlreadyShooting) this.time.delayedCall(180, () => { if (vehicle.active && vehicle.isShooting) this.fireConradWhiteVehicleShot(vehicle) })
-      } else if (vehicle.isShooting && now < holdUntil) {
-        body.setVelocityX(0)
-      } else {
-        vehicle.isShooting = false
-        let dir: number = vehicle.getData('patrolDir') ?? 1
-        if ((dir > 0 && body.blocked.right) || (dir < 0 && body.blocked.left)) {
-          dir = -dir
-          vehicle.setData('patrolDir', dir)
-        }
-        body.setVelocityX(dir * SPEED)
-        vehicle.setFlipX(dir < 0)
-      }
-
-      const animPrefix = vehicle.vehicleType === 'helicopter' ? 'heli' : vehicle.vehicleType
-      const moving     = Math.abs(body.velocity.x) > 10
-      const animKey    = moving ? `white-${animPrefix}-move` : `white-${animPrefix}-idle`
-      if (vehicle.anims.currentAnim?.key !== animKey) vehicle.play(animKey, true)
-    }
-  }
-
-  private fireConradWhiteVehicleShot(vehicle: ConradWhiteVehicle) {
-    if (!vehicle.active) return
-    this.fireVehicleShot(vehicle, this.nearestTarget(vehicle.x, vehicle.y, ConradWhiteVehicle.attackRange))
-  }
-
-  private triggerTruckBulletEffect(type: 'fire' | 'ice' | 'explode' | 'blackhole' | 'lightning', x: number, y: number) {
-    const src = this.player
-    const inRange = (t: { x: number; y: number }, r: number) => Phaser.Math.Distance.Between(x, y, t.x, t.y) < r
-    const hitBossesWithin = (r: number) => {
-      for (const b of [this.boss, this.boss2]) if (b?.active && inRange(b, r)) this.damageBoss(b)
-    }
-
-    if (type === 'explode') {
-      const RADIUS = 110
-      this.enemies.forEach(e => { if (this.isTargetable(e) && inRange(e, RADIUS)) this.hitEnemy(e, src) })
-      hitBossesWithin(RADIUS)
-    } else if (type === 'blackhole') {
-      const RADIUS = 180
-      const pulled = this.enemies.filter(e => this.isTargetable(e) && inRange(e, RADIUS))
-      // Repeatedly override enemy velocity toward the impact point for ~600 ms
-      for (let t = 0; t < 600; t += 60) {
-        this.time.delayedCall(t, () => {
-          pulled.forEach(e => {
-            if (!e.active || e.isDead) return
-            const ang = Phaser.Math.Angle.Between(e.x, e.y, x, y)
-            ;(e.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(ang) * 520, Math.sin(ang) * 520)
-          })
-        })
-      }
-      this.time.delayedCall(620, () => {
-        pulled.forEach(e => { if (e.active) this.hitEnemy(e, src) })
-        hitBossesWithin(RADIUS)
-      })
-    } else if (type === 'lightning') {
-      const RADIUS = 220
-      const targets = this.enemies
-        .filter(e => this.isTargetable(e) && inRange(e, RADIUS))
-        .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))
-        .slice(0, 3)
-      targets.forEach(e => this.hitEnemy(e, src))
-      hitBossesWithin(RADIUS)
-      targets.forEach((e, i) => {
-        this.time.delayedCall(i * 80, () => {
-          if (!e.active) return
-          const g = this.add.graphics().setDepth(15)
-          g.lineStyle(3, 0xffff44, 1)
-          g.strokeLineShape(new Phaser.Geom.Line(x, y, e.x, e.y))
-          this.tweens.add({ targets: g, alpha: 0, duration: 280, onComplete: () => g.destroy() })
-        })
-      })
-    }
-
-    const color  = type === 'fire' ? 0xff5500 : type === 'ice' ? 0x22ddff : type === 'explode' ? 0xffee00
-                 : type === 'blackhole' ? 0x220033 : 0xffff44
-    const radius = type === 'explode' ? 55 : type === 'blackhole' ? 65 : 18
-    const flash  = this.add.circle(x, y, radius, color, 0.9).setDepth(15)
-
-    if (type === 'blackhole') {
-      this.tweens.add({
-        targets: flash, scaleX: 2.5, scaleY: 2.5, alpha: 0.4, duration: 300,
-        onComplete: () => {
-          this.tweens.add({ targets: flash, scaleX: 0, scaleY: 0, alpha: 0, duration: 350,
-            onComplete: () => { if (flash.active) flash.destroy() } })
-        },
-      })
-    } else {
-      this.tweens.add({
-        targets: flash,
-        scaleX: type === 'explode' ? 4 : 2.5, scaleY: type === 'explode' ? 4 : 2.5,
-        alpha: 0,
-        duration: type === 'explode' ? 420 : 240,
-        onComplete: () => { if (flash.active) flash.destroy() },
-      })
-    }
-  }
 
   // ── Coco shadow ability ───────────────────────────────────────────────────────
 
-  private handleCocoShadow(coco: Player) {
-    if (!coco.isShadowForm) {
-      this.transformCocoIn(coco)
-    } else if (!coco.isSpindashing && this.cocoSpindashState === 'none') {
-      // applyInput() never calls this with Down held, since Down + ability is the spindash
-      this.transformCocoOut(coco)
-    }
-  }
 
   // ── Coco Shadow-form transform ────────────────────────────────────────────────
 
-  private transformCocoIn(coco: Player) {
-    if (coco.isShadowForm || coco.isTransforming) return
-    coco.isTransforming = true
-    coco.play('coco-transform-in', true)
-    coco.once('animationcomplete-coco-transform-in', () => {
-      if (!coco.active) return
-      coco.isShadowForm  = true
-      coco.isTransforming = false
-      this.cocoSpindashState = 'none'
-      coco.play('coco-shadow-idle', true)
-    })
-  }
 
-  private transformCocoOut(coco: Player) {
-    if (!coco.isShadowForm || coco.isTransforming || coco.isSpindashing) return
-    this.stopCocoSpin(coco)
-    coco.isTransforming = true
-    coco.play('coco-transform-out', true)
-    coco.once('animationcomplete-coco-transform-out', () => {
-      if (!coco.active) return
-      coco.isShadowForm   = false
-      coco.isSpindashing  = false
-      coco.isTransforming = false
-      this.cocoSpindashState = 'none'
-      coco.play(`char-${coco.charKey}-idle`, true)
-    })
-  }
 
   // ── Spindash helpers ──────────────────────────────────────────────────────────
 
-  private startCocoSpin(coco: Player, fast: boolean) {
-    this.cocoSpinTween?.stop()
-    this.cocoSpinTween = this.tweens.add({
-      targets: coco, angle: coco.flipX ? -360 : 360,
-      duration: fast ? 160 : 340, repeat: -1,
-    })
-  }
 
-  private stopCocoSpin(coco: Player) {
-    this.cocoSpinTween?.stop()
-    this.cocoSpinTween = null
-    coco.setAngle(0)
-  }
 
-  private enterCocoSpindash(coco: Player) {
-    if (this.cocoSpindashState !== 'none') return
-    this.cocoSpindashState = 'windup'
-    coco.isSpindashing = true
-    this.cocoDashHitDestructibles.clear()
-    coco.play('coco-spindash-windup', true)
-    coco.once('animationcomplete-coco-spindash-windup', () => {
-      if (!coco.active) return
-      this.cocoSpindashState = 'dashing'
-      coco.play('coco-spindash-dash', true)
-      this.startCocoSpin(coco, true)
-    })
-  }
 
-  private endCocoSpindash(coco: Player) {
-    if (this.cocoSpindashState !== 'dashing') return
-    this.cocoSpindashState = 'exit'
-    this.stopCocoSpin(coco)
-    coco.play('coco-spindash-exit', true)
-    coco.once('animationcomplete-coco-spindash-exit', () => {
-      if (!coco.active) return
-      this.cocoSpindashState = 'none'
-      coco.isSpindashing = false
-      coco.play('coco-shadow-idle', true)
-    })
-  }
 
-  private updateCocoShadow(input: InputFrame) {
-    const coco = this.player
-    if (coco.charKey !== 'coco' || !coco.isAlive || !coco.isShadowForm) return
-    if (coco.isTransforming) return   // transform animation in progress — don't override it
 
-    const body = coco.body as Phaser.Physics.Arcade.Body
-    const downHeld    = input.down
-    const abilityHeld = input.ability
-
-    switch (this.cocoSpindashState) {
-      case 'none': {
-        const airborne = !body.blocked.down
-        if (airborne && body.velocity.y < -60) {
-          if (coco.anims.currentAnim?.key !== 'coco-shadow-jump') coco.play('coco-shadow-jump', true)
-        } else if (airborne) {
-          if (coco.anims.currentAnim?.key !== 'coco-shadow-fall') coco.play('coco-shadow-fall', true)
-        } else {
-          if (this.cocoSpinTween) this.stopCocoSpin(coco)
-          const animKey = Math.abs(body.velocity.x) > 10 ? 'coco-shadow-walk' : 'coco-shadow-idle'
-          if (coco.anims.currentAnim?.key !== animKey) coco.play(animKey, true)
-        }
-        // Only spin on spindash frames 9-12
-        if (airborne) {
-          const frameNum = coco.anims.currentFrame?.textureFrame as number ?? -1
-          if (frameNum >= 9 && frameNum <= 12) {
-            if (!this.cocoSpinTween) this.startCocoSpin(coco, false)
-          } else {
-            if (this.cocoSpinTween) this.stopCocoSpin(coco)
-          }
-        }
-        // DOWN + ABILITY held while grounded → start windup then dash
-        if (downHeld && abilityHeld && body.blocked.down) this.enterCocoSpindash(coco)
-        break
-      }
-
-      case 'windup':
-        break  // animation auto-transitions to 'dashing' on complete
-
-      case 'dashing': {
-        // Release ability → exit (wall hits no longer end the dash)
-        if (!abilityHeld) { this.endCocoSpindash(coco); break }
-
-        // Amplify horizontal movement to 3× speed
-        if (Math.abs(body.velocity.x) > 10)
-          body.setVelocityX(Math.sign(body.velocity.x) * 1050)
-
-        // Enemy + boss damage handled by the physics collider in setupCollision (isSpindashing flag).
-        // Destroy nearby furniture/chests before the physics collider can stop the player.
-        for (const d of this.destructibles) {
-          if (!d.active || this.cocoDashHitDestructibles.has(d)) continue
-          if (Phaser.Math.Distance.Between(coco.x, coco.y, d.x, d.y) < 72) {
-            this.cocoDashHitDestructibles.add(d)
-            d.takeDamage(100, DamageType.Physical)
-          }
-        }
-        break
-      }
-
-      case 'exit':
-        break  // animationcomplete handler in endCocoSpindash takes over
-    }
-  }
-
-  private cocoIsOnAttackFrame(player: Player): boolean {
-    if (player.charKey !== 'coco' || !player.isShadowForm) return false
-    const frame = player.anims.currentFrame?.textureFrame
-    return typeof frame === 'number' && frame >= 10 && frame <= 12
-  }
 
   // ── Callum number ability ─────────────────────────────────────────────────────
 
-  private spawnCallumNumber(src: Player) {
-    // Don't stack if a line is already active
-    if (this.callumNumbers.length > 0) return
-    src.swingMelee()
 
-    const COUNT   = 10
-    const SPACING = 56
-    // Spawn at foot level so numbers sit on the surface the player is standing on
-    const lineY   = src.y + 28
-    const startX  = src.x - ((COUNT - 1) * SPACING) / 2
-    const palette = ['#ff6666','#ffdd44','#44ff88','#44ccff','#ff88ff',
-                     '#ff9944','#aaffff','#ffffff','#ffaacc','#aaffaa']
-
-    for (let i = 0; i < COUNT; i++) {
-      const numX   = startX + i * SPACING
-      const numVal = i + 1
-      const color  = palette[i]
-
-      const glow = this.add.text(numX, lineY, `${numVal}`, {
-        fontSize: '46px', fontFamily: FONT, color: '#ffffff',
-        stroke: '#ffffff', strokeThickness: 10,
-      }).setOrigin(0.5).setDepth(11).setAlpha(0.40)
-      glow.setTint(0xaa00ff, 0x0088ff, 0xff0077, 0xffaa00)
-      this.tweens.add({ targets: glow, alpha: 0.12, duration: 600 + i * 60, yoyo: true, repeat: -1 })
-
-      const num = this.add.text(numX, lineY, `${numVal}`, {
-        fontSize: '42px', fontFamily: FONT, color,
-        stroke: '#000000', strokeThickness: 5,
-      }).setOrigin(0.5).setDepth(12)
-
-      this.physics.add.existing(num)
-      const body = num.body as Phaser.Physics.Arcade.Body
-      body.setAllowGravity(false)
-      body.setVelocity(0, 0)
-
-      const emitter = this.add.particles(numX, lineY, '__DEFAULT', {
-        lifespan: { min: 300, max: 600 },
-        speed: { min: 10, max: 40 },
-        scale: { start: 0.25, end: 0 },
-        alpha: { start: 0.8, end: 0 },
-        tint: [0xffd700, 0xffffff, 0xccaaff, 0x88ddff],
-        quantity: 1, frequency: 120, blendMode: 'ADD',
-      }).setDepth(13)
-
-      let didHit = false
-      const cleanup = () => {
-        if (!num.active) return
-        emitter.destroy()
-        if (glow.active) glow.destroy()
-        this.tweens.add({
-          targets: num, alpha: 0, scaleX: 1.5, scaleY: 1.5,
-          duration: 160, onComplete: () => { if (num.active) num.destroy() },
-        })
-      }
-
-      const onHit = (targetObj: Enemy | Boss) => {
-        if (didHit || !num.active) return
-        if (targetObj === this.boss || targetObj === this.boss2) {
-          // Numbers pass through a boss that can't be hurt yet
-          if (!this.bossIsVulnerable(targetObj as Boss)) return
-          this.damageBoss(targetObj as Boss)
-        } else {
-          if ((targetObj as Enemy).isDead) return
-          SoundManager.enemyHit()
-          this.hitEnemy(targetObj as Enemy)
-        }
-        didHit = true
-        cleanup()
-      }
-
-      // Phase 1 (3 s): numbers sit in line; any enemy walking into them takes a hit
-      this.enemies.forEach(e => {
-        if (e.active) this.physics.add.overlap(num, e, () => onHit(e))
-      })
-      if (this.boss?.active) {
-        this.physics.add.overlap(num, this.boss, () => onHit(this.boss!))
-      }
-      if (this.boss2?.active) {
-        this.physics.add.overlap(num, this.boss2, () => onHit(this.boss2!))
-      }
-
-      // Phase 2: after 1.5 s, each number shoots toward nearest enemy
-      this.time.delayedCall(1500, () => {
-        if (!num.active || didHit) return
-        body.setBounce(1, 1)
-        body.setCollideWorldBounds(true)
-
-        const target = this.nearestTarget(num.x, num.y, Infinity)
-        if (target) {
-          const angle = Phaser.Math.Angle.Between(num.x, num.y, target.x, target.y)
-          body.setVelocity(Math.cos(angle) * 680, Math.sin(angle) * 680)
-        }
-      })
-
-      // Total lifetime cap: 7 s
-      this.time.delayedCall(7000, () => {
-        if (num.active && !didHit) cleanup()
-      })
-
-      this.callumNumbers.push({ obj: num, glow, emitter })
-    }
-  }
-
-  private updateCallumNumbers() {
-    this.callumNumbers = this.callumNumbers.filter(n => n.obj.active)
-    for (const n of this.callumNumbers) {
-      n.emitter.setPosition(n.obj.x, n.obj.y)
-      if (n.glow.active) n.glow.setPosition(n.obj.x, n.obj.y)
-    }
-  }
 
   // ── Abby transform ability ───────────────────────────────────────────────────
   // Abby animates through abby_transform frames 1-9, with frames 8-11 rotating.
   // Holds on frame 10 for 5 seconds at 3× scale, instantly killing any enemy
   // that comes into contact. Then reforms through frames 11-15 at normal size.
 
-  private handleAbbyTransform(src: Player) {
-    if (src.isTransforming) return
-    src.isTransforming = true
-    src.stop()  // halt any currently playing animation before manual frame stepping
-
-    const FRAME_MS  = 80    // ms per frame (~12.5 fps)
-    const HOLD_MS   = 5000  // 5-second spiral hold on frame 10
-    const KILL_R    = 96    // kill radius while at 3× scale (half of 64px frame × 3)
-    const origScale = src.scale  // preserve player's default scale (1.3)
-
-    src.setTexture('sheet-abby-transformer', 1)
-
-    let rotTween: Phaser.Tweens.Tween | null = null
-
-    const startRot = (dur: number) => {
-      rotTween?.stop()
-      rotTween = this.tweens.add({ targets: src, angle: '+=360', duration: dur, repeat: -1 })
-    }
-
-    // Frames 2-7: advance without rotation
-    for (let f = 2; f <= 7; f++) {
-      this.time.delayedCall((f - 1) * FRAME_MS, () => {
-        if (!src.active) return
-        src.setFrame(f)
-      })
-    }
-
-    // Frame 8: rotation begins
-    this.time.delayedCall(7 * FRAME_MS, () => {
-      if (!src.active) return
-      src.setFrame(8)
-      startRot(400)
-    })
-
-    // Frame 9
-    this.time.delayedCall(8 * FRAME_MS, () => {
-      if (!src.active) return
-      src.setFrame(9)
-    })
-
-    // Frame 10: enlarge 3×, raise 10px, hover (no gravity), spin, kill enemies + breakables
-    this.time.delayedCall(9 * FRAME_MS, () => {
-      if (!src.active) return
-      src.setFrame(10)
-      src.setScale(3)
-      src.setY(src.y - 10)
-      startRot(350)
-
-      const body = src.body as Phaser.Physics.Arcade.Body
-      body.setAllowGravity(false)
-      body.setVelocityY(0)
-      src.setData('abbySpinHold', true)
-
-      const hitSet         = new Set<Enemy>()
-      const destroyedBreak = new Set<Destructible>()
-      const killTimer = this.time.addEvent({
-        delay: 20,
-        loop: true,
-        callback: () => {
-          if (!src.active) return
-          for (const e of this.enemies) {
-            if (!e.active || hitSet.has(e)) continue
-            if (Phaser.Math.Distance.Between(src.x, src.y, e.x, e.y) < KILL_R) {
-              hitSet.add(e)
-              e.die()
-            }
-          }
-          for (const d of this.destructibles) {
-            if (!d.active || destroyedBreak.has(d)) continue
-            if (Phaser.Math.Distance.Between(src.x, src.y, d.x, d.y) < KILL_R) {
-              destroyedBreak.add(d)
-              d.takeDamage(100, DamageType.Physical)
-            }
-          }
-        },
-      })
-
-      let reformFired = false
-      const doReform = () => {
-        if (reformFired) return
-        reformFired = true
-        holdTimer.remove()
-        killTimer.remove()
-        body.setAllowGravity(true)
-        src.setData('abbySpinHold', false)
-        src.setData('abbyEarlyExit', null)
-
-        if (!src.active) {
-          rotTween?.stop()
-          src.setY(src.y + 10)
-          src.setScale(origScale)
-          src.setAngle(0)
-          src.isTransforming = false
-          return
-        }
-
-        // Frame 11: restore gravity/position, scale back to normal, rotation continues
-        src.setY(src.y + 10)
-        src.setScale(origScale)
-        src.setFrame(11)
-        startRot(400)
-
-        // After frame 11, stop rotation and play reform frames 12-15
-        this.time.delayedCall(FRAME_MS, () => {
-          rotTween?.stop()
-          rotTween = null
-          src.setAngle(0)
-
-          const reformFrames = [12, 13, 14, 15]
-          for (let i = 0; i < reformFrames.length; i++) {
-            this.time.delayedCall(i * FRAME_MS, () => {
-              if (src.active) src.setFrame(reformFrames[i])
-            })
-          }
-
-          this.time.delayedCall(reformFrames.length * FRAME_MS, () => {
-            src.setScale(origScale)
-            src.setAngle(0)
-            src.isTransforming = false
-            // updateAnimation() resumes on next tick and restores sheet-abby
-          })
-        })
-      }
-
-      src.setData('abbyEarlyExit', doReform)
-      const holdTimer = this.time.delayedCall(HOLD_MS, doReform)
-    })
-  }
 
   // ── Scarlett T-Rex transformation ────────────────────────────────────────────
 
-  private transformScarlettToTrex(player: Player) {
-    if (player.isTrex || player.isTransforming) return
-    player.isTransforming = true
-    player.setTexture('sheet-scarlett-transformer', 0)
-    player.play('scarlett-anim-transform')
-    player.once('animationcomplete-scarlett-anim-transform', () => {
-      if (!player.active) return
-      player.isTrex = true
-      player.isTransforming = false
-      player.setTexture('sheet-trex', 0)
-      player.play('trex-idle', true)
-    })
-  }
 
-  private untransformScarlett(player: Player) {
-    if (!player.isTrex || player.isTransforming) return
-    player.isTrex = false
-    player.isTransforming = true
-    player.setTexture('sheet-scarlett-transformer', 0)
-    player.play('scarlett-anim-untransform')
-    player.once('animationcomplete-scarlett-anim-untransform', () => {
-      if (!player.active) return
-      player.isTransforming = false
-    })
-  }
 
   // ── Carter dinosaur transformation ───────────────────────────────────────────
 
-  private transformCarterToDino(carter: Player) {
-    if (carter.isDinoForm || carter.isTransforming) return
-    carter.isTransforming = true
-    carter.setTexture('sheet-carter-transform', 0)
-    carter.play('carter-transform-in', true)
-    carter.once('animationcomplete-carter-transform-in', () => {
-      if (!carter.active) return
-      carter.isDinoForm     = true
-      carter.isTransforming = false
-      carter.speedMultiplier = 2.0
-      carter.play('carter-dino-idle', true)
-    })
-  }
 
-  private untransformCarterFromDino(carter: Player) {
-    if (!carter.isDinoForm || carter.isTransforming) return
-    carter.isDinoForm = false
-    this.stopCarterDinoSpin(carter)
-    carter.speedMultiplier = 1.0
-    carter.isTransforming  = true
-    carter.setTexture('sheet-carter-transform', 7)
-    carter.play('carter-transform-out', true)
-    carter.once('animationcomplete-carter-transform-out', () => {
-      if (!carter.active) return
-      carter.isTransforming = false
-      carter.setTexture(`sheet-${carter.charKey}`, 0)
-      carter.play(`char-${carter.charKey}-idle`, true)
-    })
-  }
 
-  private updateCarterDino() {
-    const carter = this.player
-    if (carter.charKey !== 'carter' || !carter.isAlive || !carter.isDinoForm) return
-    if (carter.isTransforming) return
 
-    const body    = carter.body as Phaser.Physics.Arcade.Body
-    const airborne = !body.blocked.down
 
-    if (airborne) {
-      if (body.velocity.y < -60) {
-        if (carter.anims.currentAnim?.key !== 'carter-dino-jump') carter.play('carter-dino-jump', true)
-      } else if (body.velocity.y > 80) {
-        if (carter.anims.currentAnim?.key !== 'carter-dino-fall') {
-          carter.setTexture('sheet-carter-dino-jump')
-          carter.play('carter-dino-fall', true)
-        }
-      } else {
-        if (carter.anims.currentAnim?.key !== 'carter-dino-float') {
-          carter.setTexture('sheet-carter-dino-jump')
-          carter.play('carter-dino-float', true)
-        }
-      }
 
-      // Spin while on frames 5-9 of the dino-jump sheet
-      const frame = carter.anims.currentFrame?.textureFrame as number ?? -1
-      if (frame >= 5 && frame <= 9) {
-        if (!this.carterDinoSpinTween) this.startCarterDinoSpin(carter)
-      } else {
-        if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
-      }
-    } else {
-      // Landed — restore transform sheet for idle/walk
-      if (this.carterDinoSpinTween) this.stopCarterDinoSpin(carter)
-      if (carter.texture.key !== 'sheet-carter-transform') carter.setTexture('sheet-carter-transform')
-      const moving = Math.abs(body.velocity.x) > 10
-      const key    = moving ? 'carter-dino-walk' : 'carter-dino-idle'
-      if (carter.anims.currentAnim?.key !== key) carter.play(key, true)
-    }
-  }
 
-  private startCarterDinoSpin(carter: Player) {
-    this.carterDinoSpinTween?.stop()
-    this.carterDinoSpinTween = this.tweens.add({
-      targets: carter, angle: carter.flipX ? -360 : 360,
-      duration: 280, repeat: -1,
-    })
-  }
-
-  private stopCarterDinoSpin(carter: Player) {
-    this.carterDinoSpinTween?.stop()
-    this.carterDinoSpinTween = null
-    carter.setAngle(0)
-  }
-
-  private carterDinoIsOnAttackFrame(player: Player): boolean {
-    if (player.charKey !== 'carter' || !player.isDinoForm) return false
-    const frame = player.anims.currentFrame?.textureFrame
-    return typeof frame === 'number' && frame >= 5 && frame <= 9
-  }
-
-  private fireCarterDinoMeleeLaser(carter: Player) {
-    const RANGE = 500
-    const target = this.nearestTarget(carter.x, carter.y, RANGE, true)
-    if (!target) return
-
-    const tx   = target.x
-    const ty   = target.y - 20
-    const eyeX = carter.x + (carter.flipX ? -14 : 14)
-    const eyeY = carter.y - 20
-
-    const gfx = this.add.graphics().setDepth(15)
-    gfx.lineStyle(6, 0xff2200, 0.85)
-    gfx.lineBetween(eyeX, eyeY, tx, ty)
-    gfx.lineStyle(12, 0xff6600, 0.30)
-    gfx.lineBetween(eyeX, eyeY, tx, ty)
-    this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
-
-    const flash = this.add.circle(tx, ty, 12, 0xff2200, 1).setDepth(16)
-    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.8, scaleY: 2.8, duration: 200, ease: 'Power2', onComplete: () => flash.destroy() })
-    const sparkColors = [0xff0000, 0xff4400, 0xff8800, 0xffcc44]
-    for (let i = 0; i < 7; i++) {
-      const angle = (i / 7) * Math.PI * 2
-      const speed = 55 + Math.random() * 75
-      const spark = this.add.rectangle(tx, ty, 5, 5, sparkColors[i % sparkColors.length], 1).setDepth(16)
-      this.tweens.add({
-        targets: spark,
-        x: tx + Math.cos(angle) * speed,
-        y: ty + Math.sin(angle) * speed,
-        alpha: 0, scaleX: 0.2, scaleY: 0.2,
-        duration: 230 + Math.random() * 130,
-        ease: 'Quad.Out',
-        onComplete: () => spark.destroy(),
-      })
-    }
-
-    this.hitTarget(target, carter, 2)
-  }
 
   // ── Map position overlay ──────────────────────────────────────────────────────
 
@@ -3424,160 +2561,12 @@ export class GameScene extends Phaser.Scene {
 
   // ── Carter force field ────────────────────────────────────────────────────────
 
-  private startCarterForceField(p: Player) {
-    const activate = () => {
-      if (!p.active || !p.isAlive) return
-      p.setData('carterFF', true)
-      p.setData('carterFFStart', this.time.now)
-      p.invulnerabilityActive = true
-      this.time.delayedCall(2000, () => {
-        if (!p.active) return
-        p.setData('carterFF', false)
-        // Stay invulnerable if a real invincibility boost is running
-        if (p.boostTimeLeft('invuln') === 0) p.invulnerabilityActive = false
-      })
-    }
-    // First pulse fires immediately on spawn; subsequent pulses every 5 s
-    this.time.delayedCall(300, activate)
-    this.time.addEvent({ delay: 5000, loop: true, callback: activate })
-  }
 
-  private updateCarterForceField() {
-    const FF_R = 75
-    const p = this.player
-    if (p.charKey !== 'carter' || !p.isAlive || !p.getData('carterFF')) return
-    const inRange = (t: { x: number; y: number }) => Phaser.Math.Distance.Between(p.x, p.y, t.x, t.y) < FF_R
-    this.enemies.forEach(e => { if (this.isTargetable(e) && inRange(e)) e.die() })
-    for (const b of [this.boss, this.boss2]) if (b?.active && inRange(b)) this.damageBoss(b)
-  }
 
-  // ── Carter duplicate ability ─────────────────────────────────────────────────
 
-  private handleCharacterAbility(src: Player) {
-    if (src.charKey === 'carter') {
-      if (src.carterAbility === 'dino') {
-        if (src.isDinoForm) this.untransformCarterFromDino(src)
-        else this.transformCarterToDino(src)
-      } else {
-        this.spawnCarterDuplicate(src)
-      }
-    }
-    else if (src.charKey === 'eric') {
-      if (src.isTruck) this.untransformEric(src)
-      else this.transformEricToTruck(src)
-    }
-    else if (src.charKey === 'conrad') {
-      if (src.conradAbility === 'transform') {
-        if (src.isConradTransformed) this.untransformConrad(src)
-        else this.transformConrad(src)
-      } else {
-        this.spawnConradTruck(src)
-      }
-    }
-    else if (src.charKey === 'coco') this.handleCocoShadow(src)
-    else if (src.charKey === 'callum') this.spawnCallumNumber(src)
-    else if (src.charKey === 'abby') {
-      const earlyExit = src.getData('abbyEarlyExit') as (() => void) | null
-      if (earlyExit) earlyExit()
-      else this.handleAbbyTransform(src)
-    }
-    else if (src.charKey === 'scarlett') {
-      if (src.isTrex) this.untransformScarlett(src)
-      else this.transformScarlettToTrex(src)
-    }
-    else this.doMeleeSwing(src)
-  }
 
-  // ── Eric truck transformation ─────────────────────────────────────────────
 
-  private transformEricToTruck(player: Player) {
-    if (player.isTruck || player.isTransforming) return
 
-    player.isTransforming = true
-    player.setTexture('sheet-eric-transformer', 0)
-    player.play('eric-anim-transform')
-
-    player.once('animationcomplete-eric-anim-transform', () => {
-      if (!player.active) return
-      player.isTruck = true
-      player.isTransforming = false
-      player.play('eric-anim-truck-idle', true)
-    })
-  }
-
-  private untransformEric(player: Player) {
-    if (!player.isTruck || player.isTransforming) return
-
-    player.isTruck = false
-    player.isTransforming = true
-    player.play('eric-anim-untransform')
-
-    player.once('animationcomplete-eric-anim-untransform', () => {
-      if (!player.active) return
-      player.isTransforming = false
-      // Releasing the lock lets updateAnimation() resume normal eric animations
-      // on the next frame, which auto-switches back to sheet-eric via the anim frames
-    })
-  }
-
-  spawnCarterDuplicate(src: Player) {
-    const sheet = `sheet-${src.charKey}`
-    if (!this.textures.exists(sheet)) return
-    const dup = new CarterDuplicate(this, src.x, src.y, sheet)
-    dup.setFlipX(src.flipX)
-    this.carterDuplicates.push(dup)
-    this.physics.add.collider(dup, this.platforms)
-    this.tilemapLayers.forEach(l => this.physics.add.collider(dup, l))
-    this.enemies.forEach(e => {
-      this.physics.add.overlap(dup, e, () => dup.hit())
-    })
-    if (this.boss?.active)  this.physics.add.overlap(dup, this.boss,  () => dup.hit())
-    if (this.boss2?.active) this.physics.add.overlap(dup, this.boss2, () => dup.hit())
-    dup.on('fireLaser', (d: CarterDuplicate) => this.fireDuplicateLaser(d))
-    dup.on('duplicateDied', (d: CarterDuplicate) => {
-      this.carterDuplicates = this.carterDuplicates.filter(x => x !== d)
-    })
-  }
-
-  private fireDuplicateLaser(dup: CarterDuplicate) {
-    if (!dup.active) return
-
-    const target = this.nearestTarget(dup.x, dup.y, 800)
-    if (!target) return
-
-    const tx = target.x
-    const ty = target.y - 20
-    const eyeX = dup.x + (dup.flipX ? -8 : 8)
-    const eyeY = dup.y - 18
-
-    const gfx = this.add.graphics().setDepth(15)
-    gfx.lineStyle(6, 0xff2200, 0.85)
-    gfx.lineBetween(eyeX, eyeY, tx, ty)
-    gfx.lineStyle(12, 0xff6600, 0.3)
-    gfx.lineBetween(eyeX, eyeY, tx, ty)
-    this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
-
-    // Red explosion at impact point
-    const flash = this.add.circle(tx, ty, 12, 0xff2200, 1).setDepth(16)
-    this.tweens.add({ targets: flash, alpha: 0, scaleX: 2.8, scaleY: 2.8, duration: 200, ease: 'Power2', onComplete: () => flash.destroy() })
-    const sparkColors = [0xff0000, 0xff4400, 0xff8800, 0xffcc44]
-    for (let i = 0; i < 7; i++) {
-      const angle = (i / 7) * Math.PI * 2
-      const speed = 55 + Math.random() * 75
-      const spark = this.add.rectangle(tx, ty, 5, 5, sparkColors[i % sparkColors.length], 1).setDepth(16)
-      this.tweens.add({
-        targets: spark,
-        x: tx + Math.cos(angle) * speed,
-        y: ty + Math.sin(angle) * speed,
-        alpha: 0, scaleX: 0.2, scaleY: 0.2,
-        duration: 230 + Math.random() * 130,
-        ease: 'Quad.Out',
-        onComplete: () => spark.destroy(),
-      })
-    }
-
-    this.hitTarget(target, this.player)
-  }
 
   private fireCeleryStalk() {
     if (!this.boss?.active) return
@@ -3855,15 +2844,13 @@ export class GameScene extends Phaser.Scene {
 
     if (p.isConradTransformed) p.isFlyingDown = input.down
 
-    if (p.charKey === 'conrad' && p.isConradTransformed) {
-      if (input.shieldPressed) this.spawnConradWhiteVehicle(p)
+    if (this.ability.replacesShield?.()) {
+      if (input.shieldPressed) this.ability.shieldPressed?.()
     } else {
       p.setShielding(input.shield)
     }
 
-    // In Coco's shadow form, Down + ability starts a spindash (updateCocoShadow) instead
-    const startsSpindash = p.charKey === 'coco' && p.isShadowForm && input.down
-    if (input.abilityPressed && !startsSpindash) p.useCharacterAbility()
+    if (input.abilityPressed && !this.ability.ignoresAbilityPress?.(input)) p.useCharacterAbility()
     if (input.meleePressed) p.swingMelee()
   }
 
@@ -4008,19 +2995,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── update ────────────────────────────────────────────────────────────────
-
-  /** Runs the eric-truck and T-rex walk/idle animations, which Player.update() doesn't handle. */
-  private updateVehicleAnims(p: Player) {
-    const moving = Math.abs((p.body as Phaser.Physics.Arcade.Body).velocity.x) > 10
-    if (p.isTruck) {
-      const animKey = moving ? 'eric-anim-truck-move' : 'eric-anim-truck-idle'
-      if (p.anims.currentAnim?.key !== animKey) p.play(animKey, true)
-    }
-    if (p.isTrex) {
-      const animKey = moving ? 'trex-walk' : 'trex-idle'
-      if (p.anims.currentAnim?.key !== animKey) p.play(animKey, true)
-    }
-  }
 
   /** Redraws the shield bubble and Carter's force-field ring around the player. */
   private drawPlayerEffects(p: Player) {
@@ -4204,7 +3178,6 @@ export class GameScene extends Phaser.Scene {
     if (p.isAlive) this.cameraTarget.setPosition(p.x, p.y)
 
     p.update()
-    this.updateVehicleAnims(p)
     this.drawPlayerEffects(p)
     this.applyInput(p, input)
 
@@ -4252,16 +3225,10 @@ export class GameScene extends Phaser.Scene {
     if (this.boss?.active)  this.boss.update()
     if (this.boss2?.active) this.boss2.update()
 
-    this.updateConradTrucks()
-    this.updateConradWhiteVehicles()
-    this.updateConradTransformAnim()
-    this.updateCarterForceField()
-    this.updateCarterDino()
+    this.ability.update?.(input)
     this.updateMapOverlay()
     this.updateWordDuck(input)
     this.updateArithDucks(input)
-    this.updateCocoShadow(input)
-    this.updateCallumNumbers()
     this.checkCeleryBoost()
     this.updateParentHints()
     this.ui.update(p)
