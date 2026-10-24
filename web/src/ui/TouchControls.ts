@@ -5,7 +5,11 @@ export interface TouchFrame {
   left: boolean
   right: boolean
   jump: boolean
+  /** Joystick pushed down (Coco's spindash, transformed Conrad flying down) */
+  down: boolean
   shield: boolean
+  /** Ability button held (Coco's spindash keeps going while held) */
+  ability: boolean
   shieldPressed: boolean
   abilityPressed: boolean
   meleePressed: boolean
@@ -16,6 +20,8 @@ export class TouchControls {
   private dpadLeft  = false
   private dpadRight = false
   private jumpHeld    = false
+  private downHeld    = false
+  private abilityHeld = false
   private shieldHeld  = false
   private shieldJust  = false
   private abilityJust = false
@@ -36,6 +42,7 @@ export class TouchControls {
   private readonly KNOB_RADIUS = 26
   private readonly DEAD_ZONE = 15
   private readonly H_DEAD_ZONE = 24
+  private readonly DOWN_DEAD_ZONE = 30  // larger, so walking doesn't trigger "down" by accident
 
   // Buttons are anchored bottom-right; offsets are relative to (width, height)
   // so they can be recomputed when the visible viewport changes (mobile browser
@@ -71,6 +78,8 @@ export class TouchControls {
       this.dpadLeft = false
       this.dpadRight = false
       this.jumpHeld = false
+      this.downHeld = false
+      this.abilityHeld = false
       this.shieldHeld = false
       this.shieldJust = false
       this.abilityJust = false
@@ -91,7 +100,7 @@ export class TouchControls {
     const bx = width - 65
     const by = height - 80
     this.btn(bx, by, 0,    0,    '▲', 0x4fc3f7, () => { this._interactJust = true })
-    this.btn(bx, by, 0,    -84,  'X',  0xa5d6a7, () => { this.abilityJust = true })
+    this.btn(bx, by, 0,    -84,  'X',  0xa5d6a7, () => { this.abilityJust = true; this.abilityHeld = true }, () => { this.abilityHeld = false })
     this.btn(bx, by, -84,  -84,  'Z',  0xce93d8, () => { this.shieldHeld = true; this.shieldJust = true }, () => { this.shieldHeld = false })
     this.btn(bx, by, -84,  0,    '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
@@ -149,6 +158,7 @@ export class TouchControls {
     this.dpadLeft  = dx < -this.H_DEAD_ZONE
     this.dpadRight = dx > this.H_DEAD_ZONE
     this.jumpHeld  = dy < -this.DEAD_ZONE
+    this.downHeld  = dy > this.DOWN_DEAD_ZONE
   }
 
   private resetJoystick() {
@@ -157,6 +167,7 @@ export class TouchControls {
     this.dpadLeft = false
     this.dpadRight = false
     this.jumpHeld = false
+    this.downHeld = false
     this.joystickKnob.setPosition(this.joystickBaseX, this.joystickBaseY)
   }
 
@@ -175,7 +186,8 @@ export class TouchControls {
 
   read(): TouchFrame {
     const frame: TouchFrame = {
-      left: this.dpadLeft, right: this.dpadRight, jump: this.jumpHeld, shield: this.shieldHeld,
+      left: this.dpadLeft, right: this.dpadRight, jump: this.jumpHeld, down: this.downHeld,
+      shield: this.shieldHeld, ability: this.abilityHeld,
       shieldPressed: this.shieldJust, abilityPressed: this.abilityJust,
       meleePressed: this.meleeJust, interactPressed: this._interactJust,
     }
@@ -183,7 +195,7 @@ export class TouchControls {
     this.abilityJust = false
     this.meleeJust = false
     this._interactJust = false
-    if (!this._enabled) return { ...frame, left: false, right: false, jump: false, shield: false }
+    if (!this._enabled) return { ...frame, left: false, right: false, jump: false, down: false, shield: false, ability: false }
     return frame
   }
 

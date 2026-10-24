@@ -14,6 +14,7 @@ import { setSoundMuted, recordScore } from '../game/settings'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
 import { InputReader, InputFrame } from '../input/InputReader'
+import { onKeyPress } from '../input/keys'
 import { PuzzleMenu } from '../ui/PuzzleMenu'
 import { MenuNav } from '../ui/MenuNav'
 import { ShopMenu, ShopItem } from '../ui/ShopMenu'
@@ -256,7 +257,7 @@ export class GameScene extends Phaser.Scene {
     drawTorches(this, this.cfg, (x, y) => this.isInsideWall(x, y))
     this.buildPauseMenu()
     this.buildMapOverlay()
-    this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
+    onKeyPress(this, e => { if (e.code === 'Escape') this.togglePause() })
     this.cameras.main.fadeIn(400, 0, 0, 0)
 
     const defeatedKey = this.cfg.bossDefeatedKey
@@ -3921,7 +3922,7 @@ export class GameScene extends Phaser.Scene {
     const refreshSound = () => sound.setText(SoundManager.isMuted() ? '♪  SOUND: OFF' : '♪  SOUND: ON')
     const soundAction  = () => { setSoundMuted(!SoundManager.isMuted()); refreshSound() }
     refreshSound()
-    this.input.keyboard?.on('keydown-M', refreshSound)  // M toggles sound globally (main.ts)
+    onKeyPress(this, e => { if (e.code === 'KeyM') refreshSound() })  // M toggles sound globally (main.ts)
 
     const shopAction = () => {
       this.pauseNav.enabled = false

@@ -66,10 +66,10 @@ export class InputReader {
     const held: Held = {
       left:     kb('left')  || btn(PAD.LEFT)  || pads.some(p => p.leftStick.x < -STICK_DEAD_ZONE) || !!t?.left,
       right:    kb('right') || btn(PAD.RIGHT) || pads.some(p => p.leftStick.x >  STICK_DEAD_ZONE) || !!t?.right,
-      down:     kb('down')  || btn(PAD.DOWN)  || pads.some(p => p.leftStick.y >  STICK_DEAD_ZONE),
+      down:     kb('down')  || btn(PAD.DOWN)  || pads.some(p => p.leftStick.y >  STICK_DEAD_ZONE) || !!t?.down,
       jump:     kb('jump')  || btn(PAD.A)     || !!t?.jump,
       shield:   kb('shield') || btn(PAD.Y)    || !!t?.shield,
-      ability:  kb('ability') || btn(PAD.B),
+      ability:  kb('ability') || btn(PAD.B) || !!t?.ability,
       melee:    kb('melee') || btn(PAD.X),
       interact: kb('jump')  || btn(PAD.UP),
       talk:     kb('ability') || btn(PAD.X),
